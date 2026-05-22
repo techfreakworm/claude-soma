@@ -58,10 +58,23 @@ def spawn_background_lead(
         cmd.extend(extra_args)
     cmd.append(brief)
 
-    result = subprocess.run(
-        cmd, capture_output=True, text=True, check=True, timeout=60,
-    )
-    payload = json.loads(result.stdout.strip().splitlines()[-1])
+    try:
+        result = subprocess.run(
+            cmd, capture_output=True, text=True, check=True, timeout=60,
+        )
+    except subprocess.CalledProcessError as e:
+        stderr = (e.stderr or "")[-500:]
+        raise RuntimeError(f"claude --bg failed for {name!r}: {stderr}") from e
+    except subprocess.TimeoutExpired as e:
+        raise RuntimeError(f"claude --bg timed out spawning {name!r} (60s)") from e
+
+    try:
+        payload = json.loads(result.stdout.strip().splitlines()[-1])
+    except (json.JSONDecodeError, IndexError) as e:
+        raise RuntimeError(
+            f"claude --bg returned non-JSON stdout: {result.stdout[-500:]!r}"
+        ) from e
+
     return {
         "agent_id": payload.get("agent_id") or payload.get("session_id"),
         "rc_url": payload.get("rc_url") or payload.get("claude_code_session_url", ""),
