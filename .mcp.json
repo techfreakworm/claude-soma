@@ -30,6 +30,16 @@
         "HERMES_MAX_CONCURRENT_PROJECTS": "6"
       },
       "alwaysLoad": true
+    },
+    "hermes-api": {
+      "type": "stdio",
+      "command": "/opt/claude-soma/.venv/bin/python",
+      "args": ["-m", "claude_soma.mcp_servers.hermes_api.server"],
+      "env": {
+        "HERMES_API_SOCKET": "/tmp/claude-soma-api.sock",
+        "HERMES_ACTIVITY_LOG": "/home/ubuntu/.claude-soma/activity.jsonl"
+      },
+      "alwaysLoad": true
     }
   }
 }
