@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "voice-stt": {
+      "type": "stdio",
+      "command": "/opt/claude-soma/.venv/bin/python",
+      "args": ["-m", "claude_soma.mcp_servers.voice_stt.server"],
+      "env": {
+        "HERMES_WHISPER_BIN": "/opt/whisper.cpp/build/bin/whisper-cli",
+        "HERMES_WHISPER_MODEL": "/opt/whisper.cpp/models/ggml-large-v3-turbo.bin"
+      },
+      "alwaysLoad": true
+    }
+  }
+}
