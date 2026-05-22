@@ -25,9 +25,6 @@ def _activity_log_path() -> Path:
 async def _tail_stream():
     log = _activity_log_path()
     last_size = log.stat().st_size if log.exists() else 0
-    # httpx ASGI transport buffers responses, so an infinite generator hangs
-    # client.stream() in tests. Under pytest, yield one ping then return.
-    test_mode = bool(os.environ.get("PYTEST_CURRENT_TEST"))
     # Emit a heartbeat every 15s, plus new lines as they appear.
     while True:
         if log.exists():
@@ -52,8 +49,6 @@ async def _tail_stream():
         # heartbeat
         yield {"event": "ping",
                "data": json.dumps({"ts": time.time()})}
-        if test_mode:
-            return
         await asyncio.sleep(15)
 
 
