@@ -1,0 +1,23 @@
+# systemd/claude-soma-channel.service
+[Unit]
+Description=Claude Soma persistent Telegram channel session
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=forking
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/opt/claude-soma
+EnvironmentFile=/etc/claude-soma/secrets.env
+Environment=PATH=/opt/claude-soma/.venv/bin:/usr/local/bin:/usr/bin:/bin
+Environment=CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1
+ExecStartPre=/usr/bin/install -d -o ubuntu -g ubuntu /var/log/claude-soma
+ExecStartPre=/bin/bash -c '/usr/bin/tmux kill-session -t hermes 2>/dev/null || true'
+ExecStart=/usr/bin/tmux new-session -d -s hermes 'cd /opt/claude-soma && /usr/bin/claude --channels plugin:telegram@claude-plugins-official --plugin-dir /opt/claude-soma --add-dir /home/ubuntu/hermes-work --permission-mode default 2>&1 | tee -a /var/log/claude-soma/channel.log'
+ExecStop=/usr/bin/tmux kill-session -t hermes
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
