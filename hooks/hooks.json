@@ -27,8 +27,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "/opt/claude-soma/scripts/log_activity.sh",
-            "async": true
+            "command": "/opt/claude-soma/scripts/log_activity.sh"
           }
         ]
       }
