@@ -19,6 +19,17 @@
         "HERMES_PIPER_DEFAULT_VOICE": "/opt/piper/en_US-ryan-medium.onnx"
       },
       "alwaysLoad": true
+    },
+    "project-orchestrator": {
+      "type": "stdio",
+      "command": "/opt/claude-soma/.venv/bin/python",
+      "args": ["-m", "claude_soma.mcp_servers.project_orchestrator.server"],
+      "env": {
+        "HERMES_ORCH_DB": "/opt/claude-soma/registry.sqlite",
+        "HERMES_PROJECTS_ROOT": "/home/ubuntu/projects",
+        "HERMES_MAX_CONCURRENT_PROJECTS": "6"
+      },
+      "alwaysLoad": true
     }
   }
 }
