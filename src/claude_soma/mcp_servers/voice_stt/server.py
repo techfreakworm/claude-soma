@@ -41,11 +41,17 @@ def _ensure_binary() -> str:
 
 
 def _convert_to_wav(src: Path, dst: Path) -> None:
-    subprocess.run(
-        ["ffmpeg", "-y", "-i", str(src), "-ar", "16000", "-ac", "1",
-         "-c:a", "pcm_s16le", str(dst)],
-        check=True, capture_output=True,
-    )
+    try:
+        subprocess.run(
+            ["ffmpeg", "-y", "-i", str(src), "-ar", "16000", "-ac", "1",
+             "-c:a", "pcm_s16le", str(dst)],
+            check=True, capture_output=True, timeout=60,
+        )
+    except subprocess.CalledProcessError as e:
+        stderr = (e.stderr or b"").decode("utf-8", errors="replace")[-500:]
+        raise RuntimeError(f"ffmpeg failed to decode {src.name}: {stderr}") from e
+    except subprocess.TimeoutExpired as e:
+        raise RuntimeError(f"ffmpeg timed out converting {src.name} (60s)") from e
 
 
 def transcribe_impl(audio_path: str, language: str = "auto") -> dict:
@@ -55,18 +61,24 @@ def transcribe_impl(audio_path: str, language: str = "auto") -> dict:
 
     binary = _ensure_binary()
 
-    with tempfile.TemporaryDirectory(prefix="hermes-stt-") as tmpdir:
+    with tempfile.TemporaryDirectory(prefix="claude-soma-stt-") as tmpdir:
         wav_path = Path(tmpdir) / "in.wav"
         # Always normalize via ffmpeg so we accept ogg/opus/m4a/etc.
         _convert_to_wav(path, wav_path)
         out_prefix = Path(tmpdir) / "out"
 
         lang_flag = "auto" if language in ("auto", "", None) else language
-        result = subprocess.run(
-            [binary, "-m", WHISPER_MODEL, "-f", str(wav_path),
-             "-l", lang_flag, "-otxt", "-of", str(out_prefix), "-nt"],
-            capture_output=True, text=True, check=True,
-        )
+        try:
+            result = subprocess.run(
+                [binary, "-m", WHISPER_MODEL, "-f", str(wav_path),
+                 "-l", lang_flag, "-otxt", "-of", str(out_prefix), "-nt"],
+                capture_output=True, text=True, check=True, timeout=300,
+            )
+        except subprocess.CalledProcessError as e:
+            stderr = (e.stderr or "")[-500:]
+            raise RuntimeError(f"whisper-cli failed on {wav_path.name}: {stderr}") from e
+        except subprocess.TimeoutExpired as e:
+            raise RuntimeError(f"whisper-cli timed out on {wav_path.name} (300s)") from e
 
         text_path = out_prefix.with_suffix(".txt")
         text = text_path.read_text().strip() if text_path.exists() else ""
