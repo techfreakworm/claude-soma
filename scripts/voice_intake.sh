@@ -20,10 +20,10 @@ fi
 
 # Use the voice_stt MCP via a one-shot python invocation.
 TRANSCRIPT="$(
-    /opt/claude-soma/.venv/bin/python -c "
-import json, sys
+    AUDIO_PATH="$AUDIO_PATH" /opt/claude-soma/.venv/bin/python -c "
+import json, os, sys
 from claude_soma.mcp_servers.voice_stt.server import transcribe_impl
-r = transcribe_impl('$AUDIO_PATH', language='auto')
+r = transcribe_impl(os.environ['AUDIO_PATH'], language='auto')
 print(json.dumps(r))
 " 2>/dev/null
 )"
