@@ -1,0 +1,26 @@
+# systemd/claude-soma-api.service
+[Unit]
+Description=Claude Soma FastAPI backend
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/opt/claude-soma
+EnvironmentFile=/etc/claude-soma/secrets.env
+Environment=PATH=/opt/claude-soma/.venv/bin:/usr/local/bin:/usr/bin:/bin
+Environment=HERMES_ALLOWED_GITHUB_HANDLES=techfreakworm
+Environment=HERMES_API_CORS_ORIGINS=https://claude.mayankgupta.in
+Environment=HERMES_USAGE_DB=/opt/claude-soma/usage.sqlite
+Environment=HERMES_ACTIVITY_LOG=/home/ubuntu/.claude-soma/activity.jsonl
+ExecStart=/opt/claude-soma/.venv/bin/uvicorn claude_soma.api.main:app \
+    --host 127.0.0.1 --port 9000 --no-server-header
+Restart=always
+RestartSec=5
+StandardOutput=append:/var/log/claude-soma/api.log
+StandardError=append:/var/log/claude-soma/api.err.log
+
+[Install]
+WantedBy=multi-user.target
