@@ -1,0 +1,76 @@
+"use client";
+import { useMemo } from "react";
+import ReactFlow, { Background, Controls, Edge, Node } from "reactflow";
+import "reactflow/dist/style.css";
+
+type Project = {
+  name: string; agent_id: string; type: string; rc_url: string;
+  status: string; idle_for_seconds: number;
+};
+
+const STATUS_COLOR: Record<string, string> = {
+  active: "#34d399", idle: "#fbbf24", error: "#f43f5e", killed: "#64748b",
+};
+
+function statusOf(p: Project): string {
+  if (p.status !== "active") return p.status;
+  return p.idle_for_seconds > 3600 ? "idle" : "active";
+}
+
+export function ProjectTree({ projects }: { projects: Project[] }) {
+  const { nodes, edges } = useMemo(() => {
+    const n: Node[] = [
+      {
+        id: "orchestrator",
+        position: { x: 0, y: 0 },
+        data: { label: "telegram orchestrator" },
+        style: {
+          background: "#1e293b", color: "#f1f5f9",
+          border: "2px solid #6366f1", padding: 12, borderRadius: 8,
+          fontFamily: "monospace", fontSize: 12,
+        },
+      },
+    ];
+    const e: Edge[] = [];
+    projects.forEach((p, idx) => {
+      const status = statusOf(p);
+      const color = STATUS_COLOR[status] || "#94a3b8";
+      n.push({
+        id: p.name,
+        position: { x: (idx - (projects.length - 1) / 2) * 220, y: 200 },
+        data: {
+          label: (
+            <div className="text-left">
+              <div className="font-mono text-sm">{p.name}</div>
+              <div className="text-xs text-slate-400">{p.type}</div>
+              <div className="text-xs" style={{ color }}>● {status}</div>
+              {p.rc_url && (
+                <a href={p.rc_url} target="_blank" rel="noreferrer"
+                   className="text-xs underline text-indigo-300">attach</a>
+              )}
+            </div>
+          ),
+        },
+        style: {
+          background: "#0f172a", color: "#e2e8f0",
+          border: `2px solid ${color}`, padding: 10, borderRadius: 8,
+          width: 200,
+        },
+      });
+      e.push({
+        id: `orch-${p.name}`, source: "orchestrator", target: p.name,
+        style: { stroke: color, strokeWidth: 1.5 }, animated: status === "active",
+      });
+    });
+    return { nodes: n, edges: e };
+  }, [projects]);
+
+  return (
+    <div className="h-[600px] rounded-lg border border-slate-800 bg-slate-900/40">
+      <ReactFlow nodes={nodes} edges={edges} fitView>
+        <Background gap={24} color="#1e293b" />
+        <Controls className="!bg-slate-800 !border-slate-700" />
+      </ReactFlow>
+    </div>
+  );
+}
