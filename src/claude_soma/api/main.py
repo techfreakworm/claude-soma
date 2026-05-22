@@ -5,12 +5,9 @@ import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from claude_soma.api.routes import healthz, public
-
 
 def create_app() -> FastAPI:
     app = FastAPI(title="claude-soma-api", version="0.1.0")
-
     origins = [o.strip() for o in os.environ.get(
         "HERMES_API_CORS_ORIGINS",
         "https://claude.mayankgupta.in,http://localhost:3000",
@@ -19,9 +16,14 @@ def create_app() -> FastAPI:
         CORSMiddleware, allow_origins=origins, allow_credentials=True,
         allow_methods=["*"], allow_headers=["*"],
     )
-
+    from claude_soma.api.routes import (
+        healthz, public, projects, conversations, routines
+    )
     app.include_router(healthz.router, prefix="/api")
     app.include_router(public.router, prefix="/api")
+    app.include_router(projects.router, prefix="/api")
+    app.include_router(conversations.router, prefix="/api")
+    app.include_router(routines.router, prefix="/api")
     return app
 
 
