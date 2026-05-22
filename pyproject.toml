@@ -1,0 +1,54 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "hermes-claude"
+version = "0.1.0"
+requires-python = ">=3.12"
+license = { text = "MIT" }
+dependencies = [
+    "mcp>=1.4",
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+    "pydantic>=2.9",
+    "httpx>=0.28",
+    "aiofiles>=24.1",
+    "sse-starlette>=2.1",
+    "python-multipart>=0.0.12",
+    "anyio>=4.6",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3",
+    "pytest-asyncio>=0.24",
+    "pytest-cov>=5.0",
+    "ruff>=0.7",
+    "mypy>=1.13",
+    "httpx>=0.28",
+]
+
+[project.scripts]
+hermes-voice-stt = "hermes_claude.mcp_servers.voice_stt.server:main"
+hermes-voice-tts = "hermes_claude.mcp_servers.voice_tts.server:main"
+hermes-orchestrator = "hermes_claude.mcp_servers.project_orchestrator.server:main"
+hermes-api-mcp = "hermes_claude.mcp_servers.hermes_api.server:main"
+hermes-api = "hermes_claude.api.main:run"
+hermes-init = "hermes_claude.wizard.init:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/hermes_claude"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+addopts = "-q --strict-markers"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
