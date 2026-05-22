@@ -3,7 +3,7 @@ requires = ["hatchling>=1.27"]
 build-backend = "hatchling.build"
 
 [project]
-name = "hermes-claude"
+name = "claude-soma"
 version = "0.1.0"
 requires-python = ">=3.12"
 license = { text = "MIT" }
@@ -33,15 +33,15 @@ dev = [
 ]
 
 [project.scripts]
-hermes-voice-stt = "hermes_claude.mcp_servers.voice_stt.server:main"
-hermes-voice-tts = "hermes_claude.mcp_servers.voice_tts.server:main"
-hermes-orchestrator = "hermes_claude.mcp_servers.project_orchestrator.server:main"
-hermes-api-mcp = "hermes_claude.mcp_servers.hermes_api.server:main"
-hermes-api = "hermes_claude.api.main:run"
-hermes-init = "hermes_claude.wizard.init:main"
+soma-voice-stt = "claude_soma.mcp_servers.voice_stt.server:main"
+soma-voice-tts = "claude_soma.mcp_servers.voice_tts.server:main"
+soma-orchestrator = "claude_soma.mcp_servers.project_orchestrator.server:main"
+soma-api-mcp = "claude_soma.mcp_servers.hermes_api.server:main"
+soma-api = "claude_soma.api.main:run"
+soma-init = "claude_soma.wizard.init:main"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/hermes_claude"]
+packages = ["src/claude_soma"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

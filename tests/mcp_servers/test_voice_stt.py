@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from hermes_claude.mcp_servers.voice_stt.server import transcribe_impl
+from claude_soma.mcp_servers.voice_stt.server import transcribe_impl
 
 
 import shutil as _shutil
