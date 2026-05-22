@@ -1,0 +1,26 @@
+# systemd/claude-soma-frontend.service
+[Unit]
+Description=Claude Soma Next.js dashboard
+After=network-online.target claude-soma-api.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/opt/claude-soma/frontend
+EnvironmentFile=/etc/claude-soma/secrets.env
+Environment=NODE_ENV=production
+Environment=HOSTNAME=127.0.0.1
+Environment=PORT=3000
+Environment=HERMES_API_BASE=http://127.0.0.1:9000
+Environment=HERMES_ALLOWED_GITHUB_HANDLES=techfreakworm
+Environment=AUTH_TRUST_HOST=true
+ExecStart=/usr/bin/node .next/standalone/server.js
+Restart=always
+RestartSec=5
+StandardOutput=append:/var/log/claude-soma/frontend.log
+StandardError=append:/var/log/claude-soma/frontend.err.log
+
+[Install]
+WantedBy=multi-user.target

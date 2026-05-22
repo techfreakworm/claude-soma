@@ -1,0 +1,27 @@
+# Caddyfile
+{
+    email mayank@mayankgupta.in
+}
+
+claude.mayankgupta.in {
+    # /api/* → FastAPI (port 9000). Strip any client-supplied X-GitHub-Handle so
+    # only the internal Next.js fetch path (server-side, via middleware-set header)
+    # can authenticate. Without this strip, a curl could spoof the auth header.
+    handle_path /api/* {
+        request_header -X-GitHub-Handle
+        reverse_proxy localhost:9000
+    }
+
+    # Everything else → Next.js dashboard (port 3000).
+    handle {
+        reverse_proxy localhost:3000
+    }
+
+    encode gzip zstd
+    log {
+        output file /var/log/caddy/access.log {
+            roll_size 50mb
+            roll_keep 10
+        }
+    }
+}
