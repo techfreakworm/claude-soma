@@ -221,4 +221,4 @@ If you're forking for your own use: the entire project is MIT-licensed.
 
 ## License
 
-MIT — see [LICENSE](LICENSE) (lands in Week 4 along with the marketplace publish).
+MIT — see [LICENSE](LICENSE).
