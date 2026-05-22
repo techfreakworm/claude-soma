@@ -21,18 +21,18 @@ async def _serve(handlers: HandlerMap, sock_path: str) -> None:
 
     async def handle(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
         try:
-            data = await reader.readline()
-            req = json.loads(data)
-            method = req.get("method", "")
-            params = req.get("params", {})
-            handler = handlers.get(method)
-            if handler is None:
-                resp = {"error": f"unknown method {method!r}"}
-            else:
-                try:
+            try:
+                data = await reader.readline()
+                req = json.loads(data)
+                method = req.get("method", "")
+                params = req.get("params", {})
+                handler = handlers.get(method)
+                if handler is None:
+                    resp = {"error": f"unknown method {method!r}"}
+                else:
                     resp = {"result": await handler(params)}
-                except Exception as e:
-                    resp = {"error": str(e)}
+            except Exception as e:
+                resp = {"error": f"{type(e).__name__}: {e}"}
             writer.write((json.dumps(resp) + "\n").encode())
             await writer.drain()
         finally:

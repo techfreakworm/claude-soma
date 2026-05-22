@@ -1,12 +1,20 @@
 from __future__ import annotations
 
+import asyncio
+import os
+import tempfile
+import uuid
 from pathlib import Path
-
-import pytest
 
 from claude_soma.mcp_servers.hermes_api.claude_state import (
     list_sessions, read_activity_log, read_memory
 )
+from claude_soma.mcp_servers.hermes_api.socket import _serve, call
+
+
+def _short_sock_path() -> str:
+    # macOS limits AF_UNIX paths to ~104 chars, so pytest's tmp_path is too long.
+    return os.path.join(tempfile.gettempdir(), f"cs-{uuid.uuid4().hex[:8]}.sock")
 
 
 def test_read_activity_log_returns_recent_lines(tmp_path: Path, monkeypatch) -> None:
@@ -33,3 +41,56 @@ def test_read_memory_returns_text(tmp_path: Path, monkeypatch) -> None:
 def test_list_sessions_returns_empty_when_no_jobs(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("HERMES_CLAUDE_JOBS_ROOT", str(tmp_path))
     assert list_sessions() == []
+
+
+async def test_socket_round_trip_returns_result(tmp_path: Path) -> None:
+    sock_path = _short_sock_path()
+
+    async def echo_handler(params: dict) -> dict:
+        return {"got": params}
+
+    handlers = {"echo": echo_handler}
+    server_task = asyncio.create_task(_serve(handlers, sock_path))
+    try:
+        for _ in range(50):
+            if Path(sock_path).exists():
+                break
+            await asyncio.sleep(0.01)
+        result = await call("echo", {"hello": "world"}, sock_path=sock_path)
+        assert result == {"got": {"hello": "world"}}
+    finally:
+        server_task.cancel()
+        try:
+            await server_task
+        except asyncio.CancelledError:
+            pass
+        Path(sock_path).unlink(missing_ok=True)
+
+
+async def test_socket_round_trip_returns_error_on_unknown_method(tmp_path: Path) -> None:
+    sock_path = _short_sock_path()
+
+    async def echo_handler(params: dict) -> dict:
+        return {"got": params}
+
+    handlers = {"echo": echo_handler}
+    server_task = asyncio.create_task(_serve(handlers, sock_path))
+    try:
+        for _ in range(50):
+            if Path(sock_path).exists():
+                break
+            await asyncio.sleep(0.01)
+        raised = False
+        try:
+            await call("does_not_exist", {}, sock_path=sock_path)
+        except RuntimeError as e:
+            raised = True
+            assert "does_not_exist" in str(e)
+        assert raised, "expected RuntimeError for unknown method"
+    finally:
+        server_task.cancel()
+        try:
+            await server_task
+        except asyncio.CancelledError:
+            pass
+        Path(sock_path).unlink(missing_ok=True)

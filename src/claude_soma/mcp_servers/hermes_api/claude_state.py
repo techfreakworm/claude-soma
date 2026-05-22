@@ -63,7 +63,10 @@ def read_activity_log(limit: int = 200) -> list[dict[str, Any]]:
 
 
 def read_memory(project_slug: str) -> str:
-    path = _projects_root() / project_slug / "memory" / "MEMORY.md"
+    root = _projects_root().resolve()
+    path = (root / project_slug / "memory" / "MEMORY.md").resolve()
+    if not path.is_relative_to(root):
+        return ""
     if not path.exists():
         return ""
     return path.read_text()
@@ -93,7 +96,10 @@ def list_transcript_threads(limit: int = 50) -> list[dict[str, Any]]:
 
 
 def read_transcript(thread_id: str, project: str) -> list[dict[str, Any]]:
-    path = _projects_root() / project / "transcripts" / f"{thread_id}.jsonl"
+    root = _projects_root().resolve()
+    path = (root / project / "transcripts" / f"{thread_id}.jsonl").resolve()
+    if not path.is_relative_to(root):
+        return []
     if not path.exists():
         return []
     out = []
