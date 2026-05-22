@@ -17,13 +17,18 @@ def create_app() -> FastAPI:
         allow_methods=["*"], allow_headers=["*"],
     )
     from claude_soma.api.routes import (
-        healthz, public, projects, conversations, routines
+        healthz, public, projects, conversations, routines,
+        usage, memory, logs, admin
     )
     app.include_router(healthz.router, prefix="/api")
     app.include_router(public.router, prefix="/api")
     app.include_router(projects.router, prefix="/api")
     app.include_router(conversations.router, prefix="/api")
     app.include_router(routines.router, prefix="/api")
+    app.include_router(usage.router, prefix="/api")
+    app.include_router(memory.router, prefix="/api")
+    app.include_router(logs.router, prefix="/api")
+    app.include_router(admin.router, prefix="/api")
     return app
 
 
