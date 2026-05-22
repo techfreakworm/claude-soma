@@ -9,6 +9,16 @@
         "HERMES_WHISPER_MODEL": "/opt/whisper.cpp/models/ggml-large-v3-turbo.bin"
       },
       "alwaysLoad": true
+    },
+    "voice-tts": {
+      "type": "stdio",
+      "command": "/opt/claude-soma/.venv/bin/python",
+      "args": ["-m", "claude_soma.mcp_servers.voice_tts.server"],
+      "env": {
+        "HERMES_PIPER_BIN": "/opt/piper/piper",
+        "HERMES_PIPER_DEFAULT_VOICE": "/opt/piper/en_US-ryan-medium.onnx"
+      },
+      "alwaysLoad": true
     }
   }
 }
