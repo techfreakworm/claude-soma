@@ -1,0 +1,9 @@
+# systemd/claude-soma-idle-reaper.timer
+[Unit]
+Description=Reap idle Claude Soma project-leads every 6 hours
+[Timer]
+OnBootSec=15min
+OnUnitActiveSec=6h
+Unit=claude-soma-idle-reaper.service
+[Install]
+WantedBy=timers.target

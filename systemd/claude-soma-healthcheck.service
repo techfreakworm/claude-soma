@@ -1,0 +1,6 @@
+# systemd/claude-soma-healthcheck.service
+[Unit]
+Description=Claude Soma health check
+[Service]
+Type=oneshot
+ExecStart=/opt/claude-soma/scripts/healthcheck.sh

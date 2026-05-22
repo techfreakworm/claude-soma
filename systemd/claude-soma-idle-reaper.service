@@ -1,0 +1,11 @@
+# systemd/claude-soma-idle-reaper.service
+[Unit]
+Description=Claude Soma idle project reaper
+[Service]
+Type=oneshot
+User=ubuntu
+WorkingDirectory=/opt/claude-soma
+Environment=PATH=/opt/claude-soma/.venv/bin:/usr/local/bin:/usr/bin:/bin
+Environment=HERMES_ORCH_DB=/opt/claude-soma/registry.sqlite
+Environment=HERMES_ARCHIVE_ROOT=/opt/claude-soma/archive
+ExecStart=/opt/claude-soma/.venv/bin/python /opt/claude-soma/scripts/reaper.py

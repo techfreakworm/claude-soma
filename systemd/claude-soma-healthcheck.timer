@@ -1,0 +1,9 @@
+# systemd/claude-soma-healthcheck.timer
+[Unit]
+Description=Run Claude Soma health check every 10 minutes
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=10min
+Unit=claude-soma-healthcheck.service
+[Install]
+WantedBy=timers.target

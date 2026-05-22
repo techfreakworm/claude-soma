@@ -1,0 +1,9 @@
+# systemd/claude-soma-usage-snapshot.timer
+[Unit]
+Description=Daily Claude Soma usage snapshot at 23:55 local
+[Timer]
+OnCalendar=*-*-* 23:55:00
+Persistent=true
+Unit=claude-soma-usage-snapshot.service
+[Install]
+WantedBy=timers.target

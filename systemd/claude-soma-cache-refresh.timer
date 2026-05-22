@@ -1,0 +1,9 @@
+# systemd/claude-soma-cache-refresh.timer
+[Unit]
+Description=Refresh Claude Soma dashboard caches every 5 minutes
+[Timer]
+OnBootSec=3min
+OnUnitActiveSec=5min
+Unit=claude-soma-cache-refresh.service
+[Install]
+WantedBy=timers.target

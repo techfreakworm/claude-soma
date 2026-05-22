@@ -1,0 +1,9 @@
+# systemd/claude-soma-cache-refresh.service
+[Unit]
+Description=Claude Soma dashboard cache refresh
+[Service]
+Type=oneshot
+User=ubuntu
+WorkingDirectory=/opt/claude-soma
+Environment=PATH=/opt/claude-soma/.venv/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=/opt/claude-soma/scripts/cache_refresh.py

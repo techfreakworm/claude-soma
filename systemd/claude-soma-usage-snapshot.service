@@ -1,0 +1,11 @@
+# systemd/claude-soma-usage-snapshot.service
+[Unit]
+Description=Claude Soma daily usage snapshot
+[Service]
+Type=oneshot
+User=ubuntu
+WorkingDirectory=/opt/claude-soma
+EnvironmentFile=/etc/claude-soma/secrets.env
+Environment=PATH=/opt/claude-soma/.venv/bin:/usr/local/bin:/usr/bin:/bin
+Environment=HERMES_USAGE_DB=/opt/claude-soma/usage.sqlite
+ExecStart=/opt/claude-soma/.venv/bin/python /opt/claude-soma/scripts/usage_snapshot.py
