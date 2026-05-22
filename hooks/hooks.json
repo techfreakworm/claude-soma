@@ -1,0 +1,37 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/opt/claude-soma/scripts/session_start_context.sh"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "if": "event.meta.audio_path != null",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/opt/claude-soma/scripts/voice_intake.sh"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": ".*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/opt/claude-soma/scripts/log_activity.sh",
+            "async": true
+          }
+        ]
+      }
+    ]
+  }
+}
