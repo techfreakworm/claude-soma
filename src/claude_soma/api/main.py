@@ -18,7 +18,7 @@ def create_app() -> FastAPI:
     )
     from claude_soma.api.routes import (
         healthz, public, projects, conversations, routines,
-        usage, memory, logs, admin
+        usage, memory, logs, admin, events
     )
     app.include_router(healthz.router, prefix="/api")
     app.include_router(public.router, prefix="/api")
@@ -29,6 +29,7 @@ def create_app() -> FastAPI:
     app.include_router(memory.router, prefix="/api")
     app.include_router(logs.router, prefix="/api")
     app.include_router(admin.router, prefix="/api")
+    app.include_router(events.router, prefix="/api")
     return app
 
 
