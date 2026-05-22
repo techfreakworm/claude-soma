@@ -1,0 +1,9 @@
+{
+  "type": "agentic-coding",
+  "cwd_root": "~/projects",
+  "permission_mode": "acceptEdits",
+  "default_brief": "You are the lead of an agentic coding session. Spawn focused subagents (Agent tool) for transient parallel work; no persistent team needed by default.",
+  "teammates": [],
+  "mcp_servers": ["filesystem", "web-fetch"],
+  "skills": ["superpowers:brainstorming", "superpowers:writing-plans", "superpowers:executing-plans"]
+}

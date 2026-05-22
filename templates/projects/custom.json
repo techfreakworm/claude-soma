@@ -1,0 +1,9 @@
+{
+  "type": "custom",
+  "cwd_root": "~/projects",
+  "permission_mode": "acceptEdits",
+  "default_brief": "You are the lead of a custom project. The user will brief you with specifics.",
+  "teammates": [],
+  "mcp_servers": ["filesystem"],
+  "skills": []
+}

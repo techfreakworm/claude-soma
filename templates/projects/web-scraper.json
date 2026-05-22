@@ -1,0 +1,13 @@
+{
+  "type": "web-scraper",
+  "cwd_root": "~/projects",
+  "permission_mode": "acceptEdits",
+  "default_brief": "You are the lead of a web scraper project. Use Playwright for browser automation, design a state machine for change detection, and persist state in SQLite. Coordinate with your teammates database-engineer, backend-engineer, and playwright-engineer via SendMessage.",
+  "teammates": [
+    {"name": "database-engineer", "agent": "general-purpose", "model": "sonnet"},
+    {"name": "backend-engineer", "agent": "general-purpose", "model": "sonnet"},
+    {"name": "playwright-engineer", "agent": "general-purpose", "model": "sonnet"}
+  ],
+  "mcp_servers": ["filesystem", "web-fetch", "playwright-mcp"],
+  "skills": ["bs-scraping", "async-helpers"]
+}

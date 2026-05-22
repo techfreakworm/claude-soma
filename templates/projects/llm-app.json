@@ -1,0 +1,13 @@
+{
+  "type": "llm-app",
+  "cwd_root": "~/projects",
+  "permission_mode": "acceptEdits",
+  "default_brief": "You are the lead of an LLM-powered app project. Design model interactions, evaluations, and the UI. Coordinate with your teammates model-eval-engineer, prompt-engineer, and ui-engineer via SendMessage.",
+  "teammates": [
+    {"name": "model-eval-engineer", "agent": "general-purpose", "model": "sonnet"},
+    {"name": "prompt-engineer", "agent": "general-purpose", "model": "sonnet"},
+    {"name": "ui-engineer", "agent": "general-purpose", "model": "sonnet"}
+  ],
+  "mcp_servers": ["filesystem", "web-fetch", "huggingface-mcp"],
+  "skills": ["claude-api", "ai-sdk"]
+}

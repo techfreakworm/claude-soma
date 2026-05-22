@@ -1,0 +1,13 @@
+{
+  "type": "server-app",
+  "cwd_root": "~/projects",
+  "permission_mode": "acceptEdits",
+  "default_brief": "You are the lead of a backend service project. Coordinate API design, persistence, and deployment with your teammates api-engineer, db-engineer, and ops-engineer via SendMessage.",
+  "teammates": [
+    {"name": "api-engineer", "agent": "general-purpose", "model": "sonnet"},
+    {"name": "db-engineer", "agent": "general-purpose", "model": "sonnet"},
+    {"name": "ops-engineer", "agent": "general-purpose", "model": "sonnet"}
+  ],
+  "mcp_servers": ["filesystem", "postgres-mcp", "docker-mcp"],
+  "skills": ["server-patterns", "nextjs"]
+}
