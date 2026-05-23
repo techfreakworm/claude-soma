@@ -58,7 +58,11 @@ ExecStartPre=/bin/bash -c '/usr/bin/tmux kill-session -t hermes 2>/dev/null || t
 # --channels (it silently falls into --print mode and errors). The native
 # binary is installed via `claude install latest` and is the only one that
 # supports the persistent channel-listener loop.
-ExecStart=/usr/bin/tmux new-session -d -s hermes -c /opt/claude-soma /home/ubuntu/.local/bin/claude --channels plugin:telegram@claude-plugins-official --plugin-dir /opt/claude-soma --add-dir /home/ubuntu/hermes-work --dangerously-skip-permissions --effort max
+# --append-system-prompt-file: standing operating-mode instructions that tell
+# the bot to dispatch substantial tasks to backgrounded subagents and ack
+# immediately, so the channel stays responsive while work happens in parallel.
+# See system_prompts/responsive_bot.md for the full text.
+ExecStart=/usr/bin/tmux new-session -d -s hermes -c /opt/claude-soma /home/ubuntu/.local/bin/claude --channels plugin:telegram@claude-plugins-official --plugin-dir /opt/claude-soma --add-dir /home/ubuntu/hermes-work --dangerously-skip-permissions --effort max --append-system-prompt-file /opt/claude-soma/system_prompts/responsive_bot.md
 
 # Give tmux ~1s to spin the pane, then tap its output to the log file. This
 # is the TTY-safe equivalent of `| tee`.
