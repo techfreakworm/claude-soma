@@ -3,7 +3,7 @@
 
 set -euo pipefail
 
-HOST="${CLAUDE_SOMA_HOST:-oci-hermes}"
+HOST="${CLAUDE_SOMA_HOST:-soma-vps}"
 REMOTE="/opt/claude-soma"
 
 ssh "$HOST" "sudo install -d -o ubuntu -g ubuntu $REMOTE"
