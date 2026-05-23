@@ -4,10 +4,13 @@
 }
 
 soma.mayankgupta.in {
-    # /api/* → FastAPI (port 9000). Strip any client-supplied X-GitHub-Handle so
-    # only the internal Next.js fetch path (server-side, via middleware-set header)
-    # can authenticate. Without this strip, a curl could spoof the auth header.
-    handle_path /api/* {
+    # /api/* → FastAPI (port 9000). Use `handle` (not `handle_path`) so the
+    # full /api/<path> URL is forwarded as-is — FastAPI's routers all mount
+    # under the /api prefix, so stripping it here would 404.
+    # Strip any client-supplied X-GitHub-Handle so only the internal Next.js
+    # fetch path (server-side, via middleware-set header) can authenticate.
+    # Without this strip, a curl could spoof the auth header.
+    handle /api/* {
         request_header -X-GitHub-Handle
         reverse_proxy localhost:9000
     }
