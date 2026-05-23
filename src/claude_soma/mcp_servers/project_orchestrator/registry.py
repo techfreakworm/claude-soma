@@ -1,10 +1,15 @@
 # src/claude_soma/mcp_servers/project_orchestrator/registry.py
 from __future__ import annotations
 
+import json
 import sqlite3
 import time
 from pathlib import Path
 from typing import Any
+
+
+ALLOWED_ROUTINE_KINDS = frozenset({"cloud", "local"})
+ALLOWED_ROUTINE_CREATORS = frozenset({"user", "bot", "system"})
 
 
 SCHEMA = """
@@ -23,6 +28,22 @@ CREATE TABLE IF NOT EXISTS projects (
 
 CREATE INDEX IF NOT EXISTS idx_projects_status ON projects(status);
 CREATE INDEX IF NOT EXISTS idx_projects_last_activity ON projects(last_activity);
+
+CREATE TABLE IF NOT EXISTS routines (
+    name            TEXT PRIMARY KEY,
+    kind            TEXT NOT NULL CHECK (kind IN ('cloud', 'local')),
+    schedule        TEXT NOT NULL,
+    target_skill    TEXT,
+    description     TEXT,
+    last_run        REAL,
+    next_run        REAL,
+    created_by      TEXT NOT NULL DEFAULT 'bot'
+                    CHECK (created_by IN ('user', 'bot', 'system')),
+    created_at      REAL NOT NULL,
+    metadata        TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_routines_kind ON routines(kind);
 """
 
 
@@ -100,6 +121,99 @@ class Registry:
 
     def delete(self, name: str) -> None:
         self._conn.execute("DELETE FROM projects WHERE name = ?", (name,))
+
+    def register_routine(
+        self,
+        name: str,
+        *,
+        kind: str,
+        schedule: str,
+        target_skill: str | None = None,
+        description: str | None = None,
+        created_by: str = "bot",
+        metadata: dict[str, Any] | None = None,
+    ) -> None:
+        if kind not in ALLOWED_ROUTINE_KINDS:
+            raise ValueError(
+                f"invalid routine kind {kind!r}; expected one of "
+                f"{sorted(ALLOWED_ROUTINE_KINDS)}"
+            )
+        if created_by not in ALLOWED_ROUTINE_CREATORS:
+            raise ValueError(
+                f"invalid created_by {created_by!r}; expected one of "
+                f"{sorted(ALLOWED_ROUTINE_CREATORS)}"
+            )
+        now = time.time()
+        meta_json = json.dumps(metadata) if metadata is not None else None
+        self._conn.execute(
+            """
+            INSERT INTO routines(name, kind, schedule, target_skill, description,
+                                 last_run, next_run, created_by, created_at, metadata)
+            VALUES(?, ?, ?, ?, ?, NULL, NULL, ?, ?, ?)
+            ON CONFLICT(name) DO UPDATE SET
+                kind=excluded.kind,
+                schedule=excluded.schedule,
+                target_skill=excluded.target_skill,
+                description=excluded.description,
+                created_by=excluded.created_by,
+                metadata=excluded.metadata
+            """,
+            (
+                name, kind, schedule, target_skill, description,
+                created_by, now, meta_json,
+            ),
+        )
+
+    def list_routines(self) -> list[dict[str, Any]]:
+        rows = self._conn.execute(
+            "SELECT * FROM routines ORDER BY name ASC"
+        ).fetchall()
+        return [self._row_to_routine(r) for r in rows]
+
+    def get_routine(self, name: str) -> dict[str, Any] | None:
+        row = self._conn.execute(
+            "SELECT * FROM routines WHERE name = ?", (name,)
+        ).fetchone()
+        return self._row_to_routine(row) if row else None
+
+    def delete_routine(self, name: str) -> None:
+        self._conn.execute("DELETE FROM routines WHERE name = ?", (name,))
+
+    def update_routine_run(
+        self,
+        name: str,
+        *,
+        last_run: float | None = None,
+        next_run: float | None = None,
+    ) -> None:
+        sets: list[str] = []
+        params: list[Any] = []
+        if last_run is not None:
+            sets.append("last_run = ?")
+            params.append(last_run)
+        if next_run is not None:
+            sets.append("next_run = ?")
+            params.append(next_run)
+        if not sets:
+            return
+        params.append(name)
+        self._conn.execute(
+            f"UPDATE routines SET {', '.join(sets)} WHERE name = ?",
+            params,
+        )
+
+    @staticmethod
+    def _row_to_routine(row: sqlite3.Row) -> dict[str, Any]:
+        d = dict(row)
+        raw = d.get("metadata")
+        if raw:
+            try:
+                d["metadata"] = json.loads(raw)
+            except (TypeError, json.JSONDecodeError):
+                d["metadata"] = None
+        else:
+            d["metadata"] = None
+        return d
 
     def close(self) -> None:
         self._conn.close()
