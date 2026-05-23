@@ -12,7 +12,7 @@ WorkingDirectory=/opt/claude-soma
 EnvironmentFile=/etc/claude-soma/secrets.env
 Environment=PATH=/opt/claude-soma/.venv/bin:/usr/local/bin:/usr/bin:/bin
 Environment=HERMES_ALLOWED_GITHUB_HANDLES=techfreakworm
-Environment=HERMES_API_CORS_ORIGINS=https://claude.mayankgupta.in
+Environment=HERMES_API_CORS_ORIGINS=https://soma.mayankgupta.in,http://localhost:3000
 Environment=HERMES_USAGE_DB=/opt/claude-soma/usage.sqlite
 Environment=HERMES_ACTIVITY_LOG=/home/ubuntu/.claude-soma/activity.jsonl
 ExecStart=/opt/claude-soma/.venv/bin/uvicorn claude_soma.api.main:app \

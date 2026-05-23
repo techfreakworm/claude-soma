@@ -3,7 +3,7 @@
     email mayank@mayankgupta.in
 }
 
-claude.mayankgupta.in {
+soma.mayankgupta.in {
     # /api/* → FastAPI (port 9000). Strip any client-supplied X-GitHub-Handle so
     # only the internal Next.js fetch path (server-side, via middleware-set header)
     # can authenticate. Without this strip, a curl could spoof the auth header.
