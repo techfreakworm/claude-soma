@@ -16,24 +16,29 @@ def _isolate_registry(tmp_path: Path, monkeypatch) -> None:
     orch._reset_singletons_for_tests()
 
 
+def _ok(stdout: str = "") -> MagicMock:
+    m = MagicMock()
+    m.stdout = stdout
+    m.stderr = ""
+    m.returncode = 0
+    return m
+
+
 def test_spawn_project_registers_and_returns_url() -> None:
-    fake = MagicMock(returncode=0,
-                     stdout='{"agent_id":"a-1","rc_url":"https://r.example/a-1"}\n')
-    with patch("subprocess.run", return_value=fake):
+    pane = "remote: https://rc.claude.com/alpha-rc\n"
+    with patch("subprocess.run", side_effect=[_ok(), _ok(pane)]):
         r = orch.spawn_project_impl(
             name="alpha", type_="web-scraper",
             brief="Build a scraper.", permission_mode="acceptEdits",
         )
-    assert r["agent_id"] == "a-1"
-    assert r["rc_url"] == "https://r.example/a-1"
+    assert r["agent_id"] == "soma-proj-alpha"
+    assert r["rc_url"] == "https://rc.claude.com/alpha-rc"
     listed = orch.list_projects_impl()
     assert any(p["name"] == "alpha" for p in listed)
 
 
 def test_kill_project_marks_killed() -> None:
-    fake = MagicMock(returncode=0,
-                     stdout='{"agent_id":"a-2","rc_url":"https://r/a-2"}\n')
-    with patch("subprocess.run", return_value=fake):
+    with patch("subprocess.run", side_effect=[_ok(), _ok("")]):
         orch.spawn_project_impl(name="beta", type_="custom",
                                 brief="Test.", permission_mode="default")
     r = orch.kill_project_impl(name="beta", archive=True)
@@ -42,9 +47,7 @@ def test_kill_project_marks_killed() -> None:
 
 
 def test_get_status_returns_idle_for() -> None:
-    fake = MagicMock(returncode=0,
-                     stdout='{"agent_id":"a-3","rc_url":"https://r/a-3"}\n')
-    with patch("subprocess.run", return_value=fake):
+    with patch("subprocess.run", side_effect=[_ok(), _ok("")]):
         orch.spawn_project_impl(name="gamma", type_="custom",
                                 brief="x", permission_mode="default")
     s = orch.get_status_impl("gamma")
@@ -53,11 +56,9 @@ def test_get_status_returns_idle_for() -> None:
 
 
 def test_spawn_unknown_type_falls_back_to_custom() -> None:
-    fake = MagicMock(returncode=0,
-                     stdout='{"agent_id":"a-4","rc_url":"https://r/a-4"}\n')
-    with patch("subprocess.run", return_value=fake):
+    with patch("subprocess.run", side_effect=[_ok(), _ok("")]):
         r = orch.spawn_project_impl(name="d", type_="not-a-type",
                                     brief="x", permission_mode="default")
-    assert r["agent_id"] == "a-4"
+    assert r["agent_id"] == "soma-proj-d"
     p = orch.get_status_impl("d")
     assert p["type"] in {"custom", "not-a-type"}
