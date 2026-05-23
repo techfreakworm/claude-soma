@@ -9,11 +9,9 @@ const nextConfig = {
   turbopack: {
     root: import.meta.dirname,
   },
-  rewrites: async () => [
-    {
-      source: "/api/:path*",
-      destination: "http://127.0.0.1:9000/api/:path*",
-    },
-  ],
+  // No rewrites: Caddy is the public router and handles /api/auth/* (Next-auth)
+  // vs /api/* (FastAPI) at the edge. Lib/api.ts uses an absolute API_BASE for
+  // server-side fetches. An /api/:path* rewrite here would intercept Next-auth's
+  // own /api/auth/* routes and forward them to FastAPI, which 404s on them.
 };
 export default nextConfig;
