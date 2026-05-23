@@ -22,7 +22,19 @@ After=network-online.target
 Wants=network-online.target
 
 [Service]
-Type=forking
+# Type=oneshot + RemainAfterExit=yes: we start the tmux session and
+# consider the service "active" indefinitely without trying to track a
+# main process. systemd's Type=forking didn't work here because tmux
+# daemonizes too deeply for systemd to find a MainPID, which caused a
+# restart loop (each cycle thought the service had exited, then ExecStop
+# killed the tmux session, then Restart=always re-fired).
+#
+# Recovery: if claude inside tmux dies, the tmux session goes empty but
+# stays alive — systemd doesn't notice. scripts/healthcheck.sh runs every
+# 10 minutes and calls `systemctl restart` if `tmux has-session -t hermes`
+# fails, which gives us a slow-but-reliable watchdog.
+Type=oneshot
+RemainAfterExit=yes
 User=ubuntu
 Group=ubuntu
 WorkingDirectory=/opt/claude-soma
@@ -53,9 +65,13 @@ ExecStart=/usr/bin/tmux new-session -d -s hermes -c /opt/claude-soma /home/ubunt
 ExecStartPost=/bin/sleep 1
 ExecStartPost=/usr/bin/tmux pipe-pane -t hermes -o "cat >> /var/log/claude-soma/channel.log"
 
-ExecStop=/usr/bin/tmux kill-session -t hermes
+ExecStop=/usr/bin/tmux kill-session -t hermes 2>/dev/null || true
 
-Restart=always
+# Restart=on-failure (not always) — oneshot+RemainAfterExit means the
+# service stays Active even after a clean start, so Restart=always
+# would never fire anyway. on-failure covers the case where ExecStart
+# itself fails (e.g. native claude missing, tmux broken).
+Restart=on-failure
 RestartSec=10
 
 [Install]
