@@ -1,8 +1,10 @@
 # Claude Soma — V1 Operations Checklist
 
-State after the 2026-05-23 deployment to `soma.mayankgupta.in` (Oracle Cloud Ubuntu
-24.04 ARM, 2 vCPU / 11 GB RAM / 96 GB disk, +8 GB swap). Tag at deploy time:
-`week-4-code-complete`.
+State after the 2026-05-24 deployment to `soma.mayankgupta.in` (Oracle Cloud Ubuntu
+24.04 ARM, 2 vCPU / 11 GB RAM / 96 GB disk, +8 GB swap). Domain:
+**<https://soma.mayankgupta.in>** (Caddy + Let's Encrypt). Tag at code-merge
+time: `week-4-code-complete`; plus V1.5 spawner + routines registry landed
+post-tag on `main`.
 
 ## Setup
 
@@ -29,24 +31,17 @@ State after the 2026-05-23 deployment to `soma.mayankgupta.in` (Oracle Cloud Ubu
         `tmux pipe-pane` (NOT `| tee` — that breaks claude's TTY detection)
 - [x] Codex CLI installed + `codex login` complete (ChatGPT auth, `~/.codex/auth.json`)
 - [x] plugin.json + marketplace.json: `author` as object (was string, failed Zod validation)
+- [x] **Item B — GitHub OAuth + DNS + Caddy** done. DNS A record `soma` → `soma.mayankgupta.in` at GoDaddy. OAuth app `<oauth-client-id>` callback `https://soma.mayankgupta.in/api/auth/callback/github`. Caddyfile installed; Let's Encrypt cert auto-acquired. Real `AUTH_SECRET` (44-byte base64) replaces the placeholder. Both `https://soma.mayankgupta.in/` (landing) and `/admin` (Next-auth) work end-to-end.
+- [x] **Item C — usage-snapshot timer enabled** (fires daily 23:55 UTC).
+- [x] **Item F — secrets.env backed up** to `~/Backups/claude-soma/secrets-<timestamp>.env` on M5 Max (encrypt before storing off-site).
+- [x] **GitHub deploy key for claude-soma** (push-only, scoped to one repo) — bot can self-update its own repo via SSH.
+- [x] **GitHub fine-grained PAT + `gh` CLI** — bot can `gh repo create` new repos and push to them (used to autonomously create projects). Token also exported as `GITHUB_TOKEN` in secrets.env.
+- [x] **Caddy routing fixes:** `handle /api/auth/*` → Next-auth (port 3000), `handle /api/*` → FastAPI (port 9000), everything else → Next.js. Was initially `handle_path` (stripped prefix and 404'd FastAPI) and `/api/auth/*` was caught by the FastAPI rule (404'd Next-auth).
+- [x] **`next.config.mjs` rewrite removed** — was forwarding `/api/*` to FastAPI inside Next.js, shadowing Next-auth's own `/api/auth/*` routes.
+- [x] **iptables fix:** Phase 1 inserted ACCEPT 80/443 at position 6, AFTER Oracle's default REJECT at position 5 — so the public couldn't reach Caddy. Re-inserted at position 5 (now: SSH → 80 → 443 → REJECT). Bake into next bootstrap script (see V1.5 followups).
+- [x] **`portfolio-oneliner` weekday brief** timer added by the bot itself (Mon–Fri 03:30 UTC). 5 systemd timers total.
 
 ### Pending
-
-- [ ] **Item B — GitHub OAuth app + DNS + Caddy**
-  - Pick a domain (e.g. `claude.mayankgupta.in`), add A record → `soma.mayankgupta.in`
-  - Register OAuth app at <https://github.com/settings/developers>
-    - Homepage: `https://<domain>/`
-    - Callback: `https://<domain>/api/auth/callback/github`
-  - Append `AUTH_GITHUB_ID` + `AUTH_GITHUB_SECRET` to `/etc/claude-soma/secrets.env`
-  - Generate real `AUTH_SECRET=$(openssl rand -base64 32)`, replace placeholder
-  - `sudo install -m 644 Caddyfile /etc/caddy/Caddyfile && sudo systemctl reload caddy`
-  - Verify: `https://<domain>/` (public) + `https://<domain>/admin` (OAuth gate)
-
-- [ ] **Item D — Replace `AUTH_SECRET` placeholder**
-  - Currently `placeholder-soma-replace-on-deploy-XXXXXXXXXXXXXXXXXXXXXXXX`
-  - `AUTH_SECRET=$(openssl rand -base64 32)`
-  - Restart frontend: `sudo systemctl restart claude-soma-frontend.service`
-  - Only matters once Item B is done (no one can log in until then)
 
 - [ ] **Item F — Backup `secrets.env`**
   - Single point of failure. CLAUDE_CODE_OAUTH_TOKEN + Telegram bot token + AUTH_SECRET all live there.
@@ -126,13 +121,23 @@ State after the 2026-05-23 deployment to `soma.mayankgupta.in` (Oracle Cloud Ubu
 
 ## V1.5 backlog
 
-- [ ] **Rewrite `spawner.py`** for current Claude Code. `claude --bg` was removed in 2.1.150; `claude agents` is interactive-only. Options: (a) tmux-wrap a `claude` per project (same pattern as `claude-soma-channel.service`) and scrape session ID from startup output, (b) wait for upstream `claude agents create`. Without this, the bot self-recovers by doing trivial tasks inline (works) but never registers a real project-lead.
+- [x] **`spawner.py` rewrite** — done (commit `d31df9a`). tmux-wrapped per-project sessions using native `claude` at `~/.local/bin/claude`. 10 new tests. `agent_id` is now `soma-proj-<name>` (tmux session name).
 
-- [ ] **Unified routines registry.** Today the bot tracks zero routines as first-class entities. Cloud routines live on Anthropic's infra (queryable via `/routines` slash command); local systemd timers live in `/etc/systemd/system/` (visible only via `systemctl list-timers`); the `/api/routines` endpoint only knows about the cloud side. Proposed fix:
-  1. Add a `routines` table to `/opt/claude-soma/registry.sqlite` with columns `name`, `kind` (`cloud`/`local`), `schedule`, `target_skill`, `last_run`, `next_run`, `created_by` (`user`/`bot`)
-  2. Have the bot insert a row whenever it creates a routine (cloud OR local)
-  3. Extend `/api/routines` to merge the registry table with live `systemctl list-timers --no-pager | grep claude-soma` output and the RemoteTrigger query
-  - Without this, you'll have a fragmented view as soon as you have more than ~3 local timers (you forget which the bot created and why).
+- [x] **Unified routines registry** — done (commit `87cb741`). `routines` table + 5 Registry methods + `/api/routines` endpoint merging registry/systemd/RemoteTrigger sources. 10 new tests.
+
+- [ ] **#36 Wire `kill_session()` into `kill_project_impl`** — the spawner rewrite added `kill_session()` but `project_orchestrator/server.py::kill_project_impl` still only sets registry `status='killed'` without actually terminating the tmux session. ~10 line change.
+
+- [ ] **#37 Bot-side `register_routine()` calls** — the routines table exists but no creator populates it. Wire:
+  1. `skills/schedule-routine/` skill — after creating a RemoteTrigger, call `register_routine(name, kind="cloud", schedule=..., target_skill=..., metadata={"trigger_id": "..."}, created_by="user")`
+  2. portfolio-oneliner provisioning (and any future bot-created local timer) — `register_routine(name, kind="local", schedule=..., target_skill=..., created_by="bot")`
+  3. `soma-init` wizard (when installing default timers) — `register_routine(..., created_by="system")` for each of healthcheck, cache-refresh, usage-snapshot, idle-reaper
+  - Until this lands, `/api/routines` falls back to synthesized entries from systemd/RemoteTrigger (correct shape, but `created_by` always says `"system"`/`"cloud"` — never canonical `"bot"`/`"user"`).
+
+- [ ] **#38 Fix Phase 1 bootstrap iptables order** — the bootstrap script must insert ACCEPT 80/443 at position **5** (before Oracle's default REJECT), not position 6. Bake into `scripts/vps_bootstrap.sh` (new file) and/or `soma-init` wizard. Also document in NEXT.md B2.
+
+- [ ] **Routines registry: store `systemd unit name` in `metadata.unit`** so the merger doesn't rely on heuristic name aliasing (`<name>` ↔ `claude-soma-<name>.timer`). Will come naturally when #37 lands.
+
+- [ ] **Pre-existing `F401` in `project_orchestrator/server.py`** — `InvalidProjectName`, `BriefTooLong` imports unused. One-line cleanup. Flagged by both subagents, left alone per "don't reformat unrelated code".
 
 ## Operational quick reference
 
