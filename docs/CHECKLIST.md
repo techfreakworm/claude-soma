@@ -70,10 +70,10 @@ State after the 2026-05-23 deployment to `soma.mayankgupta.in` (Oracle Cloud Ubu
 
 ### Pending
 
-- [ ] **T1 — Project spawn** — **BLOCKED on spawner rewrite**
+- [~] **T1 — Project spawn** — **soft pass via fallback; orchestrator path BLOCKED**
   - DM: *"Build me a tiny demo app called demo-smoke that just prints hello."*
   - Expected: bot replies with a Remote Control URL for `demo-smoke`
-  - **Actual on 2026-05-23**: spawner fails. Root cause: `src/claude_soma/mcp_servers/project_orchestrator/spawner.py` invokes `claude --bg --output-format json <brief>`, but Claude Code 2.1.150 removed the `--bg` flag entirely. The replacement is the `claude agents` subcommand, which is interactive-only (no non-interactive `create` equivalent yet). When the spawn fails, the bot self-recovers by killing the orphan sessions and trying to execute the task in the current session — which works for trivial tasks but defeats the whole project-orchestrator design.
+  - **Actual on 2026-05-23**: spawner fails, bot self-recovers and delivers the functional outcome (built `/tmp/demo-smoke/index.html`, served via `python3 -m http.server 8000`, exposed via ngrok). User-facing flow works, but no project-lead was registered. Root cause: `src/claude_soma/mcp_servers/project_orchestrator/spawner.py` invokes `claude --bg --output-format json <brief>`, but Claude Code 2.1.150 removed the `--bg` flag entirely. Replacement (`claude agents`) is interactive-only — no non-interactive `create` equivalent yet.
   - **V1.5 fix path**: either (a) rewrite spawner to launch a tmux-wrapped `claude` per project (same pattern as `claude-soma-channel.service`) and scrape the session ID from claude's startup output, or (b) wait for upstream `claude agents create` non-interactive subcommand.
 
 - [ ] **T2 — Portfolio status skill**
