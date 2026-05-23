@@ -2,7 +2,11 @@
   "name": "claude-soma",
   "version": "0.1.0",
   "description": "Hermes-Agent's value in 10% the code, by riding Claude Code's native rails.",
-  "author": "Mayank Gupta",
+  "author": {
+    "name": "Mayank Gupta",
+    "email": "techfreakworm@gmail.com",
+    "url": "https://mayankgupta.in"
+  },
   "repository": "https://github.com/techfreakworm/claude-soma",
   "homepage": "https://claude.mayankgupta.in",
   "license": "MIT",
