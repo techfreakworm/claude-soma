@@ -153,7 +153,18 @@ sudo npx --yes playwright install-deps chromium 2>&1 | tail -3
 if [ ! -d "$HOME/.cache/ms-playwright" ] || [ -z "$(ls "$HOME/.cache/ms-playwright" 2>/dev/null)" ]; then
     npx --yes playwright install chromium 2>&1 | tail -3
 fi
-ls -d "$HOME/.cache/ms-playwright/chromium"* 2>/dev/null | head -1
+# Playwright MCP only accepts --browser={chrome,firefox,webkit,msedge}; "chrome"
+# channel isn't shipped for Linux ARM64. Solution: point --executable-path at
+# the chromium binary Playwright installed. A version-stable symlink lets the
+# .mcp.json reference a path that survives chromium-version bumps (next bump
+# just re-runs this step and points the symlink at the new path).
+LATEST_CHROMIUM=$(ls -d "$HOME"/.cache/ms-playwright/chromium-*/chrome-linux/chrome 2>/dev/null | sort | tail -1)
+if [ -n "$LATEST_CHROMIUM" ]; then
+    sudo ln -sf "$LATEST_CHROMIUM" /usr/local/bin/playwright-chromium
+    ls -la /usr/local/bin/playwright-chromium
+else
+    echo "WARN: no chromium binary found in $HOME/.cache/ms-playwright/"
+fi
 
 step "11/12  pre-create claude-soma directories"
 sudo install -d -m 700 -o ubuntu -g ubuntu /etc/claude-soma

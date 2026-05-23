@@ -44,7 +44,11 @@
     "playwright": {
       "type": "stdio",
       "command": "/usr/bin/playwright-mcp",
-      "args": ["--headless", "--isolated"],
+      "args": [
+        "--headless",
+        "--isolated",
+        "--executable-path", "/usr/local/bin/playwright-chromium"
+      ],
       "alwaysLoad": true
     }
   }
