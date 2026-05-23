@@ -124,6 +124,16 @@ State after the 2026-05-23 deployment to `soma.mayankgupta.in` (Oracle Cloud Ubu
   - `sqlite3 /opt/claude-soma/usage.sqlite 'SELECT * FROM daily_snapshots ORDER BY date DESC LIMIT 1'`
   - Expect: one row with today's date and non-zero credit numbers
 
+## V1.5 backlog
+
+- [ ] **Rewrite `spawner.py`** for current Claude Code. `claude --bg` was removed in 2.1.150; `claude agents` is interactive-only. Options: (a) tmux-wrap a `claude` per project (same pattern as `claude-soma-channel.service`) and scrape session ID from startup output, (b) wait for upstream `claude agents create`. Without this, the bot self-recovers by doing trivial tasks inline (works) but never registers a real project-lead.
+
+- [ ] **Unified routines registry.** Today the bot tracks zero routines as first-class entities. Cloud routines live on Anthropic's infra (queryable via `/routines` slash command); local systemd timers live in `/etc/systemd/system/` (visible only via `systemctl list-timers`); the `/api/routines` endpoint only knows about the cloud side. Proposed fix:
+  1. Add a `routines` table to `/opt/claude-soma/registry.sqlite` with columns `name`, `kind` (`cloud`/`local`), `schedule`, `target_skill`, `last_run`, `next_run`, `created_by` (`user`/`bot`)
+  2. Have the bot insert a row whenever it creates a routine (cloud OR local)
+  3. Extend `/api/routines` to merge the registry table with live `systemctl list-timers --no-pager | grep claude-soma` output and the RemoteTrigger query
+  - Without this, you'll have a fragmented view as soon as you have more than ~3 local timers (you forget which the bot created and why).
+
 ## Operational quick reference
 
 ```bash
