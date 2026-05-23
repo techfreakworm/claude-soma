@@ -4,6 +4,13 @@
 }
 
 soma.mayankgupta.in {
+    # /api/auth/* → Next.js (port 3000). Next-auth owns these routes
+    # (signin, callback, session, csrf, etc.) via app/api/auth/[...nextauth].
+    # Must be matched BEFORE the generic /api/* rule below.
+    handle /api/auth/* {
+        reverse_proxy localhost:3000
+    }
+
     # /api/* → FastAPI (port 9000). Use `handle` (not `handle_path`) so the
     # full /api/<path> URL is forwarded as-is — FastAPI's routers all mount
     # under the /api prefix, so stripping it here would 404.
