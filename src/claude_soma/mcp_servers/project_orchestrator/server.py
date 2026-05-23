@@ -8,7 +8,9 @@ from pathlib import Path
 from mcp.server.fastmcp import FastMCP
 
 from .registry import Registry
-from .spawner import spawn_background_lead, InvalidProjectName, BriefTooLong
+from .spawner import (
+    spawn_background_lead, kill_session, InvalidProjectName, BriefTooLong,
+)
 from .templates import load_template, list_template_names, TemplateNotFound
 
 
@@ -96,6 +98,11 @@ def kill_project_impl(*, name: str, archive: bool = True) -> dict:
     p = _reg().get(name)
     if not p:
         raise RuntimeError(f"no project named {name!r}")
+    # Terminate the tmux-wrapped claude session first (it's the actual running
+    # process); then mark the registry row as killed so list_active hides it.
+    # kill_session is best-effort — if the tmux session is already gone we
+    # still want to update the registry.
+    kill_session(p["agent_id"])
     _reg().set_status(name, "killed")
     return {"name": name, "killed_at": time.time()}
 

@@ -37,13 +37,19 @@ def test_spawn_project_registers_and_returns_url() -> None:
     assert any(p["name"] == "alpha" for p in listed)
 
 
-def test_kill_project_marks_killed() -> None:
-    with patch("subprocess.run", side_effect=[_ok(), _ok("")]):
+def test_kill_project_marks_killed_and_terminates_tmux() -> None:
+    # subprocess.run call sequence: 2 for spawn (tmux new-session + capture-pane),
+    # 1 for kill (tmux kill-session).
+    with patch("subprocess.run", side_effect=[_ok(), _ok(""), _ok("")]) as run_mock:
         orch.spawn_project_impl(name="beta", type_="custom",
                                 brief="Test.", permission_mode="default")
-    r = orch.kill_project_impl(name="beta", archive=True)
+        r = orch.kill_project_impl(name="beta", archive=True)
     assert r["killed_at"] is not None
     assert all(p["name"] != "beta" for p in orch.list_projects_impl())
+    # Last subprocess.run was the kill_session: tmux kill-session -t soma-proj-beta
+    last_cmd = run_mock.call_args_list[-1].args[0]
+    assert "kill-session" in last_cmd
+    assert "soma-proj-beta" in last_cmd
 
 
 def test_get_status_returns_idle_for() -> None:
