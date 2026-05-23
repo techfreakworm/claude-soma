@@ -1,7 +1,13 @@
 from __future__ import annotations
 
+from pathlib import Path
+
+from claude_soma.mcp_servers.project_orchestrator.registry import Registry
 from claude_soma.wizard.init import (
-    render_systemd_unit, render_caddyfile, validate_domain
+    _backfill_default_routines,
+    render_caddyfile,
+    render_systemd_unit,
+    validate_domain,
 )
 
 
@@ -28,3 +34,46 @@ def test_render_systemd_unit_substitutes_paths() -> None:
     )
     assert "ExecStart=/usr/bin/echo ok" in out
     assert "Description=API" in out
+
+
+def test_backfill_default_routines_registers_all_five(
+    tmp_path: Path, monkeypatch
+) -> None:
+    db = tmp_path / "reg.sqlite"
+    monkeypatch.setenv("HERMES_ORCH_DB", str(db))
+
+    _backfill_default_routines()
+
+    reg = Registry(db)
+    try:
+        routines = {r["name"]: r for r in reg.list_routines()}
+    finally:
+        reg.close()
+
+    assert set(routines) == {
+        "healthcheck", "cache-refresh", "usage-snapshot",
+        "idle-reaper", "portfolio-oneliner",
+    }
+    for name in ("healthcheck", "cache-refresh", "usage-snapshot", "idle-reaper"):
+        assert routines[name]["created_by"] == "system"
+        assert routines[name]["kind"] == "local"
+    assert routines["portfolio-oneliner"]["created_by"] == "bot"
+    assert routines["portfolio-oneliner"]["kind"] == "local"
+    assert routines["portfolio-oneliner"]["target_skill"] == "portfolio-oneliner"
+
+
+def test_backfill_default_routines_is_idempotent(
+    tmp_path: Path, monkeypatch
+) -> None:
+    db = tmp_path / "reg.sqlite"
+    monkeypatch.setenv("HERMES_ORCH_DB", str(db))
+
+    _backfill_default_routines()
+    _backfill_default_routines()
+
+    reg = Registry(db)
+    try:
+        routines = reg.list_routines()
+    finally:
+        reg.close()
+    assert len(routines) == 5

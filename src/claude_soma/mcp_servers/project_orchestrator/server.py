@@ -1,6 +1,7 @@
 # src/claude_soma/mcp_servers/project_orchestrator/server.py
 from __future__ import annotations
 
+import json
 import os
 import time
 from pathlib import Path
@@ -160,6 +161,33 @@ def get_status(name: str) -> dict:
 def list_template_types() -> list[str]:
     """Return the available project template type names."""
     return list_template_names()
+
+
+@mcp.tool()
+def register_routine(
+    name: str,
+    kind: str,
+    schedule: str,
+    target_skill: str = "",
+    description: str = "",
+    created_by: str = "bot",
+    metadata_json: str = "",
+) -> dict:
+    """Register a routine in the local registry so it appears in /api/routines.
+
+    Call this after creating a cloud routine via RemoteTrigger.create() OR
+    after installing a local systemd timer."""
+    meta = json.loads(metadata_json) if metadata_json else None
+    _reg().register_routine(
+        name,
+        kind=kind,
+        schedule=schedule,
+        target_skill=target_skill or None,
+        description=description or None,
+        created_by=created_by,
+        metadata=meta,
+    )
+    return {"registered": name, "kind": kind}
 
 
 def main() -> None:

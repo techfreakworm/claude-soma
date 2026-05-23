@@ -128,6 +128,39 @@ def enable_services(names: Iterable[str]) -> None:
     subprocess.run(cmd, check=True)
 
 
+def _backfill_default_routines() -> None:
+    """Register the 4 system timers + the portfolio-oneliner bot timer."""
+    from claude_soma.mcp_servers.project_orchestrator.registry import Registry
+    db = os.environ.get("HERMES_ORCH_DB", "/opt/claude-soma/registry.sqlite")
+    reg = Registry(db)
+    try:
+        defaults = [
+            ("healthcheck", "system",
+             "every 10 min", "healthcheck",
+             "Restart api/frontend/channel if any is down"),
+            ("cache-refresh", "system",
+             "every 5 min", "cache-refresh",
+             "Prime hot dashboard API paths"),
+            ("usage-snapshot", "system",
+             "daily 23:55 UTC", "usage-snapshot",
+             "Daily Max-credit usage snapshot"),
+            ("idle-reaper", "system",
+             "every 6h", "idle-reaper",
+             "Hibernate idle project-leads >24h"),
+            ("portfolio-oneliner", "bot",
+             "Mon..Fri *-*-* 03:30:00", "portfolio-oneliner",
+             "Weekday 09:00 IST portfolio brief"),
+        ]
+        for name, created_by, schedule, target_skill, description in defaults:
+            reg.register_routine(
+                name, kind="local", schedule=schedule,
+                target_skill=target_skill, description=description,
+                created_by=created_by,
+            )
+    finally:
+        reg.close()
+
+
 # ---- wizard flow ----------------------------------------------------------
 
 def run() -> int:
@@ -195,6 +228,10 @@ def run() -> int:
         "claude-soma-usage-snapshot.timer",
         "claude-soma-idle-reaper.timer",
     ])
+
+    # Backfill known routines into the registry so /api/routines has canonical
+    # entries (instead of falling back to systemd-synthesized 'system' entries).
+    _backfill_default_routines()
 
     print("\nSetup complete.")
     print(f"  Public: https://{domain}/")

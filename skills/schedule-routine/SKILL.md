@@ -6,6 +6,7 @@ description: |
   tomorrow", "schedule X every Sunday", and similar.
 allowed-tools:
   - RemoteTrigger
+  - mcp__project_orchestrator__register_routine
 ---
 
 # schedule-routine
@@ -35,7 +36,27 @@ allowed-tools:
    })
    ```
 
-4. Confirm to user with parsed run time + claude.ai URL the response includes.
+4. After RemoteTrigger.create succeeds, register the routine locally so it
+   appears in the dashboard. Call:
+
+   ```
+   mcp__project_orchestrator__register_routine(
+     name="<the routine name>",
+     kind="cloud",
+     schedule="<the cron expression you used>",
+     target_skill="<the skill the routine invokes>",
+     description="<one-liner the user gave you>",
+     created_by="user",
+     metadata_json='{"trigger_id": "<the id returned by RemoteTrigger.create>"}'
+   )
+   ```
+
+   If the local registration fails, surface that as a warning but do NOT
+   roll back the cloud routine — the cloud side is the source of truth and
+   the dashboard fallback already synthesizes a "cloud" entry from the
+   /routines list query.
+
+5. Confirm to user with parsed run time + claude.ai URL the response includes.
 
 ## Constraints
 

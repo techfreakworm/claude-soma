@@ -68,3 +68,55 @@ def test_spawn_unknown_type_falls_back_to_custom() -> None:
     assert r["agent_id"] == "soma-proj-d"
     p = orch.get_status_impl("d")
     assert p["type"] in {"custom", "not-a-type"}
+
+
+def test_register_routine_writes_to_registry() -> None:
+    result = orch.register_routine(
+        name="weekly-brief",
+        kind="cloud",
+        schedule="0 9 * * 1",
+        target_skill="morning-brief",
+        description="Weekly Monday digest",
+        created_by="user",
+        metadata_json='{"trigger_id": "trg_abc"}',
+    )
+    assert result == {"registered": "weekly-brief", "kind": "cloud"}
+    got = orch._reg().get_routine("weekly-brief")
+    assert got is not None
+    assert got["name"] == "weekly-brief"
+    assert got["kind"] == "cloud"
+    assert got["schedule"] == "0 9 * * 1"
+    assert got["target_skill"] == "morning-brief"
+    assert got["description"] == "Weekly Monday digest"
+    assert got["created_by"] == "user"
+    assert got["metadata"] == {"trigger_id": "trg_abc"}
+
+
+def test_register_routine_defaults_optional_fields() -> None:
+    result = orch.register_routine(
+        name="basic",
+        kind="local",
+        schedule="*-*-* 12:00:00",
+    )
+    assert result == {"registered": "basic", "kind": "local"}
+    got = orch._reg().get_routine("basic")
+    assert got is not None
+    assert got["target_skill"] is None
+    assert got["description"] is None
+    assert got["created_by"] == "bot"
+    assert got["metadata"] is None
+
+
+def test_register_routine_is_upsert() -> None:
+    orch.register_routine(
+        name="dup", kind="local", schedule="*-*-* 01:00:00",
+        description="first",
+    )
+    orch.register_routine(
+        name="dup", kind="local", schedule="*-*-* 02:00:00",
+        description="second",
+    )
+    got = orch._reg().get_routine("dup")
+    assert got is not None
+    assert got["schedule"] == "*-*-* 02:00:00"
+    assert got["description"] == "second"
