@@ -41,7 +41,12 @@ ExecStartPre=/bin/bash -c '/usr/bin/tmux kill-session -t hermes 2>/dev/null || t
 # prompt would freeze it. Trade-off accepted: the bot can run any tool
 # without confirmation, including Bash and Edit. Mitigated by Telegram
 # access policy (allowlist) — only paired users can drive the bot.
-ExecStart=/usr/bin/tmux new-session -d -s hermes -c /opt/claude-soma /usr/bin/claude --channels plugin:telegram@claude-plugins-official --plugin-dir /opt/claude-soma --add-dir /home/ubuntu/hermes-work --dangerously-skip-permissions
+# IMPORTANT: use the *native* claude install (~/.local/bin/claude). The npm
+# package at /usr/bin/claude has a different binary that doesn't accept
+# --channels (it silently falls into --print mode and errors). The native
+# binary is installed via `claude install latest` and is the only one that
+# supports the persistent channel-listener loop.
+ExecStart=/usr/bin/tmux new-session -d -s hermes -c /opt/claude-soma /home/ubuntu/.local/bin/claude --channels plugin:telegram@claude-plugins-official --plugin-dir /opt/claude-soma --add-dir /home/ubuntu/hermes-work --dangerously-skip-permissions
 
 # Give tmux ~1s to spin the pane, then tap its output to the log file. This
 # is the TTY-safe equivalent of `| tee`.
