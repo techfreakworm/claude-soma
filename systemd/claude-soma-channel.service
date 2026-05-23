@@ -36,7 +36,12 @@ ExecStartPre=/bin/bash -c '/usr/bin/tmux kill-session -t hermes 2>/dev/null || t
 # tmux forks the server; the new-session call returns 0 after detaching, which
 # is what Type=forking expects. Claude runs inside the detached pane with a
 # real PTY.
-ExecStart=/usr/bin/tmux new-session -d -s hermes -c /opt/claude-soma /usr/bin/claude --channels plugin:telegram@claude-plugins-official --plugin-dir /opt/claude-soma --add-dir /home/ubuntu/hermes-work --permission-mode default
+# --dangerously-skip-permissions: required for autonomous bot operation. A
+# bot has no human at the keyboard to approve tool calls, so any permission
+# prompt would freeze it. Trade-off accepted: the bot can run any tool
+# without confirmation, including Bash and Edit. Mitigated by Telegram
+# access policy (allowlist) — only paired users can drive the bot.
+ExecStart=/usr/bin/tmux new-session -d -s hermes -c /opt/claude-soma /usr/bin/claude --channels plugin:telegram@claude-plugins-official --plugin-dir /opt/claude-soma --add-dir /home/ubuntu/hermes-work --dangerously-skip-permissions
 
 # Give tmux ~1s to spin the pane, then tap its output to the log file. This
 # is the TTY-safe equivalent of `| tee`.
