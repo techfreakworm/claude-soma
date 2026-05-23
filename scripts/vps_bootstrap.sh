@@ -122,13 +122,46 @@ if ! command -v gh >/dev/null 2>&1; then
 fi
 gh --version | head -1
 
-step "9/9  pre-create claude-soma directories"
+step "9/12  Docker (for the bot to spin up containers autonomously)"
+if ! command -v docker >/dev/null 2>&1; then
+    curl -fsSL https://download.docker.com/linux/ubuntu/gpg \
+        | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+    sudo chmod a+r /etc/apt/keyrings/docker.gpg
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo "$VERSION_CODENAME") stable" \
+        | sudo tee /etc/apt/sources.list.d/docker.list >/dev/null
+    sudo DEBIAN_FRONTEND=noninteractive apt-get update -y
+    sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
+        docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+    sudo usermod -aG docker ubuntu
+fi
+docker --version
+# Note: `usermod -aG docker ubuntu` doesn't refresh existing sessions. The
+# ubuntu user must reconnect SSH (or use `sg docker -c '...'`) to invoke
+# docker without sudo. The systemd channel.service inherits the active
+# group set at start time — if it was started before this bootstrap,
+# restart it AFTER all of bootstrap finishes, NOT mid-bootstrap.
+
+step "10/12  Playwright MCP (web browsing for the bot, headless)"
+if ! command -v playwright-mcp >/dev/null 2>&1; then
+    sudo npm install -g @playwright/mcp
+fi
+playwright-mcp --version 2>/dev/null || echo "playwright-mcp: $(which playwright-mcp)"
+# Chromium browser + system deps. Install system deps once with sudo, then
+# install browser binary into each user's cache (system deps are shared).
+sudo npx --yes playwright install-deps chromium 2>&1 | tail -3
+# Browser binary for the ubuntu user (the one the bot runs as):
+if [ ! -d "$HOME/.cache/ms-playwright" ] || [ -z "$(ls "$HOME/.cache/ms-playwright" 2>/dev/null)" ]; then
+    npx --yes playwright install chromium 2>&1 | tail -3
+fi
+ls -d "$HOME/.cache/ms-playwright/chromium"* 2>/dev/null | head -1
+
+step "11/12  pre-create claude-soma directories"
 sudo install -d -m 700 -o ubuntu -g ubuntu /etc/claude-soma
 sudo install -d -m 755 -o ubuntu -g ubuntu /var/log/claude-soma
 sudo install -d -m 755 -o ubuntu -g ubuntu /home/ubuntu/hermes-work
 ls -ld /etc/claude-soma /var/log/claude-soma /home/ubuntu/hermes-work
 
-step "DONE  Next steps"
+step "12/12  DONE  Next steps"
 cat <<'NEXT'
 1. claude auth login   # one-time browser OAuth for interactive --channels
 2. codex login         # one-time browser OAuth for image-gen via ChatGPT

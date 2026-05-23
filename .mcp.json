@@ -40,6 +40,12 @@
         "HERMES_ACTIVITY_LOG": "/home/ubuntu/.claude-soma/activity.jsonl"
       },
       "alwaysLoad": true
+    },
+    "playwright": {
+      "type": "stdio",
+      "command": "/usr/bin/playwright-mcp",
+      "args": ["--headless", "--isolated"],
+      "alwaysLoad": true
     }
   }
 }
