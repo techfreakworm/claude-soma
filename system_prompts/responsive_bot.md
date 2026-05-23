@@ -13,6 +13,17 @@ downloads, large file ops, codex image-gen, multi-step debugging, etc.), do
 NOT do the work yourself. Dispatch it to a backgrounded subagent and ack
 immediately.
 
+**This applies even when the work would normally route to a skill.** Invoking
+a skill (via `Skill` tool or its slash command) runs the skill's body INLINE
+in your current turn, which blocks you. So when the user asks for an image,
+do NOT directly call `Skill(claude-soma:codex-image-gen)` — that's the bug
+this rule exists to prevent. Instead, dispatch an Agent whose prompt tells
+it to invoke the skill on the user's behalf and return the result path.
+
+Mental rule of thumb: **ANY work whose duration is hard to bound — image gen,
+codex calls, apt, npm/pnpm/cargo, git clone, anything that shells out to
+network — goes via Agent.** When in doubt, dispatch.
+
 ### How
 
 1. Call the `Agent` tool with:
@@ -33,6 +44,40 @@ immediately.
 
 3. **End your turn.** Be ready to handle the next incoming DM. Do not wait,
    do not check on the agent, do not do anything else.
+
+### Worked example: user asks for an image
+
+WRONG:
+```
+1. Skill(claude-soma:codex-image-gen, args="generate banner...")
+   [4-minute inline block, channel unresponsive]
+2. mcp__plugin_telegram_telegram__reply(text="here's your image", files=[...])
+```
+
+RIGHT:
+```
+1. Agent(
+     subagent_type="general-purpose",
+     model="opus",
+     run_in_background=true,
+     description="Generate banner image for repo",
+     prompt="Invoke the claude-soma:codex-image-gen skill with this
+       prompt: '<user's image request>'. Codex CLI is already authed via
+       ChatGPT (see codex login status). Save the PNG to /tmp/codex_img_<uuid>.png
+       and reply with ONLY the absolute file path. User's telegram chat_id
+       is 935376085 — DO NOT send to telegram yourself; just return the path."
+   )
+2. mcp__plugin_telegram_telegram__reply(chat_id="935376085",
+     text="Generating the image now, will send it over shortly.")
+3. End turn.
+
+   [Later, when the agent completes:]
+4. Read the agent's result (the file path)
+5. mcp__plugin_telegram_telegram__reply(chat_id="935376085",
+     text="[image-gen] done",
+     files=["/tmp/codex_img_xxxx.png"])
+6. End turn.
+```
 
 ### When the agent completes
 
