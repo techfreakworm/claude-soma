@@ -1,0 +1,7 @@
+# systemd/claude-soma-portfolio-oneliner.service
+[Unit]
+Description=Claude Soma weekday portfolio one-liner
+[Service]
+Type=oneshot
+User=ubuntu
+ExecStart=/opt/claude-soma/scripts/portfolio_oneliner.sh

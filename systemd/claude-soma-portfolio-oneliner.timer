@@ -1,0 +1,9 @@
+# systemd/claude-soma-portfolio-oneliner.timer
+[Unit]
+Description=Send weekday portfolio one-liner at 09:00 IST (03:30 UTC, Mon-Fri)
+[Timer]
+OnCalendar=Mon..Fri *-*-* 03:30:00
+Persistent=true
+Unit=claude-soma-portfolio-oneliner.service
+[Install]
+WantedBy=timers.target
