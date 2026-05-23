@@ -1,50 +1,21 @@
 #!/usr/bin/env bash
 # scripts/voice_intake.sh
 #
-# Invoked by UserPromptSubmit hook when meta.audio_path is present.
-# Reads the hook event JSON on stdin, transcribes the audio via voice_stt MCP,
-# and emits a JSON output that rewrites the user prompt to include the transcript.
+# UserPromptSubmit hook that WAS supposed to transcribe voice memos before
+# they reached claude. In practice the Telegram channel plugin downloads
+# the .oga to a path inside the message, and claude calls
+# `mcp__voice-stt__transcribe` on it directly — so this hook ends up firing
+# for every text DM with nothing useful to do.
 #
-# Hook protocol: https://code.claude.com/docs/en/hooks
+# The hook output schema we used (`{decision: "continue", user_prompt: ...,
+# meta_inject: ...}`) was rejected as invalid by Claude Code 2.1.150's
+# stricter UserPromptSubmit schema. Until the schema stabilizes (the docs
+# moved between minors), we keep this as a silent no-op: exit 0 with no
+# output is the universally accepted "do nothing, pass through" signal.
+#
+# V1.5 follow-up: rewrite this against the current hook schema
+# (hookSpecificOutput.additionalContext) if we find a real use case where
+# pre-processing the prompt server-side beats letting claude orchestrate
+# the voice MCP itself.
 
-set -euo pipefail
-
-EVENT_JSON="$(cat)"
-AUDIO_PATH="$(jq -r '.meta.audio_path // empty' <<<"$EVENT_JSON")"
-
-if [[ -z "$AUDIO_PATH" || ! -f "$AUDIO_PATH" ]]; then
-    # No audio meta or file missing — emit pass-through.
-    jq -nc '{decision: "continue"}'
-    exit 0
-fi
-
-# Use the voice_stt MCP via a one-shot python invocation.
-TRANSCRIPT="$(
-    AUDIO_PATH="$AUDIO_PATH" /opt/claude-soma/.venv/bin/python -c "
-import json, os, sys
-from claude_soma.mcp_servers.voice_stt.server import transcribe_impl
-r = transcribe_impl(os.environ['AUDIO_PATH'], language='auto')
-print(json.dumps(r))
-" 2>/dev/null
-)"
-
-if [[ -z "$TRANSCRIPT" ]]; then
-    jq -nc '{decision: "continue"}'
-    exit 0
-fi
-
-TEXT="$(jq -r '.text' <<<"$TRANSCRIPT")"
-LANG="$(jq -r '.language_detected' <<<"$TRANSCRIPT")"
-DUR="$(jq -r '.duration_seconds' <<<"$TRANSCRIPT")"
-
-ORIGINAL="$(jq -r '.user_prompt // .prompt // ""' <<<"$EVENT_JSON")"
-
-# Rewrite prompt: keep original (channel often inserts placeholder),
-# prepend a clear transcript marker so downstream skills can detect "voice in".
-NEW_PROMPT=$(printf "[voice transcript · lang=%s · dur=%ss]\n%s\n\n(audio path: %s)" \
-    "$LANG" "$DUR" "$TEXT" "$AUDIO_PATH")
-
-jq -nc \
-  --arg p "$NEW_PROMPT" \
-  --arg ap "$AUDIO_PATH" \
-  '{decision: "continue", user_prompt: $p, meta_inject: {voice_in: true, audio_path: $ap}}'
+exit 0
