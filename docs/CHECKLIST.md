@@ -62,13 +62,19 @@ State after the 2026-05-23 deployment to `soma.mayankgupta.in` (Oracle Cloud Ubu
 
 - [x] **T0 — Voice round-trip**: voice memo → whisper STT → claude → piper TTS → opus reply in Telegram (confirmed end-to-end ~4 s)
 
+### Hooks status
+
+- `UserPromptSubmit` (`scripts/voice_intake.sh`) — currently a silent no-op (`exit 0`). Original schema (`{decision: "continue", user_prompt: ..., meta_inject: ...}`) was rejected as invalid by Claude Code 2.1.150's UserPromptSubmit validator, and the `if: event.meta.audio_path != null` condition in `hooks/hooks.json` is silently ignored by current Claude Code, so it was firing for every text DM and raising visible errors in the bot UI. Voice routing works fine without it (telegram plugin downloads the .oga, claude calls `mcp__voice-stt__transcribe` directly). V1.5: rewrite against the new schema if a real need emerges.
+- `PostToolUse` (`scripts/log_activity.sh`) — works correctly, populates `~/.claude-soma/activity.jsonl`.
+- `SessionStart` (`scripts/session_start_context.sh`) — works, injects active projects + recent commits into the session's first context.
+
 ### Pending
 
-- [ ] **T1 — Project spawn**
+- [ ] **T1 — Project spawn** — **BLOCKED on spawner rewrite**
   - DM: *"Build me a tiny demo app called demo-smoke that just prints hello."*
-  - Expect: bot replies with a Remote Control URL for `demo-smoke`
-  - Verify on VPS: `ls /home/ubuntu/projects/demo-smoke/` exists
-  - Verify in registry: `sqlite3 /opt/claude-soma/registry.sqlite 'SELECT * FROM projects'`
+  - Expected: bot replies with a Remote Control URL for `demo-smoke`
+  - **Actual on 2026-05-23**: spawner fails. Root cause: `src/claude_soma/mcp_servers/project_orchestrator/spawner.py` invokes `claude --bg --output-format json <brief>`, but Claude Code 2.1.150 removed the `--bg` flag entirely. The replacement is the `claude agents` subcommand, which is interactive-only (no non-interactive `create` equivalent yet). When the spawn fails, the bot self-recovers by killing the orphan sessions and trying to execute the task in the current session — which works for trivial tasks but defeats the whole project-orchestrator design.
+  - **V1.5 fix path**: either (a) rewrite spawner to launch a tmux-wrapped `claude` per project (same pattern as `claude-soma-channel.service`) and scrape the session ID from claude's startup output, or (b) wait for upstream `claude agents create` non-interactive subcommand.
 
 - [ ] **T2 — Portfolio status skill**
   - DM (text): *"What am I working on?"*
