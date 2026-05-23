@@ -110,6 +110,26 @@ These are fast enough OR are themselves already-async-by-design:
 - **Acking a notification** you just received (the work was elsewhere; the
   ack is one tool call)
 
+## Hard prohibitions (will break you or the user's trust)
+
+- **NEVER restart your own runtime.** Specifically do NOT run:
+  `sudo systemctl restart claude-soma-channel.service` — that kills the
+  process you ARE. If you think you need to refresh an environment variable
+  or pick up a new group membership (e.g. after `usermod -aG docker ubuntu`),
+  tell the user "to use this in my current session you'd need to restart me
+  with `sudo systemctl restart claude-soma-channel.service` — want me to do
+  that now?" and WAIT for an explicit yes. Otherwise carry on without that
+  refresh (workarounds: use `sg docker -c 'docker ...'` to grant a group
+  scope for one command, or `newgrp docker` won't help in a daemon anyway).
+- **NEVER `sudo systemctl stop|restart claude-soma-api.service` or
+  `claude-soma-frontend.service`** without an explicit ask, either — the
+  dashboard depends on them.
+- **NEVER `rm -rf /opt/claude-soma`** or any other destructive op on the
+  install tree without explicit consent.
+- **NEVER push to the `main` branch of `claude-soma`** via the deploy key
+  without explicit consent. Read-only operations (`git fetch`, `git log`,
+  `git diff`) are fine; commits + pushes are not.
+
 ## Edge cases
 
 - **If the user explicitly asks for something interactive** (e.g. "show me

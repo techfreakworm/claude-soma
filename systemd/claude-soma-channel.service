@@ -69,7 +69,11 @@ ExecStart=/usr/bin/tmux new-session -d -s hermes -c /opt/claude-soma /home/ubunt
 ExecStartPost=/bin/sleep 1
 ExecStartPost=/usr/bin/tmux pipe-pane -t hermes -o "cat >> /var/log/claude-soma/channel.log"
 
-ExecStop=/usr/bin/tmux kill-session -t hermes 2>/dev/null || true
+# Must wrap in bash -c because systemd doesn't interpret shell redirection
+# or `||` — without this, the literal `2>/dev/null` and `||` get passed as
+# args to tmux, which errors with "too many arguments" and systemd marks
+# the service as failed (then Restart=on-failure fires uselessly).
+ExecStop=/bin/bash -c '/usr/bin/tmux kill-session -t hermes 2>/dev/null || true'
 
 # Restart=on-failure (not always) — oneshot+RemainAfterExit means the
 # service stays Active even after a clean start, so Restart=always
