@@ -22,7 +22,11 @@ if ! curl -fsS --max-time 5 http://127.0.0.1:3000/ -o /dev/null; then
 fi
 
 # 3. Channel tmux session present
-if ! tmux has-session -t hermes 2>/dev/null; then
+# Check as user ubuntu — tmux sessions are per-user, and this script runs
+# as root from systemd. A bare `tmux has-session` from root always fails
+# (no /tmp/tmux-0 server), which caused a needless restart every 10 minutes
+# and killed the channel + every running project-lead session with it.
+if ! sudo -u ubuntu tmux has-session -t hermes 2>/dev/null; then
     echo "[$TS] channel: tmux missing, restarting" >> "$LOG"
     sudo systemctl restart claude-soma-channel.service
 fi
