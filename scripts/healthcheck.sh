@@ -31,4 +31,56 @@ if ! sudo -u ubuntu tmux has-session -t hermes 2>/dev/null; then
     sudo systemctl restart claude-soma-channel.service
 fi
 
+# 4. Channel's Telegram-MCP bun child is alive
+# The telegram plugin runs as `bun server.ts` spawned by `claude --channels`
+# over stdio. bun has an internal watchdog (server.ts:668-679) that
+# self-exits within ~5s if claude's stdin pipe closes or its parent PID
+# changes. Claude does not auto-respawn dead stdio MCP children, so the
+# bot keeps running but is silently Telegram-mute. Detect that and bounce
+# the channel service.
+#
+# Bot PID = the `claude --channels` process owned by ubuntu (NOT the tmux
+# wrapper, which also matches `pgrep -f` because the command appears in
+# its argv). Filter by `comm=claude` to disambiguate.
+BOT_PID=""
+for pid in $(sudo -u ubuntu pgrep -fu ubuntu -- 'claude --channels' 2>/dev/null); do
+    if [ "$(ps -o comm= -p "$pid" 2>/dev/null)" = "claude" ]; then
+        BOT_PID="$pid"
+        break
+    fi
+done
+
+if [ -n "$BOT_PID" ]; then
+    # Grace period: don't race bun's own startup right after a healthy
+    # restart (claude takes ~10-20s to come up, then spawns bun). Without
+    # this we'd restart-loop every 10 min.
+    ETIMES=$(ps -o etimes= -p "$BOT_PID" 2>/dev/null | tr -d ' ')
+    if [ -n "$ETIMES" ] && [ "$ETIMES" -ge 60 ]; then
+        # Walk descendant tree of BOT_PID via pgrep -P recursion.
+        descendants() {
+            local parent=$1
+            local kids
+            kids=$(pgrep -P "$parent" 2>/dev/null)
+            for k in $kids; do
+                echo "$k"
+                descendants "$k"
+            done
+        }
+        BUN_FOUND=0
+        for pid in $(descendants "$BOT_PID"); do
+            comm=$(ps -o comm= -p "$pid" 2>/dev/null)
+            if [ "$comm" = "bun" ]; then
+                args=$(ps -o args= -p "$pid" 2>/dev/null)
+                case "$args" in
+                    *server.ts*) BUN_FOUND=1; break ;;
+                esac
+            fi
+        done
+        if [ "$BUN_FOUND" -eq 0 ]; then
+            echo "[$TS] channel: bun MCP missing (bot pid=$BOT_PID up ${ETIMES}s), restarting" >> "$LOG"
+            sudo systemctl restart claude-soma-channel.service
+        fi
+    fi
+fi
+
 echo "[$TS] healthcheck: ok" >> "$LOG"
