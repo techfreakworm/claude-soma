@@ -172,6 +172,35 @@ claude-soma/
 
 ---
 
+## Forking — replace the author's personal defaults
+
+The repo ships with my (Mayank Gupta's) live deployment as the worked example, so a few personal values appear as defaults. If you're standing up your own instance, find-replace these:
+
+| Where | Default value | What to change it to |
+|---|---|---|
+| `Caddyfile` server block + `email` | `soma.mayankgupta.in`, `mayank@mayankgupta.in` | your domain, your Let's Encrypt email |
+| `systemd/claude-soma-api.service` `HERMES_API_CORS_ORIGINS` | `https://soma.mayankgupta.in,http://localhost:3000` | your domain + localhost |
+| `src/claude_soma/api/main.py` CORS default | `claude.mayankgupta.in` | your domain (this is only the dev/test fallback; production reads the env var) |
+| `src/claude_soma/wizard/init.py` default-domain prompt | `claude.mayankgupta.in` | your domain |
+| `tests/wizard/test_init.py` test data | `claude.mayankgupta.in` | your domain (or any valid subdomain — it's just regex test data) |
+| `frontend/components/landing/Architecture.tsx` ASCII diagram | `claude.mayankgupta.in` | your domain |
+| `frontend/components/landing/Footer.tsx` "Built by" link | `https://mayankgupta.in` | your personal site / GitHub profile |
+| `.claude-plugin/{plugin,marketplace}.json` `homepage` / `author.url` | `https://claude.mayankgupta.in`, `https://mayankgupta.in` | your URLs |
+| `HERMES_ALLOWED_GITHUB_HANDLES` default | `techfreakworm` | your GitHub handle (set this via `/etc/claude-soma/secrets.env` env override; the in-code default is just for tests) |
+
+Quick one-liner sweep (zsh/bash) once you've decided on your domain + handle:
+
+```bash
+DOMAIN=soma.yourdomain.com EMAIL=you@yourdomain.com HANDLE=your-handle \
+  git ls-files | xargs grep -l -E 'mayankgupta\.in|techfreakworm' \
+  -- ':!docs/superpowers/' \
+  | xargs sed -i '' "s|soma.mayankgupta.in|$DOMAIN|g; s|claude.mayankgupta.in|$DOMAIN|g; s|mayank@mayankgupta.in|$EMAIL|g; s|https://mayankgupta.in|https://github.com/$HANDLE|g"
+```
+
+The `docs/superpowers/specs/` and `docs/superpowers/plans/` files are intentionally excluded — they're frozen historical design artifacts.
+
+---
+
 ## Quick install (when V1 is shipped)
 
 The setup wizard isn't implemented yet (Week 4). Until then, follow [`NEXT.md`](NEXT.md) for the manual checklist.
