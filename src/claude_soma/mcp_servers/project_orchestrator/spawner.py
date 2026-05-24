@@ -181,6 +181,14 @@ def spawn_background_lead(
         "--permission-mode", permission_mode,
         "--dangerously-skip-permissions",
         "--effort", "max",
+        # Skip user-scope settings so the user-enabled telegram plugin doesn't
+        # load in project-lead sessions and hijack the bot's Telegram poller
+        # slot. Confirmed race documented in
+        # docs/notes/2026-05-25-telegram-poller-race.md. The bot itself runs
+        # WITHOUT this flag so it keeps the user-scope plugin and continues
+        # polling; claude.ai connectors (Canva, Gmail) are auth-driven via
+        # ~/.claude/.credentials.json so project leads keep those.
+        "--setting-sources", "project,local",
     ]
     if extra_args:
         claude_argv.extend(extra_args)

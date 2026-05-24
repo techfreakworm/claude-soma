@@ -244,6 +244,22 @@ def test_spawn_passes_remote_control_with_session_name(tmp_path: Path) -> None:
     assert args[rc_idx] == "soma-proj-rc"
 
 
+def test_spawn_passes_setting_sources_excluding_user(tmp_path: Path) -> None:
+    """Project leads must skip user-scope settings so the user-enabled telegram
+    plugin doesn't load and steal the bot's Telegram poller slot (race
+    documented in docs/notes/2026-05-25-telegram-poller-race.md)."""
+    cwd = tmp_path / "ss"
+    cwd.mkdir()
+    with patch("subprocess.run", side_effect=[_ok(), _ok("")]) as run:
+        spawn_background_lead(
+            name="ss", brief="x", cwd=cwd, permission_mode="acceptEdits",
+        )
+    args = run.call_args_list[0][0][0]
+    assert "--setting-sources" in args
+    ss_idx = args.index("--setting-sources") + 1
+    assert args[ss_idx] == "project,local"
+
+
 def test_capture_rc_url_polls_until_url_appears(tmp_path: Path, monkeypatch) -> None:
     """_capture_rc_url's retry loop: if the URL isn't in the pane on the first
     capture but shows up by the second, we still get it."""
