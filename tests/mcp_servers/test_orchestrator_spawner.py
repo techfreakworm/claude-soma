@@ -1,15 +1,31 @@
 # tests/mcp_servers/test_orchestrator_spawner.py
 from __future__ import annotations
 
+import json
 import subprocess as sp
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 
 import pytest
 
+from claude_soma.mcp_servers.project_orchestrator import spawner
 from claude_soma.mcp_servers.project_orchestrator.spawner import (
     spawn_background_lead, BriefTooLong, InvalidProjectName, kill_session
 )
+
+
+@pytest.fixture(autouse=True)
+def _isolate_spawner(tmp_path: Path, monkeypatch) -> None:
+    # Pre-trust state lives in ~/.claude.json on the real machine. Point the
+    # spawner at a tmp file so tests don't bulldoze the dev user's actual file.
+    monkeypatch.setenv(
+        "HERMES_CLAUDE_GLOBAL_JSON", str(tmp_path / "claude.json"),
+    )
+    # _capture_rc_url polls every RC_URL_POLL_INTERVAL seconds up to
+    # RC_URL_POLL_SECONDS. With non-zero values the "no URL in mock output"
+    # tests would actually wait. Set both to 0 so the loop runs once and exits.
+    monkeypatch.setattr(spawner, "RC_URL_POLL_SECONDS", 0)
+    monkeypatch.setattr(spawner, "RC_URL_POLL_INTERVAL", 0)
 
 
 def _ok(stdout: str = "") -> MagicMock:
@@ -80,9 +96,12 @@ def test_spawn_uses_tmux_with_native_claude_binary(tmp_path: Path) -> None:
     assert "--output-format" not in args, args
 
 
-def test_spawn_scrapes_rc_url_when_present(tmp_path: Path) -> None:
+def test_spawn_scrapes_rc_url_when_present(tmp_path: Path, monkeypatch) -> None:
     cwd = tmp_path / "scraped"
     cwd.mkdir()
+    # Autouse fixture sets POLL_SECONDS=0 (loop never runs). For the
+    # happy-path scrape, give it a tiny budget so the first iteration fires.
+    monkeypatch.setattr(spawner, "RC_URL_POLL_SECONDS", 1.0)
     pane = "starting session...\nremote: https://rc.claude.com/abc123def\nbrief...\n"
     with patch("subprocess.run", side_effect=[_ok(), _ok(pane)]):
         result = spawn_background_lead(
@@ -141,3 +160,108 @@ def test_kill_session_ignores_missing_session() -> None:
     err = sp.CalledProcessError(1, ["tmux"], stderr="can't find session")
     with patch("subprocess.run", side_effect=err):
         kill_session("ghost")
+
+
+# --- new tests for the three V1.5 fixes ---
+
+def test_spawn_pretrusts_cwd_in_claude_global_json(tmp_path: Path) -> None:
+    """Spawn must add the cwd to ~/.claude.json with hasTrustDialogAccepted=true
+    BEFORE launching tmux, so claude skips the safety-check dialog in the
+    detached pane (where there's no human to hit Enter)."""
+    cwd = tmp_path / "trustme"
+    cwd.mkdir()
+    global_json = Path(spawner._claude_global_json())
+    assert not global_json.exists(), "fixture should give us a fresh path"
+
+    with patch("subprocess.run", side_effect=[_ok(), _ok("")]):
+        spawn_background_lead(
+            name="trustme", brief="x", cwd=cwd, permission_mode="acceptEdits",
+        )
+
+    data = json.loads(global_json.read_text())
+    entry = data["projects"][str(cwd)]
+    assert entry["hasTrustDialogAccepted"] is True
+    assert "projectOnboardingSeenCount" in entry
+
+
+def test_pretrust_merges_with_existing_projects(tmp_path: Path) -> None:
+    """Pre-existing entries for OTHER projects must be preserved on write."""
+    cwd = tmp_path / "newproj"
+    cwd.mkdir()
+    global_json = Path(spawner._claude_global_json())
+    global_json.write_text(json.dumps({
+        "projects": {
+            "/some/other/cwd": {
+                "hasTrustDialogAccepted": True,
+                "allowedTools": ["Bash"],
+            },
+        },
+        "theme": "dark",
+    }))
+
+    with patch("subprocess.run", side_effect=[_ok(), _ok("")]):
+        spawn_background_lead(
+            name="newproj", brief="x", cwd=cwd, permission_mode="acceptEdits",
+        )
+
+    data = json.loads(global_json.read_text())
+    assert data["theme"] == "dark"  # unrelated key preserved
+    assert data["projects"]["/some/other/cwd"]["allowedTools"] == ["Bash"]  # other entry preserved
+    assert data["projects"][str(cwd)]["hasTrustDialogAccepted"] is True  # new entry added
+
+
+def test_pretrust_tolerates_corrupt_global_json(tmp_path: Path) -> None:
+    """If ~/.claude.json is unreadable/corrupt, don't crash — just skip the
+    pretrust step. Operator will see the dialog in the pane and can fix."""
+    cwd = tmp_path / "corrupt"
+    cwd.mkdir()
+    global_json = Path(spawner._claude_global_json())
+    global_json.write_text("{not valid json")
+
+    with patch("subprocess.run", side_effect=[_ok(), _ok("")]):
+        # Should NOT raise.
+        spawn_background_lead(
+            name="corrupt", brief="x", cwd=cwd, permission_mode="acceptEdits",
+        )
+    # File left untouched (we bailed before writing).
+    assert global_json.read_text() == "{not valid json"
+
+
+def test_spawn_passes_remote_control_with_session_name(tmp_path: Path) -> None:
+    """Project leads need --remote-control so they (a) stay alive after the
+    first prompt completes, (b) get an rc.claude.com URL the operator can
+    attach to from the Claude mobile app."""
+    cwd = tmp_path / "rc"
+    cwd.mkdir()
+    with patch("subprocess.run", side_effect=[_ok(), _ok("")]) as run:
+        spawn_background_lead(
+            name="rc", brief="x", cwd=cwd, permission_mode="acceptEdits",
+        )
+    args = run.call_args_list[0][0][0]
+    assert "--remote-control" in args
+    rc_idx = args.index("--remote-control") + 1
+    # The RC name matches the tmux session name for easy correlation.
+    assert args[rc_idx] == "soma-proj-rc"
+
+
+def test_capture_rc_url_polls_until_url_appears(tmp_path: Path, monkeypatch) -> None:
+    """_capture_rc_url's retry loop: if the URL isn't in the pane on the first
+    capture but shows up by the second, we still get it."""
+    cwd = tmp_path / "polly"
+    cwd.mkdir()
+    # Re-enable a tiny poll budget for this test (autouse fixture sets it to 0).
+    monkeypatch.setattr(spawner, "RC_URL_POLL_SECONDS", 1.0)
+    monkeypatch.setattr(spawner, "RC_URL_POLL_INTERVAL", 0.0)
+
+    # Sequence: tmux new-session, then capture-pane returns no URL, then
+    # capture-pane returns the URL on the second poll.
+    first_pane = "loading...\n"
+    second_pane = "loaded\nremote: https://rc.claude.com/poll-success\n"
+    with patch(
+        "subprocess.run",
+        side_effect=[_ok(), _ok(first_pane), _ok(second_pane)],
+    ):
+        result = spawn_background_lead(
+            name="polly", brief="x", cwd=cwd, permission_mode="acceptEdits",
+        )
+    assert result["rc_url"] == "https://rc.claude.com/poll-success"
