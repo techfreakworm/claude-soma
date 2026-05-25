@@ -7,6 +7,7 @@ from unittest.mock import patch, MagicMock
 import pytest
 
 from claude_soma.mcp_servers.project_orchestrator import server as orch
+from claude_soma.mcp_servers.project_orchestrator import spawner
 
 
 @pytest.fixture(autouse=True)
@@ -16,12 +17,46 @@ def _isolate_registry(tmp_path: Path, monkeypatch) -> None:
     orch._reset_singletons_for_tests()
 
 
+def _no_url_poll(monkeypatch) -> None:
+    """Short-circuit the spawner's rc.claude.com poll for tests that feed an
+    empty pane. _capture_rc_url loops calling `tmux capture-pane` for up to
+    RC_URL_POLL_SECONDS (default 30s, sleeping RC_URL_POLL_INTERVAL between
+    polls). Zeroing the timeout makes it return "" immediately with zero
+    capture-pane calls instead of hanging. The constant is read at call time
+    (see _capture_rc_url's docstring), so patching the module attribute works.
+
+    Used only by the no-URL tests; test_spawn_project_registers_and_returns_url
+    keeps the real poll so its first capture finds the URL it supplies.
+    """
+    monkeypatch.setattr(spawner, "RC_URL_POLL_SECONDS", 0)
+
+
 def _ok(stdout: str = "") -> MagicMock:
     m = MagicMock()
     m.stdout = stdout
     m.stderr = ""
     m.returncode = 0
     return m
+
+
+def _tmux_side_effect(stdout: str = ""):
+    """Return a subprocess.run side_effect that's independent of call count.
+
+    The spawn path issues one `tmux new-session` then polls `tmux
+    capture-pane`; kill issues `tmux kill-session`. Inspect the command (first
+    positional arg, a list) so every call gets a valid result no matter how
+    many polls the spawner makes — this keeps the tests from regressing if the
+    spawner's call pattern changes again. capture-pane returns `stdout` (the
+    simulated pane contents); everything else returns a generic success.
+    """
+
+    def _run(*args, **kwargs) -> MagicMock:
+        cmd = args[0] if args else kwargs.get("args", [])
+        if "capture-pane" in cmd:
+            return _ok(stdout)
+        return _ok()
+
+    return _run
 
 
 def test_spawn_project_registers_and_returns_url() -> None:
@@ -37,10 +72,12 @@ def test_spawn_project_registers_and_returns_url() -> None:
     assert any(p["name"] == "alpha" for p in listed)
 
 
-def test_kill_project_marks_killed_and_terminates_tmux() -> None:
-    # subprocess.run call sequence: 2 for spawn (tmux new-session + capture-pane),
-    # 1 for kill (tmux kill-session).
-    with patch("subprocess.run", side_effect=[_ok(), _ok(""), _ok("")]) as run_mock:
+def test_kill_project_marks_killed_and_terminates_tmux(monkeypatch) -> None:
+    # side_effect is a callable so the test is independent of how many
+    # capture-pane polls spawn does (here, zero, since RC_URL_POLL_SECONDS=0).
+    # kill_session runs after spawn, so the LAST call is still tmux kill-session.
+    _no_url_poll(monkeypatch)
+    with patch("subprocess.run", side_effect=_tmux_side_effect("")) as run_mock:
         orch.spawn_project_impl(name="beta", type_="custom",
                                 brief="Test.", permission_mode="default")
         r = orch.kill_project_impl(name="beta", archive=True)
@@ -52,8 +89,9 @@ def test_kill_project_marks_killed_and_terminates_tmux() -> None:
     assert "soma-proj-beta" in last_cmd
 
 
-def test_get_status_returns_idle_for() -> None:
-    with patch("subprocess.run", side_effect=[_ok(), _ok("")]):
+def test_get_status_returns_idle_for(monkeypatch) -> None:
+    _no_url_poll(monkeypatch)
+    with patch("subprocess.run", side_effect=_tmux_side_effect("")):
         orch.spawn_project_impl(name="gamma", type_="custom",
                                 brief="x", permission_mode="default")
     s = orch.get_status_impl("gamma")
@@ -61,8 +99,9 @@ def test_get_status_returns_idle_for() -> None:
     assert "idle_for_seconds" in s
 
 
-def test_spawn_unknown_type_falls_back_to_custom() -> None:
-    with patch("subprocess.run", side_effect=[_ok(), _ok("")]):
+def test_spawn_unknown_type_falls_back_to_custom(monkeypatch) -> None:
+    _no_url_poll(monkeypatch)
+    with patch("subprocess.run", side_effect=_tmux_side_effect("")):
         r = orch.spawn_project_impl(name="d", type_="not-a-type",
                                     brief="x", permission_mode="default")
     assert r["agent_id"] == "soma-proj-d"
