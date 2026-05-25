@@ -166,7 +166,7 @@ else
     echo "WARN: no chromium binary found in $HOME/.cache/ms-playwright/"
 fi
 
-step "11/13  ngrok (random-URL tunnels for the bot's ad-hoc public endpoints)"
+step "11/15  ngrok (random-URL tunnels for the bot's ad-hoc public endpoints)"
 # Installed via the official apt repo so updates flow through apt. The
 # auth token + tunnel config live in ~/.config/ngrok/ngrok.yml; rsync that
 # file from your previous install — the binary alone is useless without it.
@@ -181,13 +181,52 @@ if ! command -v ngrok >/dev/null 2>&1; then
 fi
 ngrok --version
 
-step "12/13  pre-create claude-soma directories"
+step "12/15  piper (voice TTS — voice_tts MCP server)"
+# Binary release from rhasspy/piper for Linux ARM64. The .mcp.json's
+# HERMES_PIPER_BIN points at /opt/piper/piper and HERMES_PIPER_DEFAULT_VOICE
+# points at /opt/piper/en_US-ryan-medium.onnx, so both must live there.
+# The voice model + its .json sidecar both come from huggingface piper-voices.
+PIPER_VERSION="2023.11.14-2"
+if [ ! -x /opt/piper/piper ]; then
+    sudo curl -fsSL "https://github.com/rhasspy/piper/releases/download/${PIPER_VERSION}/piper_linux_aarch64.tar.gz" \
+        | sudo tar xz -C /opt
+    sudo chown -R ubuntu:ubuntu /opt/piper
+fi
+PIPER_VOICE_BASE="https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/ryan/medium"
+if [ ! -f /opt/piper/en_US-ryan-medium.onnx ]; then
+    sudo -u ubuntu curl -fsSL "${PIPER_VOICE_BASE}/en_US-ryan-medium.onnx" \
+        -o /opt/piper/en_US-ryan-medium.onnx
+fi
+if [ ! -f /opt/piper/en_US-ryan-medium.onnx.json ]; then
+    sudo -u ubuntu curl -fsSL "${PIPER_VOICE_BASE}/en_US-ryan-medium.onnx.json" \
+        -o /opt/piper/en_US-ryan-medium.onnx.json
+fi
+ls -lh /opt/piper/piper /opt/piper/en_US-ryan-medium.onnx 2>&1 | head -2
+
+step "13/15  whisper.cpp (voice STT — voice_stt MCP server + ggml-large-v3-turbo model)"
+# Git clone + cmake build. .mcp.json's HERMES_WHISPER_BIN expects
+# /opt/whisper.cpp/build/bin/whisper-cli and HERMES_WHISPER_MODEL expects
+# /opt/whisper.cpp/models/ggml-large-v3-turbo.bin (~1.5 GB download).
+if [ ! -x /opt/whisper.cpp/build/bin/whisper-cli ]; then
+    sudo install -d -m 755 -o ubuntu -g ubuntu /opt/whisper.cpp
+    sudo -u ubuntu git clone https://github.com/ggerganov/whisper.cpp.git /opt/whisper.cpp.tmp
+    sudo -u ubuntu cp -a /opt/whisper.cpp.tmp/. /opt/whisper.cpp/
+    sudo rm -rf /opt/whisper.cpp.tmp
+    sudo -u ubuntu cmake -S /opt/whisper.cpp -B /opt/whisper.cpp/build
+    sudo -u ubuntu cmake --build /opt/whisper.cpp/build --config Release -j"$(nproc)"
+fi
+if [ ! -f /opt/whisper.cpp/models/ggml-large-v3-turbo.bin ]; then
+    sudo -u ubuntu bash -c 'cd /opt/whisper.cpp && bash ./models/download-ggml-model.sh large-v3-turbo'
+fi
+ls -lh /opt/whisper.cpp/build/bin/whisper-cli /opt/whisper.cpp/models/ggml-large-v3-turbo.bin 2>&1 | head -2
+
+step "14/15  pre-create claude-soma directories"
 sudo install -d -m 700 -o ubuntu -g ubuntu /etc/claude-soma
 sudo install -d -m 755 -o ubuntu -g ubuntu /var/log/claude-soma
 sudo install -d -m 755 -o ubuntu -g ubuntu /home/ubuntu/hermes-work
 ls -ld /etc/claude-soma /var/log/claude-soma /home/ubuntu/hermes-work
 
-step "13/13  DONE  Next steps"
+step "15/15  DONE  Next steps"
 cat <<'NEXT'
 1. claude auth login   # one-time browser OAuth for interactive --channels
 2. codex login         # one-time browser OAuth for image-gen via ChatGPT
