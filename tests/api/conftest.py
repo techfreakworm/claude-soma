@@ -14,4 +14,7 @@ def _isolate_api(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("HERMES_CLAUDE_BIN", "/usr/bin/false")
     monkeypatch.setenv("HERMES_USAGE_DB", str(tmp_path / "usage.sqlite"))
     monkeypatch.setenv("HERMES_BROADCAST_QUEUE", str(tmp_path / "broadcast.jsonl"))
+    # Point the API bridge at a non-existent socket so tests never touch the
+    # live production socket; the bridge degrades to an empty fallback.
+    monkeypatch.setenv("HERMES_API_SOCKET", str(tmp_path / "hermes_api.sock"))
     orch._reset_singletons_for_tests()

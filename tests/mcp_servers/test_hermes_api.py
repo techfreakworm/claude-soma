@@ -67,6 +67,34 @@ async def test_socket_round_trip_returns_result(tmp_path: Path) -> None:
         Path(sock_path).unlink(missing_ok=True)
 
 
+async def test_socket_round_trip_handles_large_response(tmp_path: Path) -> None:
+    sock_path = _short_sock_path()
+
+    big_items = ["x" * 100 for _ in range(2000)]
+
+    async def big_handler(_params: dict) -> dict:
+        return {"items": big_items}
+
+    handlers = {"big": big_handler}
+    server_task = asyncio.create_task(_serve(handlers, sock_path))
+    try:
+        for _ in range(50):
+            if Path(sock_path).exists():
+                break
+            await asyncio.sleep(0.01)
+        result = await call("big", {}, sock_path=sock_path)
+        assert len(result["items"]) == 2000
+        assert sum(len(s) for s in result["items"]) == 200000
+        assert result["items"] == big_items
+    finally:
+        server_task.cancel()
+        try:
+            await server_task
+        except asyncio.CancelledError:
+            pass
+        Path(sock_path).unlink(missing_ok=True)
+
+
 async def test_socket_round_trip_returns_error_on_unknown_method(tmp_path: Path) -> None:
     sock_path = _short_sock_path()
 
