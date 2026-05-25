@@ -166,13 +166,28 @@ else
     echo "WARN: no chromium binary found in $HOME/.cache/ms-playwright/"
 fi
 
-step "11/12  pre-create claude-soma directories"
+step "11/13  ngrok (random-URL tunnels for the bot's ad-hoc public endpoints)"
+# Installed via the official apt repo so updates flow through apt. The
+# auth token + tunnel config live in ~/.config/ngrok/ngrok.yml; rsync that
+# file from your previous install — the binary alone is useless without it.
+if ! command -v ngrok >/dev/null 2>&1; then
+    curl -fsSL https://ngrok-agent.s3.amazonaws.com/ngrok.asc \
+        | sudo gpg --dearmor -o /etc/apt/keyrings/ngrok.gpg
+    sudo chmod a+r /etc/apt/keyrings/ngrok.gpg
+    echo "deb [signed-by=/etc/apt/keyrings/ngrok.gpg] https://ngrok-agent.s3.amazonaws.com bookworm main" \
+        | sudo tee /etc/apt/sources.list.d/ngrok.list >/dev/null
+    sudo DEBIAN_FRONTEND=noninteractive apt-get update -y
+    sudo DEBIAN_FRONTEND=noninteractive apt-get install -y ngrok
+fi
+ngrok --version
+
+step "12/13  pre-create claude-soma directories"
 sudo install -d -m 700 -o ubuntu -g ubuntu /etc/claude-soma
 sudo install -d -m 755 -o ubuntu -g ubuntu /var/log/claude-soma
 sudo install -d -m 755 -o ubuntu -g ubuntu /home/ubuntu/hermes-work
 ls -ld /etc/claude-soma /var/log/claude-soma /home/ubuntu/hermes-work
 
-step "12/12  DONE  Next steps"
+step "13/13  DONE  Next steps"
 cat <<'NEXT'
 1. claude auth login   # one-time browser OAuth for interactive --channels
 2. codex login         # one-time browser OAuth for image-gen via ChatGPT
