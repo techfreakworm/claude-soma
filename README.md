@@ -219,6 +219,21 @@ sudo $(which soma-init)   # interactive wizard
 
 ---
 
+## Inspecting running sessions — `somux`
+
+Each project-lead runs in its own tmux server on a private socket
+(`soma-lead-<name>`), so a plain `tmux ls` shows only the Telegram channel
+session. `somux` (put on PATH by `scripts/vps_bootstrap.sh`) discovers and
+drives them:
+
+```bash
+somux ls               # table of the channel + every lead (ALIVE/DEAD + unit state)
+somux a <name>         # attach to a lead by friendly name (somux a hermes = channel)
+somux peek <name> [N]  # read-only: last N pane lines (default 40), no attach
+```
+
+---
+
 ## What you'll need
 
 | Requirement | Why |
