@@ -77,8 +77,50 @@ if [ -n "$BOT_PID" ]; then
             fi
         done
         if [ "$BUN_FOUND" -eq 0 ]; then
-            echo "[$TS] channel: bun MCP missing (bot pid=$BOT_PID up ${ETIMES}s), restarting" >> "$LOG"
-            sudo systemctl restart claude-soma-channel.service
+            HOLDER=$(cat /home/ubuntu/.claude/channels/telegram/bot.pid 2>/dev/null || echo none)
+            echo "[$TS] channel: bun MCP missing (bot pid=$BOT_PID up ${ETIMES}s, bot.pid holder=$HOLDER)" >> "$LOG"
+            # Non-destructive recovery FIRST: respawn claude in its existing tmux
+            # pane. Unlike `systemctl restart` (which re-runs ExecStartPre/Stop and
+            # tears down the whole tmux server, killing anything sharing it -- a
+            # project lead spawned the old way, an attached operator), this only
+            # replaces the bot's claude process. Same argv as the service via the
+            # single-source scripts/channel-claude.sh. Re-tap the log afterwards
+            # (respawn-pane drops the pipe-pane), then fall back to a full restart
+            # only if the poller does not come back.
+            if sudo -u ubuntu tmux respawn-pane -k -t hermes:0 \
+                    /opt/claude-soma/scripts/channel-claude.sh 2>>"$LOG"; then
+                sudo -u ubuntu tmux pipe-pane -t hermes:0 -o \
+                    "cat >> /var/log/claude-soma/channel.log" 2>>"$LOG" || true
+                echo "[$TS] channel: respawned claude in-pane, verifying poller returns" >> "$LOG"
+                RECOVERED=0
+                for _ in $(seq 1 12); do   # up to ~60s for a fresh claude+bun
+                    sleep 5
+                    NEWBOT=""
+                    for pid in $(sudo -u ubuntu pgrep -fu ubuntu -- 'claude --channels' 2>/dev/null); do
+                        if [ "$(ps -o comm= -p "$pid" 2>/dev/null)" = "claude" ]; then
+                            NEWBOT="$pid"; break
+                        fi
+                    done
+                    [ -z "$NEWBOT" ] && continue
+                    for pid in $(descendants "$NEWBOT"); do
+                        if [ "$(ps -o comm= -p "$pid" 2>/dev/null)" = "bun" ]; then
+                            case "$(ps -o args= -p "$pid" 2>/dev/null)" in
+                                *server.ts*) RECOVERED=1; break ;;
+                            esac
+                        fi
+                    done
+                    [ "$RECOVERED" -eq 1 ] && break
+                done
+                if [ "$RECOVERED" -eq 1 ]; then
+                    echo "[$TS] channel: in-pane respawn recovered the poller (no service restart)" >> "$LOG"
+                else
+                    echo "[$TS] channel: in-pane respawn did not restore poller, restarting service" >> "$LOG"
+                    sudo systemctl restart claude-soma-channel.service
+                fi
+            else
+                echo "[$TS] channel: respawn-pane failed, restarting service" >> "$LOG"
+                sudo systemctl restart claude-soma-channel.service
+            fi
         fi
     fi
 fi
