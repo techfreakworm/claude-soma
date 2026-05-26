@@ -28,6 +28,14 @@ fi
 .venv/bin/pip install -U pip
 .venv/bin/pip install -e ".[dev]"
 chmod +x scripts/*.sh
+
+# Build the Next.js dashboard ON THE SERVER. rsync excludes .next, and
+# output: "standalone" does NOT copy .next/static or public/ next to
+# server.js, so build_frontend.sh does the build AND that copy. Without this
+# step the standalone server serves HTML but every /_next/static/* asset 404s
+# and the dashboard renders completely unstyled. Restart to pick up the build.
+bash scripts/build_frontend.sh
+sudo systemctl restart claude-soma-frontend.service
 EOSSH
 
 echo "✓ Deployed to $HOST:$REMOTE"

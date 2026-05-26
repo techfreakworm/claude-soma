@@ -22,8 +22,15 @@ fi
 pnpm install --prod=false
 pnpm build
 
-cp -rf .next/static .next/standalone/.next/static
-cp -rf public      .next/standalone/public
+# Copy static + public NEXT TO the standalone server.js. Use rm -rf + cp (not
+# `cp -rf src dst`) so this is rebuild-safe: if the target dir already exists
+# from a previous deploy, `cp -rf .next/static .next/standalone/.next/static`
+# would nest the assets one level too deep (.../static/static) and they'd 404
+# again. mkdir -p guards the (build-created) parent.
+mkdir -p .next/standalone/.next
+rm -rf .next/standalone/.next/static .next/standalone/public
+cp -r .next/static .next/standalone/.next/static
+cp -r public       .next/standalone/public
 
 ls .next/standalone/.next/static >/dev/null && echo "static assets copied"
 ls .next/standalone/server.js     >/dev/null && echo "server.js present"
