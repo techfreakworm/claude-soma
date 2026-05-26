@@ -45,7 +45,17 @@ def test_spawn_calls_claude_bg_with_expected_args(tmp_path: Path) -> None:
             permission_mode="acceptEdits",
         )
     args = run.call_args_list[0][0][0]
-    assert args[0].endswith("tmux")
+    # The new-session call is now wrapped in `sudo systemd-run` so the lead
+    # lands in its own cgroup; tmux appears after the `--` separator.
+    assert args[0].endswith("sudo")
+    assert any(a.endswith("systemd-run") for a in args)
+    assert "--unit=claude-soma-lead-my-project.service" in args
+    assert "--" in args
+    assert any(a.endswith("tmux") for a in args)
+    # Dedicated tmux socket so the server is the only thing on it.
+    assert "-L" in args
+    sock_idx = args.index("-L") + 1
+    assert args[sock_idx] == "soma-lead-my-project"
     assert "new-session" in args
     assert "-d" in args
     assert "-s" in args
@@ -145,15 +155,23 @@ def test_spawn_wraps_tmux_timeout_as_runtime_error(tmp_path: Path) -> None:
             )
 
 
-def test_kill_session_runs_tmux_kill_session() -> None:
+def test_kill_session_stops_unit_then_kills_tmux_session() -> None:
     with patch("subprocess.run", return_value=_ok()) as run:
         kill_session("my-project")
-    args = run.call_args_list[0][0][0]
-    assert args[0].endswith("tmux")
-    assert "kill-session" in args
-    assert "-t" in args
-    t_idx = args.index("-t") + 1
-    assert "my-project" in args[t_idx]
+    cmds = [c.args[0] for c in run.call_args_list]
+    # First: stop the transient unit -- KillMode=control-group tears down the
+    # whole cgroup (the tmux server with it).
+    stop_cmd = cmds[0]
+    assert any(a.endswith("systemctl") for a in stop_cmd)
+    assert "stop" in stop_cmd
+    assert "claude-soma-lead-my-project.service" in stop_cmd
+    # Last: kill the session on its own socket (belt-and-suspenders).
+    last = cmds[-1]
+    assert last[0].endswith("tmux")
+    assert "-L" in last
+    assert last[last.index("-L") + 1] == "soma-lead-my-project"
+    assert "kill-session" in last
+    assert last[last.index("-t") + 1] == "soma-proj-my-project"
 
 
 def test_kill_session_ignores_missing_session() -> None:

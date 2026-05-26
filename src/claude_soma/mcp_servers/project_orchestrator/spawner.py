@@ -21,6 +21,38 @@ CLAUDE_BIN = os.environ.get("HERMES_CLAUDE_BIN", NATIVE_CLAUDE_DEFAULT)
 TMUX_BIN = os.environ.get("HERMES_TMUX_BIN", "/usr/bin/tmux")
 TMUX_SESSION_PREFIX = "soma-proj-"
 
+# Each lead runs inside its OWN transient systemd service, created at spawn time
+# with systemd-run, so it lives in a sibling cgroup to
+# claude-soma-channel.service instead of inside it. Restarting the channel
+# (KillMode=control-group) then can't reach the lead. The lead also gets a
+# DEDICATED tmux socket so its server is the only thing on that socket -- the
+# server is born INSIDE the new unit, so it is parented to the lead's cgroup,
+# not the orchestrator's. See docs/notes/2026-05-25-project-lead-cgroup-teardown.md.
+SUDO_BIN = os.environ.get("HERMES_SUDO_BIN", "/usr/bin/sudo")
+SYSTEMD_RUN_BIN = os.environ.get("HERMES_SYSTEMD_RUN_BIN", "/usr/bin/systemd-run")
+SYSTEMCTL_BIN = os.environ.get("HERMES_SYSTEMCTL_BIN", "/usr/bin/systemctl")
+LEAD_SOCKET_PREFIX = "soma-lead-"
+LEAD_UNIT_PREFIX = "claude-soma-lead-"
+
+# The fresh systemd unit does NOT inherit the channel's environment the way the
+# old shared-tmux spawn did, so we restore the essentials explicitly. The OAuth
+# token (no API key -- Max OAuth only) comes from the EnvironmentFile, never the
+# command line, so it can't leak via `ps`/audit. Leading `-` => optional, so
+# spawn doesn't fail on a box without the file (CI/dev).
+LEAD_USER = os.environ.get("HERMES_LEAD_USER", "ubuntu")
+LEAD_GROUP = os.environ.get("HERMES_LEAD_GROUP", "ubuntu")
+LEAD_HOME = os.environ.get("HERMES_LEAD_HOME", "/home/ubuntu")
+LEAD_ENV_FILE = os.environ.get("HERMES_LEAD_ENV_FILE", "/etc/claude-soma/secrets.env")
+LEAD_PATH = os.environ.get(
+    "HERMES_LEAD_PATH",
+    "/opt/claude-soma/.venv/bin:/home/ubuntu/.local/bin:/home/ubuntu/bin:"
+    "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/snap/bin",
+)
+
+# systemd-run returns quickly once the oneshot ExecStart (tmux new-session -d)
+# detaches; 20s is generous headroom for talking to PID 1 under load.
+SPAWN_TIMEOUT = 20
+
 # Where Claude Code stores per-cwd trust state (NOT ~/.claude/settings.json —
 # that key is ignored in 2.1.150; only this file is consulted). Override with
 # HERMES_CLAUDE_GLOBAL_JSON for tests.
@@ -67,6 +99,41 @@ def _tmux() -> str:
 
 def _session_name(name: str) -> str:
     return f"{TMUX_SESSION_PREFIX}{name}"
+
+
+def _bare_name(name: str) -> str:
+    """Accept either a bare project name or a full `soma-proj-<name>` session
+    name (agent_id) and return the bare name."""
+    if name.startswith(TMUX_SESSION_PREFIX):
+        return name[len(TMUX_SESSION_PREFIX):]
+    return name
+
+
+def _lead_socket(name: str) -> str:
+    return f"{LEAD_SOCKET_PREFIX}{name}"
+
+
+def _lead_unit(name: str) -> str:
+    return f"{LEAD_UNIT_PREFIX}{name}.service"
+
+
+def _wrap_in_transient_unit(name: str, inner_argv: list[str]) -> list[str]:
+    """Wrap `inner_argv` so it runs inside its own transient systemd service,
+    giving the lead a cgroup independent of claude-soma-channel.service."""
+    return [
+        SUDO_BIN, "-n", SYSTEMD_RUN_BIN, "--collect", "--quiet",
+        f"--unit={_lead_unit(name)}",
+        "--property=Type=oneshot",
+        "--property=RemainAfterExit=yes",
+        f"--property=User={LEAD_USER}",
+        f"--property=Group={LEAD_GROUP}",
+        f"--property=EnvironmentFile=-{LEAD_ENV_FILE}",
+        f"--setenv=HOME={LEAD_HOME}",
+        f"--setenv=PATH={LEAD_PATH}",
+        "--setenv=CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1",
+        "--",
+        *inner_argv,
+    ]
 
 
 def _claude_global_json() -> Path:
@@ -118,7 +185,7 @@ def _pretrust_cwd(cwd: Path) -> None:
         raise
 
 
-def _capture_rc_url(session: str, timeout: float | None = None) -> str:
+def _capture_rc_url(session: str, socket: str, timeout: float | None = None) -> str:
     """Poll the tmux pane until the rc.claude.com URL appears, or timeout.
 
     The original implementation was a single capture-pane call right after
@@ -128,6 +195,9 @@ def _capture_rc_url(session: str, timeout: float | None = None) -> str:
 
     `timeout=None` reads the module constant at call time, so tests can
     monkeypatch RC_URL_POLL_SECONDS without rebinding the default.
+
+    `socket` is the lead's dedicated tmux socket (-L), since each lead now runs
+    its own tmux server inside its own systemd unit.
     """
     if timeout is None:
         timeout = RC_URL_POLL_SECONDS
@@ -136,7 +206,7 @@ def _capture_rc_url(session: str, timeout: float | None = None) -> str:
     while time.monotonic() < deadline:
         try:
             result = subprocess.run(
-                [_tmux(), "capture-pane", "-p", "-t", session],
+                [_tmux(), "-L", socket, "capture-pane", "-p", "-t", session],
                 capture_output=True, text=True, check=True, timeout=10,
             )
         except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
@@ -170,6 +240,7 @@ def spawn_background_lead(
     _pretrust_cwd(cwd)
 
     session = _session_name(name)
+    socket = _lead_socket(name)
     claude_argv: list[str] = [
         _claude(),
         # --remote-control <name>: project leads stay alive after their first
@@ -194,22 +265,32 @@ def spawn_background_lead(
         claude_argv.extend(extra_args)
     claude_argv.append(brief)
 
-    cmd: list[str] = [
-        _tmux(), "new-session", "-d", "-s", session, "-c", str(cwd),
-        *claude_argv,
+    # tmux on the lead's OWN socket, wrapped in its OWN transient systemd unit
+    # so the server is parented to the lead's cgroup, not the channel's.
+    tmux_argv: list[str] = [
+        _tmux(), "-L", socket, "new-session", "-d", "-s", session,
+        "-c", str(cwd), *claude_argv,
     ]
+    cmd: list[str] = _wrap_in_transient_unit(name, tmux_argv)
 
     try:
         subprocess.run(
-            cmd, capture_output=True, text=True, check=True, timeout=10,
+            cmd, capture_output=True, text=True, check=True, timeout=SPAWN_TIMEOUT,
         )
     except subprocess.CalledProcessError as e:
         stderr = (e.stderr or "")[-500:]
-        raise RuntimeError(f"tmux new-session failed for {name!r}: {stderr}") from e
+        if "already exists" in stderr.lower():
+            raise RuntimeError(
+                f"a systemd unit for project {name!r} already exists "
+                f"({_lead_unit(name)}); kill the existing project first, or if "
+                f"it is a stale/dead lead run kill_project to clear it. "
+                f"stderr: {stderr}"
+            ) from e
+        raise RuntimeError(f"spawn failed for {name!r}: {stderr}") from e
     except subprocess.TimeoutExpired as e:
-        raise RuntimeError(f"tmux new-session timed out for {name!r} (10s)") from e
+        raise RuntimeError(f"spawn timed out for {name!r} ({SPAWN_TIMEOUT}s)") from e
 
-    rc_url = _capture_rc_url(session)
+    rc_url = _capture_rc_url(session, socket)
 
     return {
         "agent_id": session,
@@ -219,10 +300,25 @@ def spawn_background_lead(
 
 
 def kill_session(name: str) -> None:
-    session = _session_name(name) if not name.startswith(TMUX_SESSION_PREFIX) else name
+    bare = _bare_name(name)
+    session = _session_name(bare)
+    socket = _lead_socket(bare)
+    unit = _lead_unit(bare)
+    # Stop the transient unit first: KillMode=control-group tears down the whole
+    # cgroup (tmux server included) and avoids leaking an `active (exited)` unit.
+    # Best-effort -- the unit may already be gone.
     try:
         subprocess.run(
-            [_tmux(), "kill-session", "-t", session],
+            [SUDO_BIN, "-n", SYSTEMCTL_BIN, "stop", unit],
+            capture_output=True, text=True, check=True, timeout=10,
+        )
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
+        pass
+    # Belt-and-suspenders: kill the session on its own socket too, tolerating a
+    # server already torn down by the unit stop above.
+    try:
+        subprocess.run(
+            [_tmux(), "-L", socket, "kill-session", "-t", session],
             capture_output=True, text=True, check=True, timeout=10,
         )
     except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
