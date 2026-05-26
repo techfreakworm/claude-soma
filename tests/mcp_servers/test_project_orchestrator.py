@@ -70,7 +70,10 @@ def test_spawn_project_registers_and_returns_url() -> None:
         )
     assert r["agent_id"] == "soma-proj-alpha"
     assert r["rc_url"] == "https://rc.claude.com/alpha-rc"
-    listed = orch.list_projects_impl()
+    # list_projects now reconciles liveness against the lead's tmux session;
+    # the mocked spawn has no real session, so pretend it's alive here.
+    with patch.object(orch, "is_lead_alive", return_value=True):
+        listed = orch.list_projects_impl()
     assert any(p["name"] == "alpha" for p in listed)
 
 
@@ -96,7 +99,8 @@ def test_get_status_returns_idle_for(monkeypatch) -> None:
     with patch("subprocess.run", side_effect=_tmux_side_effect("")):
         orch.spawn_project_impl(name="gamma", type_="custom",
                                 brief="x", permission_mode="default")
-    s = orch.get_status_impl("gamma")
+    with patch.object(orch, "is_lead_alive", return_value=True):
+        s = orch.get_status_impl("gamma")
     assert s["name"] == "gamma"
     assert "idle_for_seconds" in s
 
@@ -107,8 +111,60 @@ def test_spawn_unknown_type_falls_back_to_custom(monkeypatch) -> None:
         r = orch.spawn_project_impl(name="d", type_="not-a-type",
                                     brief="x", permission_mode="default")
     assert r["agent_id"] == "soma-proj-d"
-    p = orch.get_status_impl("d")
+    with patch.object(orch, "is_lead_alive", return_value=True):
+        p = orch.get_status_impl("d")
     assert p["type"] in {"custom", "not-a-type"}
+
+
+def test_list_projects_reconciles_dead_lead(monkeypatch) -> None:
+    """A lead whose tmux session vanished must drop out of list_projects and
+    have its registry status flipped to 'dead' (the bug: it stayed 'active')."""
+    _no_url_poll(monkeypatch)
+    with patch("subprocess.run", side_effect=_tmux_side_effect("")):
+        orch.spawn_project_impl(name="zombie", type_="custom",
+                                brief="x", permission_mode="default")
+    with patch.object(orch, "is_lead_alive", return_value=False):
+        listed = orch.list_projects_impl()
+    assert all(p["name"] != "zombie" for p in listed)
+    assert orch._reg().get("zombie")["status"] == "dead"
+
+
+def test_get_status_reports_dead_when_session_gone(monkeypatch) -> None:
+    _no_url_poll(monkeypatch)
+    with patch("subprocess.run", side_effect=_tmux_side_effect("")):
+        orch.spawn_project_impl(name="ghost", type_="custom",
+                                brief="x", permission_mode="default")
+    with patch.object(orch, "is_lead_alive", return_value=False):
+        s = orch.get_status_impl("ghost")
+    assert s["status"] == "dead"
+    assert orch._reg().get("ghost")["status"] == "dead"
+
+
+def test_get_status_keeps_active_when_alive(monkeypatch) -> None:
+    _no_url_poll(monkeypatch)
+    with patch("subprocess.run", side_effect=_tmux_side_effect("")):
+        orch.spawn_project_impl(name="healthy", type_="custom",
+                                brief="x", permission_mode="default")
+    with patch.object(orch, "is_lead_alive", return_value=True):
+        s = orch.get_status_impl("healthy")
+    assert s["status"] == "active"
+
+
+def test_dead_lead_frees_a_concurrency_slot(monkeypatch) -> None:
+    """A ghost lead (dead but still 'active' in the registry) must not count
+    against MAX_CONCURRENT -- reconciliation frees the slot at spawn time."""
+    _no_url_poll(monkeypatch)
+    monkeypatch.setattr(orch, "MAX_CONCURRENT", 1)
+    with patch("subprocess.run", side_effect=_tmux_side_effect("")):
+        orch.spawn_project_impl(name="first", type_="custom",
+                                brief="x", permission_mode="default")
+        # Cap is 1 and 'first' is active; a second spawn would be refused if
+        # 'first' still counted. Its session has vanished, so the slot frees.
+        with patch.object(orch, "is_lead_alive", return_value=False):
+            r = orch.spawn_project_impl(name="second", type_="custom",
+                                        brief="x", permission_mode="default")
+    assert r["agent_id"] == "soma-proj-second"
+    assert orch._reg().get("first")["status"] == "dead"
 
 
 def test_register_routine_writes_to_registry() -> None:

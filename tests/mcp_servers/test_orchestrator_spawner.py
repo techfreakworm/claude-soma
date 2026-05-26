@@ -186,6 +186,40 @@ def test_kill_session_ignores_missing_session() -> None:
         kill_session("ghost")
 
 
+def test_is_lead_alive_true_when_session_present() -> None:
+    with patch("subprocess.run", return_value=_ok()) as run:
+        assert spawner.is_lead_alive("hello") is True
+    cmd = run.call_args_list[0][0][0]
+    assert cmd[0].endswith("tmux")
+    assert cmd[cmd.index("-L") + 1] == "soma-lead-hello"
+    assert "has-session" in cmd
+    assert cmd[cmd.index("-t") + 1] == "soma-proj-hello"
+
+
+def test_is_lead_alive_false_when_session_gone() -> None:
+    gone = _ok()
+    gone.returncode = 1  # tmux has-session exits non-zero when it's gone
+    with patch("subprocess.run", return_value=gone):
+        assert spawner.is_lead_alive("hello") is False
+
+
+def test_is_lead_alive_accepts_agent_id_form() -> None:
+    """is_lead_alive must accept either a bare name or the soma-proj-<name>
+    agent_id and resolve to the same socket/session."""
+    with patch("subprocess.run", return_value=_ok()) as run:
+        assert spawner.is_lead_alive("soma-proj-hello") is True
+    cmd = run.call_args_list[0][0][0]
+    assert cmd[cmd.index("-L") + 1] == "soma-lead-hello"
+    assert cmd[cmd.index("-t") + 1] == "soma-proj-hello"
+
+
+def test_is_lead_alive_conservative_on_tool_error() -> None:
+    """If the check itself can't run, assume alive -- a false 'dead' would hide
+    a running lead and risk a duplicate respawn."""
+    with patch("subprocess.run", side_effect=sp.TimeoutExpired(cmd=["tmux"], timeout=10)):
+        assert spawner.is_lead_alive("hello") is True
+
+
 # --- new tests for the three V1.5 fixes ---
 
 def test_spawn_pretrusts_cwd_in_claude_global_json(tmp_path: Path) -> None:
