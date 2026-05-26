@@ -1,0 +1,13 @@
+# systemd/claude-soma-pw-refresh.timer
+# Weekly keep-warm so platform sessions survive between monthly manual logins.
+# Weekly (not daily) keeps load on the platforms low while comfortably beating
+# typical session-cookie rotation windows.
+[Unit]
+Description=Refresh Claude Soma Playwright platform auth weekly
+[Timer]
+OnCalendar=Sun *-*-* 04:00:00
+Persistent=true
+RandomizedDelaySec=30min
+Unit=claude-soma-pw-refresh.service
+[Install]
+WantedBy=timers.target
