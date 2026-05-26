@@ -1,0 +1,17 @@
+# systemd/claude-soma-pw-refresh.service
+# Keep-warm for the shared Playwright platform auth: opens the persistent
+# profile headless, visits each platform's authed page so rolling-session
+# cookies get reissued, and re-exports the per-platform storageState the MCP
+# servers + leads read. Expired platforms are left untouched and flagged with a
+# NEEDS_REAUTH-<platform> sentinel. See docs/notes/2026-05-26-shared-playwright-auth.md.
+[Unit]
+Description=Claude Soma Playwright auth keep-warm refresh
+After=network-online.target
+Wants=network-online.target
+[Service]
+Type=oneshot
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/opt/claude-soma
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
+ExecStart=/usr/bin/node /opt/claude-soma/scripts/pw-refresh.js
