@@ -62,7 +62,10 @@ ExecStartPre=/bin/bash -c '/usr/bin/tmux kill-session -t hermes 2>/dev/null || t
 # the bot to dispatch substantial tasks to backgrounded subagents and ack
 # immediately, so the channel stays responsive while work happens in parallel.
 # See system_prompts/responsive_bot.md for the full text.
-ExecStart=/usr/bin/tmux new-session -d -s hermes -c /opt/claude-soma /home/ubuntu/.local/bin/claude --channels plugin:telegram@claude-plugins-official --plugin-dir /opt/claude-soma --add-dir /home/ubuntu/hermes-work --dangerously-skip-permissions --effort max --append-system-prompt-file /opt/claude-soma/system_prompts/responsive_bot.md
+# The claude argv lives in scripts/channel-claude.sh (single source of truth) so
+# scripts/healthcheck.sh can respawn it in-pane via `tmux respawn-pane` WITHOUT a
+# destructive `systemctl restart`. See that script for the per-flag rationale.
+ExecStart=/usr/bin/tmux new-session -d -s hermes -c /opt/claude-soma /opt/claude-soma/scripts/channel-claude.sh
 
 # Give tmux ~1s to spin the pane, then tap its output to the log file. This
 # is the TTY-safe equivalent of `| tee`.
