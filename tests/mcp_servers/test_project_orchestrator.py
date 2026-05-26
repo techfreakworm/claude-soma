@@ -16,6 +16,8 @@ def _isolate_registry(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("HERMES_PROJECTS_ROOT", str(tmp_path / "projects"))
     # spawn creates the per-lead log dir for real; keep it off /var/log.
     monkeypatch.setenv("HERMES_LEAD_LOG_DIR", str(tmp_path / "leadlogs"))
+    # Lead MCP config absent by default so --mcp-config is omitted deterministically.
+    monkeypatch.setenv("HERMES_LEAD_MCP_CONFIG", str(tmp_path / "absent-lead-mcp.json"))
     orch._reset_singletons_for_tests()
 
 
