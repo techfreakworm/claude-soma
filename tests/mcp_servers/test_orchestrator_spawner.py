@@ -29,6 +29,9 @@ def _isolate_spawner(tmp_path: Path, monkeypatch) -> None:
     # spawn creates the per-lead log dir for real (pathlib, not subprocess), so
     # point it at tmp_path instead of the real /var/log/claude-soma.
     monkeypatch.setenv("HERMES_LEAD_LOG_DIR", str(tmp_path / "leadlogs"))
+    # Point the lead MCP config at a NON-existent path by default so --mcp-config
+    # is deterministically omitted (tests that exercise it set their own file).
+    monkeypatch.setenv("HERMES_LEAD_MCP_CONFIG", str(tmp_path / "absent-lead-mcp.json"))
 
 
 def _ok(stdout: str = "") -> MagicMock:
@@ -302,10 +305,11 @@ def test_spawn_passes_remote_control_with_session_name(tmp_path: Path) -> None:
     assert args[rc_idx] == "soma-proj-rc"
 
 
-def test_spawn_passes_setting_sources_excluding_user(tmp_path: Path) -> None:
-    """Project leads must skip user-scope settings so the user-enabled telegram
-    plugin doesn't load and steal the bot's Telegram poller slot (race
-    documented in docs/notes/2026-05-25-telegram-poller-race.md)."""
+def test_spawn_passes_setting_sources_including_user(tmp_path: Path) -> None:
+    """Leads load user,project,local so they inherit user-scope MCPs
+    (sequential-thinking) + the user's skills/plugins. Telegram is no longer in
+    user scope (bot opts in via --settings), so including user no longer risks
+    the poller hijack -- see docs/notes/2026-05-26-leads-inherit-all-mcps.md."""
     cwd = tmp_path / "ss"
     cwd.mkdir()
     with patch("subprocess.run", side_effect=[_ok(), _ok("")]) as run:
@@ -315,7 +319,63 @@ def test_spawn_passes_setting_sources_excluding_user(tmp_path: Path) -> None:
     args = run.call_args_list[0][0][0]
     assert "--setting-sources" in args
     ss_idx = args.index("--setting-sources") + 1
-    assert args[ss_idx] == "project,local"
+    assert args[ss_idx] == "user,project,local"
+    # The bot's --settings (telegram opt-in) is NEVER passed to a lead.
+    assert "--settings" not in args
+
+
+def test_spawn_injects_lead_mcp_config_when_present(tmp_path: Path, monkeypatch) -> None:
+    """When the curated lead MCP config exists, spawn passes it via --mcp-config
+    so leads get the bot's tool servers (playwright, voice)."""
+    cfg = tmp_path / "lead-mcp.json"
+    cfg.write_text('{"mcpServers": {}}')
+    monkeypatch.setenv("HERMES_LEAD_MCP_CONFIG", str(cfg))
+    cwd = tmp_path / "mc"
+    cwd.mkdir()
+    with patch("subprocess.run", side_effect=[_ok(), _ok("")]) as run:
+        spawn_background_lead(
+            name="mc", brief="x", cwd=cwd, permission_mode="acceptEdits",
+        )
+    args = run.call_args_list[0][0][0]
+    assert "--mcp-config" in args
+    assert args[args.index("--mcp-config") + 1] == str(cfg)
+
+
+def test_spawn_omits_mcp_config_when_absent(tmp_path: Path, monkeypatch) -> None:
+    """If the lead MCP config file is missing, --mcp-config is omitted (the lead
+    still spawns; it just falls back to its own scopes) rather than failing."""
+    monkeypatch.setenv("HERMES_LEAD_MCP_CONFIG", str(tmp_path / "does-not-exist.json"))
+    cwd = tmp_path / "nomc"
+    cwd.mkdir()
+    with patch("subprocess.run", side_effect=[_ok(), _ok("")]) as run:
+        spawn_background_lead(
+            name="nomc", brief="x", cwd=cwd, permission_mode="acceptEdits",
+        )
+    args = run.call_args_list[0][0][0]
+    assert "--mcp-config" not in args
+
+
+def test_lead_mcp_config_is_curated_tool_set() -> None:
+    """Drift guard for the shipped config/claude/lead-mcp.json:
+
+    - the TOOL servers must equal the bot's .mcp.json MINUS the control-plane
+      ones (hermes-api clobbers the dashboard socket; project-orchestrator
+      shares the registry / could recursively spawn leads),
+    - sequential-thinking is added explicitly (user-scope loading is cwd/timing
+      flaky, so we guarantee it via --mcp-config),
+    - the control-plane servers and telegram are never present.
+    Each tool stanza must match .mcp.json byte-for-byte (catches path drift)."""
+    import json
+    repo = Path(__file__).resolve().parents[2]
+    full = json.loads((repo / ".mcp.json").read_text())["mcpServers"]
+    lead = json.loads((repo / "config/claude/lead-mcp.json").read_text())["mcpServers"]
+    assert "hermes-api" not in lead and "project-orchestrator" not in lead
+    assert "telegram" not in lead and not any("telegram" in k for k in lead)
+    assert "sequential-thinking" in lead
+    tool_servers = set(lead) - {"sequential-thinking"}
+    assert tool_servers == set(full) - {"hermes-api", "project-orchestrator"}
+    for name in tool_servers:
+        assert lead[name] == full[name], f"{name} drifted from .mcp.json"
 
 
 def test_capture_rc_url_polls_until_url_appears(tmp_path: Path, monkeypatch) -> None:

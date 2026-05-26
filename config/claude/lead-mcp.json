@@ -1,0 +1,102 @@
+{
+  "mcpServers": {
+    "voice-stt": {
+      "type": "stdio",
+      "command": "/opt/claude-soma/.venv/bin/python",
+      "args": [
+        "-m",
+        "claude_soma.mcp_servers.voice_stt.server"
+      ],
+      "env": {
+        "HERMES_WHISPER_BIN": "/opt/whisper.cpp/build/bin/whisper-cli",
+        "HERMES_WHISPER_MODEL": "/opt/whisper.cpp/models/ggml-large-v3-turbo.bin"
+      },
+      "alwaysLoad": true
+    },
+    "voice-tts": {
+      "type": "stdio",
+      "command": "/opt/claude-soma/.venv/bin/python",
+      "args": [
+        "-m",
+        "claude_soma.mcp_servers.voice_tts.server"
+      ],
+      "env": {
+        "HERMES_PIPER_BIN": "/opt/piper/piper",
+        "HERMES_PIPER_DEFAULT_VOICE": "/opt/piper/en_US-ryan-medium.onnx"
+      },
+      "alwaysLoad": true
+    },
+    "playwright": {
+      "type": "stdio",
+      "command": "/usr/bin/playwright-mcp",
+      "args": [
+        "--headless",
+        "--isolated",
+        "--executable-path",
+        "/usr/local/bin/playwright-chromium"
+      ],
+      "alwaysLoad": true
+    },
+    "playwright-linkedin": {
+      "type": "stdio",
+      "command": "/usr/bin/playwright-mcp",
+      "args": [
+        "--headless",
+        "--isolated",
+        "--storage-state",
+        "/home/ubuntu/.claude-pw/state-linkedin.json",
+        "--executable-path",
+        "/usr/local/bin/playwright-chromium"
+      ],
+      "alwaysLoad": true
+    },
+    "playwright-x": {
+      "type": "stdio",
+      "command": "/usr/bin/playwright-mcp",
+      "args": [
+        "--headless",
+        "--isolated",
+        "--storage-state",
+        "/home/ubuntu/.claude-pw/state-x.json",
+        "--executable-path",
+        "/usr/local/bin/playwright-chromium"
+      ],
+      "alwaysLoad": true
+    },
+    "playwright-x-article": {
+      "type": "stdio",
+      "command": "/usr/bin/playwright-mcp",
+      "args": [
+        "--headless",
+        "--isolated",
+        "--storage-state",
+        "/home/ubuntu/.claude-pw/state-x.json",
+        "--executable-path",
+        "/usr/local/bin/playwright-chromium"
+      ],
+      "alwaysLoad": true
+    },
+    "playwright-medium": {
+      "type": "stdio",
+      "command": "/usr/bin/playwright-mcp",
+      "args": [
+        "--headless",
+        "--isolated",
+        "--storage-state",
+        "/home/ubuntu/.claude-pw/state-medium.json",
+        "--executable-path",
+        "/usr/local/bin/playwright-chromium"
+      ],
+      "alwaysLoad": true
+    },
+    "sequential-thinking": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-sequential-thinking"
+      ],
+      "env": {}
+    }
+  }
+}

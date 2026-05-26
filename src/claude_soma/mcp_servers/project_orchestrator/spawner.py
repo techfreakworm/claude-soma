@@ -57,6 +57,16 @@ LEAD_PATH = os.environ.get(
 # the file).
 LEAD_LOG_DIR_DEFAULT = "/var/log/claude-soma"
 
+# Leads load the bot's TOOL MCP servers (playwright x5, voice-stt/tts) via this
+# curated --mcp-config: it is the bot's .mcp.json MINUS the control-plane
+# servers (hermes-api, which unlink+rebinds the bot's dashboard socket, and
+# project-orchestrator, which shares the registry and could recursively
+# spawn/kill leads). Telegram is excluded everywhere (bot-only via --settings).
+# Read at call time (HERMES_LEAD_MCP_CONFIG) so tests can point elsewhere; if
+# the file is absent the flag is simply omitted (leads degrade to their own
+# scope rather than failing to spawn).
+LEAD_MCP_CONFIG_DEFAULT = "/opt/claude-soma/config/claude/lead-mcp.json"
+
 # systemd-run returns quickly once the oneshot ExecStart (tmux new-session -d)
 # detaches; 20s is generous headroom for talking to PID 1 under load.
 SPAWN_TIMEOUT = 20
@@ -276,15 +286,25 @@ def spawn_background_lead(
         "--permission-mode", permission_mode,
         "--dangerously-skip-permissions",
         "--effort", "max",
-        # Skip user-scope settings so the user-enabled telegram plugin doesn't
-        # load in project-lead sessions and hijack the bot's Telegram poller
-        # slot. Confirmed race documented in
-        # docs/notes/2026-05-25-telegram-poller-race.md. The bot itself runs
-        # WITHOUT this flag so it keeps the user-scope plugin and continues
-        # polling; claude.ai connectors (Canva, Gmail) are auth-driven via
-        # ~/.claude/.credentials.json so project leads keep those.
-        "--setting-sources", "project,local",
+        # Load USER scope too, not just project,local. This gives leads the
+        # user-scope MCP servers (sequential-thinking) and the user's
+        # skills/agents/plugins. It used to be `project,local` to keep the
+        # then-user-scoped telegram plugin out of leads (it would hijack the
+        # bot's poller). That risk is GONE: telegram was moved out of user
+        # scope -- the bot now opts in ONLY via
+        # `--settings .../channel-settings.json`, which leads never receive.
+        # So a lead gets every user MCP/skill/plugin EXCEPT telegram. (Verified
+        # 2026-05-26: ~/.claude.json + ~/.claude/settings.json enabledPlugins
+        # contain no telegram; /home/ubuntu even disables it explicitly.)
+        "--setting-sources", "user,project,local",
     ]
+    # Inject the bot's tool MCP servers (playwright, voice) from the curated
+    # lead config -- but NOT hermes-api/project-orchestrator (see
+    # LEAD_MCP_CONFIG_DEFAULT). Omit the flag if the file isn't present so a
+    # box without it (pre-deploy / CI) still spawns leads cleanly.
+    lead_mcp_config = os.environ.get("HERMES_LEAD_MCP_CONFIG", LEAD_MCP_CONFIG_DEFAULT)
+    if Path(lead_mcp_config).exists():
+        claude_argv += ["--mcp-config", lead_mcp_config]
     if extra_args:
         claude_argv.extend(extra_args)
     claude_argv.append(brief)
