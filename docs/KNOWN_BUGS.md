@@ -7,8 +7,9 @@ Each entry records symptom, trigger, mechanism, status, and pointers.
 
 ## 1. New Claude sessions on the VPS hijack the Telegram poller / restart the orchestrator
 
-- Status: OPEN (partial fixes shipped: project leads + manual-shell wrapper; the
-  Agent/Task-subagent vector remains open)
+- Status: OPEN (manual-shell + project-lead fixes shipped; structural root fix for the
+  subagent vector implemented on branch fix/telegram-poller-hijack-hardening, pending a
+  maintenance-window deploy + one inheritance check)
 - Severity: high - silently drops the Telegram bot, or restarts the whole channel
 - Documented: 2026-05-25 (project-lead case), 2026-05-26 (general case + manual-shell
   evidence + plugin-load semantics verified)
@@ -98,23 +99,30 @@ Branch `fix/project-lead-cgroup-isolation` runs each project lead in its own tra
 (`KillMode=control-group`) can no longer kill leads. This does not stop the hijack but
 removes its worst consequence. See `docs/notes/2026-05-25-project-lead-cgroup-teardown.md`.
 
-### Real-fix directions for the remaining (subagent) vector
+### Root fix (implemented on branch, pending maintenance-window deploy)
 
-The open question is whether an Agent/Task subagent inherits its spawner's
-`--setting-sources` (case 1) or always defaults to `user,project,local` (case 2). Both
-point to keeping telegram enabled only in a scope the bot loads but subagents/manual
-sessions do not. Candidate approaches, none yet implemented:
+Verified by isolated probing (2026-05-26): `--channels` does NOT load the plugin without
+`enabledPlugins` in a loaded scope; a bot-only `--settings <file>` DOES load it and merges
+additively with the bot's user-scope settings. So the fix removes telegram from user scope
+and has the bot opt in via `--settings`:
 
-- Move telegram enablement out of user scope into a bot-only scope (e.g. a dedicated
-  `--settings <file>` the bot passes, or `/opt/claude-soma/.claude/settings.json` project
-  scope) IF that scope is not also loaded by subagents/manual sessions. Must verify
-  Claude Code honours `enabledPlugins` at that scope AND that subagents do not inherit it.
-- Have the bot route heavy/parallel work to orchestrator-spawned project leads (already
-  plugin-skipped + cgroup-isolated) instead of in-session Agent dispatches -- a
-  `system_prompts/responsive_bot.md` change. Sidesteps the in-bot Agent vector entirely.
-- Gate the plugin's takeover on an env var only the bot sets (e.g. `TELEGRAM_POLL=off`
-  for non-bot sessions). Requires patching the third-party plugin `server.ts` (no such
-  gate exists today), which is erased on plugin upgrade -- last resort / upstream ask.
+- `scripts/disable-user-telegram-plugin.sh` removes telegram from user-scope enabledPlugins
+  (idempotent, backs up). No non-bot session then loads the plugin from the default scopes.
+- `scripts/channel-claude.sh` adds `--settings config/claude/channel-settings.json`
+  (telegram-only) to the bot launch, so only the bot re-acquires the plugin.
+
+This covers manual shells AND subagents regardless of whether subagents inherit
+`--setting-sources` (both the default scopes and the cleaned user scope are telegram-free).
+The single residual -- whether Claude Code propagates the parent's `--settings` flag to
+Agent/Task subagents -- plus the deploy and a bot-still-polls check are validated in a
+maintenance window. Full design + window checklist:
+`docs/notes/2026-05-26-telegram-plugin-scope-isolation.md`.
+
+Fallback if that residual fails (subagents DO inherit `--settings`): route the bot's heavy
+work to orchestrator-spawned leads (plugin-skipped + cgroup-isolated) via
+`system_prompts/responsive_bot.md` instead of in-session Agent dispatches. (A third option,
+patching the third-party plugin to gate its takeover on an env var only the bot sets, is a
+last resort -- it is erased on plugin upgrade.)
 
 Note: a distinct `TELEGRAM_STATE_DIR` per non-bot session prevents the `SIGTERM` of the
 real `bot.pid`, but a session that still has a real token in its env would then poll the
