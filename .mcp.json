@@ -50,6 +50,50 @@
         "--executable-path", "/usr/local/bin/playwright-chromium"
       ],
       "alwaysLoad": true
+    },
+    "playwright-linkedin": {
+      "type": "stdio",
+      "command": "/usr/bin/playwright-mcp",
+      "args": [
+        "--headless",
+        "--isolated",
+        "--storage-state", "/home/ubuntu/.claude-pw/state-linkedin.json",
+        "--executable-path", "/usr/local/bin/playwright-chromium"
+      ],
+      "alwaysLoad": true
+    },
+    "playwright-x": {
+      "type": "stdio",
+      "command": "/usr/bin/playwright-mcp",
+      "args": [
+        "--headless",
+        "--isolated",
+        "--storage-state", "/home/ubuntu/.claude-pw/state-x.json",
+        "--executable-path", "/usr/local/bin/playwright-chromium"
+      ],
+      "alwaysLoad": true
+    },
+    "playwright-x-article": {
+      "type": "stdio",
+      "command": "/usr/bin/playwright-mcp",
+      "args": [
+        "--headless",
+        "--isolated",
+        "--storage-state", "/home/ubuntu/.claude-pw/state-x.json",
+        "--executable-path", "/usr/local/bin/playwright-chromium"
+      ],
+      "alwaysLoad": true
+    },
+    "playwright-medium": {
+      "type": "stdio",
+      "command": "/usr/bin/playwright-mcp",
+      "args": [
+        "--headless",
+        "--isolated",
+        "--storage-state", "/home/ubuntu/.claude-pw/state-medium.json",
+        "--executable-path", "/usr/local/bin/playwright-chromium"
+      ],
+      "alwaysLoad": true
     }
   }
 }
