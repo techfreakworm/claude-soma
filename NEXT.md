@@ -175,7 +175,7 @@ From the local repo:
 
 ```bash
 cd ~/Projects/llm/hermes-claude
-./scripts/deploy.sh   # rsyncs to /opt/claude-soma, creates venv, pip install -e .[dev]
+./scripts/deploy.sh   # rsync, venv + pip install, build frontend (+ copy static), restart frontend
 ```
 
 Verify: `ssh oci-hermes /opt/claude-soma/.venv/bin/python -c "from claude_soma.mcp_servers.voice_stt.server import transcribe_impl; print('OK')"`.
@@ -271,9 +271,10 @@ When Week 3 code is committed:
      sudo install -m 644 /tmp/Caddyfile /etc/caddy/Caddyfile
      sudo systemctl daemon-reload
 
-     cd /opt/claude-soma/frontend
-     pnpm install --prod=false
-     pnpm build
+     # build_frontend.sh runs pnpm install + build AND copies .next/static +
+     # public next to the standalone server.js. A bare `pnpm build` skips that
+     # copy, so the dashboard serves unstyled (every /_next/static/* 404s).
+     bash /opt/claude-soma/scripts/build_frontend.sh
 
      sudo systemctl enable --now claude-soma-api.service claude-soma-frontend.service
      sudo systemctl reload caddy
