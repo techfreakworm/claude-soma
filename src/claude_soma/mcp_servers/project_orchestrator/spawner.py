@@ -60,9 +60,20 @@ CLAUDE_GLOBAL_JSON_DEFAULT = str(Path.home() / ".claude.json")
 
 MAX_BRIEF_CHARS = 100_000  # safety: keep briefs reasonable
 NAME_RX = re.compile(r"^[a-z][a-z0-9-]{0,63}$")
-RC_URL_RX = re.compile(r"https?://rc\.claude\.com/\S+")
 
-# How long to keep polling tmux capture for the rc.claude.com URL before
+# claude prints a Remote Control URL like
+# https://claude.ai/code/session_018tGGH6weoRDokVSn7fmMhR at startup (verified
+# live 2026-05-26 across three running leads). Older builds printed
+# https://rc.claude.com/<id>; keep that as a fallback so a version skew doesn't
+# silently break capture again. The session id is the only variable part
+# (base62), so bound it to URL-safe chars instead of \S+ -- \S+ would swallow a
+# trailing box-drawing glyph if the URL ever renders mid-line in the pane.
+RC_URL_RX = re.compile(
+    r"https?://claude\.ai/code/session_[A-Za-z0-9_-]+"
+    r"|https?://rc\.claude\.com/\S+"
+)
+
+# How long to keep polling tmux capture for the Remote Control URL before
 # giving up. claude prints the URL within ~5s usually, but the first capture
 # right after tmux returns sometimes misses it.
 RC_URL_POLL_SECONDS = 30
@@ -186,7 +197,7 @@ def _pretrust_cwd(cwd: Path) -> None:
 
 
 def _capture_rc_url(session: str, socket: str, timeout: float | None = None) -> str:
-    """Poll the tmux pane until the rc.claude.com URL appears, or timeout.
+    """Poll the tmux pane until the Remote Control URL appears, or timeout.
 
     The original implementation was a single capture-pane call right after
     tmux returned, which raced with claude's startup output — most of the

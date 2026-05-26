@@ -299,3 +299,40 @@ def test_capture_rc_url_polls_until_url_appears(tmp_path: Path, monkeypatch) -> 
             name="polly", brief="x", cwd=cwd, permission_mode="acceptEdits",
         )
     assert result["rc_url"] == "https://rc.claude.com/poll-success"
+
+
+def test_spawn_scrapes_claude_ai_rc_url(tmp_path: Path, monkeypatch) -> None:
+    """The live Remote Control URL format is https://claude.ai/code/session_<id>
+    (verified across three running leads 2026-05-26). The old regex only knew
+    rc.claude.com, so every real spawn returned rc_url="" even though the pane
+    showed a valid URL."""
+    cwd = tmp_path / "claudeai"
+    cwd.mkdir()
+    # Autouse fixture zeroes the poll budget; give one iteration so it captures.
+    monkeypatch.setattr(spawner, "RC_URL_POLL_SECONDS", 1.0)
+    pane = (
+        "  https://claude.ai/code/session_018tGGH6weoRDokVSn7fmMhR\n"
+        "  bypass permissions on (shift+tab to cycle)\n"
+        "                                Remote Control active\n"
+    )
+    with patch("subprocess.run", side_effect=[_ok(), _ok(pane)]):
+        result = spawn_background_lead(
+            name="claudeai", brief="x", cwd=cwd, permission_mode="acceptEdits",
+        )
+    assert result["rc_url"] == "https://claude.ai/code/session_018tGGH6weoRDokVSn7fmMhR"
+
+
+def test_rc_url_rx_bounds_match_and_keeps_legacy_fallback() -> None:
+    """RC_URL_RX must (a) capture the live claude.ai URL cleanly even when a
+    box-drawing glyph abuts it (a bare \\S+ would swallow the glyph), (b) still
+    accept the legacy rc.claude.com URL, and (c) NOT match the literal
+    `session_<id>` placeholder that appears verbatim in some briefs/TASK files."""
+    rx = spawner.RC_URL_RX
+    live = "https://claude.ai/code/session_018tGGH6weoRDokVSn7fmMhR"
+    # Glyph immediately adjacent (no space): bounded class stops at the glyph.
+    m = rx.search(f"Remote Control · {live}│")
+    assert m is not None and m.group(0) == live
+    legacy = "https://rc.claude.com/abc123def"
+    assert rx.search(f"remote: {legacy}\n").group(0) == legacy
+    # `<` is not a session-id character, so the placeholder must not match.
+    assert rx.search("the URL is https://claude.ai/code/session_<id> now") is None
