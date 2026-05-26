@@ -26,6 +26,9 @@ def _isolate_spawner(tmp_path: Path, monkeypatch) -> None:
     # tests would actually wait. Set both to 0 so the loop runs once and exits.
     monkeypatch.setattr(spawner, "RC_URL_POLL_SECONDS", 0)
     monkeypatch.setattr(spawner, "RC_URL_POLL_INTERVAL", 0)
+    # spawn creates the per-lead log dir for real (pathlib, not subprocess), so
+    # point it at tmp_path instead of the real /var/log/claude-soma.
+    monkeypatch.setenv("HERMES_LEAD_LOG_DIR", str(tmp_path / "leadlogs"))
 
 
 def _ok(stdout: str = "") -> MagicMock:
@@ -67,7 +70,10 @@ def test_spawn_calls_claude_bg_with_expected_args(tmp_path: Path) -> None:
     assert any("claude" in a for a in args)
     assert "--add-dir" in args and str(cwd) in args
     assert "--permission-mode" in args and "acceptEdits" in args
-    assert args[-1] == "Build it."
+    # The brief is the final argument to new-session -- now right before the
+    # `;` that starts the chained pipe-pane logging command.
+    sep_idx = args.index(";")
+    assert args[sep_idx - 1] == "Build it."
     assert "--bg" not in args
     assert "--output-format" not in args
     assert result["agent_id"].endswith("my-project")
@@ -299,3 +305,50 @@ def test_capture_rc_url_polls_until_url_appears(tmp_path: Path, monkeypatch) -> 
             name="polly", brief="x", cwd=cwd, permission_mode="acceptEdits",
         )
     assert result["rc_url"] == "https://rc.claude.com/poll-success"
+
+
+def test_spawn_chains_pipe_pane_logging_to_lead_log(tmp_path: Path, monkeypatch) -> None:
+    """The spawn must chain a `pipe-pane` (via tmux's `;` separator) in the SAME
+    invocation, teeing the lead's pane to <log dir>/<name>.log so a dead lead's
+    output survives. Same invocation => no extra spawn subprocess; the `cat`
+    writer is forked by the tmux server (lead's cgroup) so logging survives a
+    channel restart."""
+    log_dir = tmp_path / "logs"
+    monkeypatch.setenv("HERMES_LEAD_LOG_DIR", str(log_dir))
+    cwd = tmp_path / "loggy"
+    cwd.mkdir()
+    with patch("subprocess.run", side_effect=[_ok(), _ok("")]) as run:
+        spawn_background_lead(
+            name="loggy", brief="x", cwd=cwd, permission_mode="acceptEdits",
+        )
+    args = run.call_args_list[0][0][0]
+    # pipe-pane is chained after the new-session command via the `;` separator.
+    assert ";" in args, args
+    chain = args[args.index(";") + 1:]
+    assert chain[0] == "pipe-pane"
+    assert "-O" in chain and "-o" in chain  # output-only, idempotent
+    assert chain[chain.index("-t") + 1] == "soma-proj-loggy"
+    # The tee target is the per-lead log under the configured dir.
+    assert any(str(log_dir / "loggy.log") in a for a in chain), chain
+    # spawn created the log dir (best-effort mkdir).
+    assert log_dir.is_dir()
+
+
+def test_spawn_pipe_pane_logging_is_best_effort_on_unwritable_dir(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """If the log dir can't be created, spawn must still succeed (logging is
+    non-critical). The pipe-pane chain is still appended -- its `cat` simply
+    exits without writing, leaving the pane untouched."""
+    # Point the log dir under a *file*, so mkdir(parents=True) raises.
+    blocker = tmp_path / "not-a-dir"
+    blocker.write_text("x")
+    monkeypatch.setenv("HERMES_LEAD_LOG_DIR", str(blocker / "logs"))
+    cwd = tmp_path / "stillspawns"
+    cwd.mkdir()
+    with patch("subprocess.run", side_effect=[_ok(), _ok("")]) as run:
+        result = spawn_background_lead(
+            name="stillspawns", brief="x", cwd=cwd, permission_mode="acceptEdits",
+        )
+    assert result["agent_id"] == "soma-proj-stillspawns"
+    assert ";" in run.call_args_list[0][0][0]  # chain still present
