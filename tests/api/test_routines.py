@@ -15,6 +15,20 @@ from claude_soma.api.routes import routines as routines_route
 HEADERS = {"X-GitHub-Handle": "techfreakworm"}
 
 
+@pytest.fixture(autouse=True)
+def _isolate_routines(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # The cloud result is cached module-side; clear it so cases don't leak.
+    routines_route._clear_routines_cache()
+    # Deterministic cron sources -- empty unless a case points them at fixtures.
+    monkeypatch.setattr(routines_route, "ETC_CRONTAB", str(tmp_path / "nocrontab"))
+    monkeypatch.setattr(routines_route, "CRON_D_DIR", str(tmp_path / "nocron.d"))
+    # Never spawn a real `claude -p` in tests; cases that exercise cloud routines
+    # override this. (Without it, the smoke test below would shell out for ~12s.)
+    monkeypatch.setattr(
+        routines_route, "_call_claude_routines", lambda *a, **k: {"triggers": []}
+    )
+
+
 def test_list_routines_returns_list() -> None:
     app = create_app()
     client = TestClient(app)
@@ -68,6 +82,8 @@ def _fake_subprocess_run(*, raise_for_show: bool = False) -> Any:
             return subprocess.CompletedProcess(
                 args=cmd, returncode=0, stdout=_systemctl_show_payload(unit), stderr=""
             )
+        if cmd[:1] == ["crontab"]:  # the route now also scans the user crontab
+            return subprocess.CompletedProcess(args=cmd, returncode=0, stdout="", stderr="")
         raise AssertionError(f"unexpected subprocess call: {cmd!r}")
     return runner
 
@@ -227,3 +243,105 @@ def test_list_routines_handles_systemd_failure_gracefully(
     payload = r.json()
     by_name = {x["name"]: x for x in payload}
     assert "daily-tldr" in by_name
+
+
+def test_list_routines_includes_cron_jobs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Cron jobs from the user crontab, /etc/crontab, and /etc/cron.d must be
+    aggregated and labelled created_by='cron', kind='local'."""
+    db = tmp_path / "reg.sqlite"
+    monkeypatch.setenv("HERMES_ORCH_DB", str(db))
+
+    etc_crontab = tmp_path / "crontab"
+    etc_crontab.write_text(
+        "# /etc/crontab\nSHELL=/bin/sh\nPATH=/usr/bin\n"
+        "17 *\t* * *\troot\tcd / && run-parts --report /etc/cron.hourly\n"
+    )
+    crond = tmp_path / "cron.d"
+    crond.mkdir()
+    (crond / "sysstat").write_text(
+        "# sysstat\n5 10 * * *\troot\t/usr/lib/sysstat/debian-sa1 1 1\n"
+    )
+    monkeypatch.setattr(routines_route, "ETC_CRONTAB", str(etc_crontab))
+    monkeypatch.setattr(routines_route, "CRON_D_DIR", str(crond))
+
+    def runner(cmd: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
+        argv = " ".join(cmd)
+        if cmd[:1] == ["crontab"]:  # user crontab with a macro schedule
+            return subprocess.CompletedProcess(
+                args=cmd, returncode=0,
+                stdout="@daily /home/ubuntu/backup.sh\n", stderr="",
+            )
+        if "list-timers" in argv:
+            return subprocess.CompletedProcess(args=cmd, returncode=0, stdout="[]", stderr="")
+        return subprocess.CompletedProcess(args=cmd, returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(routines_route.subprocess, "run", runner)
+
+    app = create_app()
+    client = TestClient(app)
+    rows = client.get("/api/routines", headers=HEADERS).json()
+    crons = [x for x in rows if x.get("created_by") == "cron"]
+    schedules = {c["schedule"] for c in crons}
+    assert "17 * * * *" in schedules     # /etc/crontab (user field stripped)
+    assert "5 10 * * *" in schedules     # /etc/cron.d/sysstat
+    assert "@daily" in schedules         # user crontab macro
+    assert all(c["kind"] == "local" for c in crons)
+
+
+def test_list_routines_includes_non_claude_soma_timers(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Timer aggregation must surface ALL systemd timers, not only claude-soma
+    ones (the user wants every local schedule visible)."""
+    db = tmp_path / "reg.sqlite"
+    monkeypatch.setenv("HERMES_ORCH_DB", str(db))
+
+    def runner(cmd: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
+        argv = " ".join(cmd)
+        if "list-timers" in argv:
+            payload = json.dumps([
+                {"unit": "fstrim.timer", "next": 1748073600000000, "last": 0},
+                {"unit": "claude-soma-healthcheck.timer", "next": 1748073600000000, "last": 0},
+            ])
+            return subprocess.CompletedProcess(args=cmd, returncode=0, stdout=payload, stderr="")
+        if cmd[:2] == ["systemctl", "show"]:
+            return subprocess.CompletedProcess(
+                args=cmd, returncode=0, stdout="OnCalendar=daily\nResult=success\n", stderr=""
+            )
+        if cmd[:1] == ["crontab"]:
+            return subprocess.CompletedProcess(args=cmd, returncode=0, stdout="", stderr="")
+        return subprocess.CompletedProcess(args=cmd, returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(routines_route.subprocess, "run", runner)
+
+    app = create_app()
+    client = TestClient(app)
+    names = {x["name"] for x in client.get("/api/routines", headers=HEADERS).json()}
+    assert "fstrim.timer" in names                  # broadened beyond claude-soma
+    assert "claude-soma-healthcheck.timer" in names
+
+
+def test_cloud_query_is_cached_across_requests(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The slow cloud query (claude -p) must be cached: a second /api/routines
+    request within the TTL must not re-invoke it."""
+    db = tmp_path / "reg.sqlite"
+    monkeypatch.setenv("HERMES_ORCH_DB", str(db))
+    monkeypatch.setattr(routines_route.subprocess, "run", _fake_subprocess_run())
+
+    calls = {"n": 0}
+
+    def counting_cloud(action: str, **kwargs: Any) -> dict[str, Any]:
+        calls["n"] += 1
+        return {"triggers": [{"name": "c1", "schedule": "0 9 * * *"}]}
+
+    monkeypatch.setattr(routines_route, "_call_claude_routines", counting_cloud)
+
+    app = create_app()
+    client = TestClient(app)
+    assert client.get("/api/routines", headers=HEADERS).status_code == 200
+    assert client.get("/api/routines", headers=HEADERS).status_code == 200
+    assert calls["n"] == 1  # second request served from the cloud cache
