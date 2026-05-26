@@ -99,11 +99,20 @@ class Registry:
         ).fetchall()
         return [dict(r) for r in rows]
 
-    def set_status(self, name: str, status: str) -> None:
-        self._conn.execute(
-            "UPDATE projects SET status = ?, last_activity = ? WHERE name = ?",
-            (status, time.time(), name),
-        )
+    def set_status(self, name: str, status: str, *, bump_activity: bool = True) -> None:
+        # bump_activity=False is for liveness reconciliation: flipping a vanished
+        # lead to 'dead' is bookkeeping, not activity, so it must not reset the
+        # idle clock (which would make a long-dead lead look freshly active).
+        if bump_activity:
+            self._conn.execute(
+                "UPDATE projects SET status = ?, last_activity = ? WHERE name = ?",
+                (status, time.time(), name),
+            )
+        else:
+            self._conn.execute(
+                "UPDATE projects SET status = ? WHERE name = ?",
+                (status, name),
+            )
 
     def touch(self, name: str) -> None:
         self._conn.execute(

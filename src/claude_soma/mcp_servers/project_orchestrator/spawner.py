@@ -299,6 +299,37 @@ def spawn_background_lead(
     }
 
 
+def is_lead_alive(name: str) -> bool:
+    """True iff the lead's tmux session is alive on its dedicated socket.
+
+    Ground-truth liveness: the lead's claude process IS the tmux pane process,
+    and with remain-on-exit off (the default) tmux destroys the session the
+    instant claude exits, so a live session means a live lead. We deliberately
+    do NOT trust the systemd unit state: the transient unit is Type=oneshot +
+    RemainAfterExit=yes, so it reads `active (exited)` even after the tmux
+    server inside it has died -- `systemctl is-active` would call a dead lead
+    alive.
+
+    `tmux has-session` exits non-zero (no exception) when the session is gone
+    OR the socket no longer exists, which is exactly the vanished-lead case.
+    Conservative on a genuine tool error (tmux missing, timeout): return True so
+    a transient glitch never demotes a live lead to 'dead' -- a false 'dead'
+    hides a running lead from list_projects and risks a duplicate respawn, a
+    worse outcome than briefly showing a ghost.
+    """
+    bare = _bare_name(name)
+    session = _session_name(bare)
+    socket = _lead_socket(bare)
+    try:
+        result = subprocess.run(
+            [_tmux(), "-L", socket, "has-session", "-t", session],
+            capture_output=True, text=True, timeout=10,
+        )
+    except (subprocess.SubprocessError, OSError):
+        return True
+    return result.returncode == 0
+
+
 def kill_session(name: str) -> None:
     bare = _bare_name(name)
     session = _session_name(bare)

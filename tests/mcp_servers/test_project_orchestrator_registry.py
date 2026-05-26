@@ -4,8 +4,6 @@ from __future__ import annotations
 import time
 from pathlib import Path
 
-import pytest
-
 from claude_soma.mcp_servers.project_orchestrator.registry import Registry
 
 
@@ -45,3 +43,25 @@ def test_idle_for_seconds_increases(tmp_path: Path) -> None:
     r.register("x", agent_id="a-1", type_="custom", cwd="/x", rc_url="https://x")
     time.sleep(0.5)
     assert r.idle_for("x") >= 0.4
+
+
+def test_set_status_default_bumps_last_activity(tmp_path: Path) -> None:
+    r = Registry(tmp_path / "reg.sqlite")
+    r.register("x", agent_id="a-1", type_="custom", cwd="/x", rc_url="https://x")
+    before = r.get("x")["last_activity"]
+    time.sleep(0.05)
+    r.set_status("x", "killed")
+    assert r.get("x")["status"] == "killed"
+    assert r.get("x")["last_activity"] > before
+
+
+def test_set_status_no_bump_preserves_last_activity(tmp_path: Path) -> None:
+    """Liveness reconciliation flips a vanished lead to 'dead' with
+    bump_activity=False so a long-dead lead doesn't look freshly active."""
+    r = Registry(tmp_path / "reg.sqlite")
+    r.register("x", agent_id="a-1", type_="custom", cwd="/x", rc_url="https://x")
+    before = r.get("x")["last_activity"]
+    time.sleep(0.05)
+    r.set_status("x", "dead", bump_activity=False)
+    assert r.get("x")["status"] == "dead"
+    assert r.get("x")["last_activity"] == before

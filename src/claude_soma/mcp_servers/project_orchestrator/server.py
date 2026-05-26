@@ -10,7 +10,7 @@ from mcp.server.fastmcp import FastMCP
 
 from .registry import Registry
 from .spawner import (
-    spawn_background_lead, kill_session, InvalidProjectName, BriefTooLong,
+    spawn_background_lead, kill_session, is_lead_alive,
 )
 from .templates import load_template, list_template_names, TemplateNotFound
 
@@ -42,10 +42,32 @@ def _resolve_template(type_: str) -> dict:
         return load_template("custom")
 
 
+def _reconcile_active() -> list[dict]:
+    """Return the registry rows that are marked active AND whose lead is really
+    still running, flipping any active-but-dead row to 'dead' as a side effect.
+
+    The registry only ever learns a lead died if kill_project was called; a lead
+    that vanished on its own (channel restart before cgroup isolation, crash, or
+    a finished task) stayed 'active' forever. This cross-checks the live tmux
+    session so list_projects, the concurrency gate, and get_status agree on what
+    'active' means. Uses bump_activity=False so the demotion doesn't reset the
+    idle clock.
+    """
+    live: list[dict] = []
+    for r in _reg().list_active():
+        if is_lead_alive(r["name"]):
+            live.append(r)
+        else:
+            _reg().set_status(r["name"], "dead", bump_activity=False)
+    return live
+
+
 def spawn_project_impl(
     *, name: str, type_: str, brief: str, permission_mode: str = "acceptEdits"
 ) -> dict:
-    active = _reg().list_active()
+    # Reconcile first so ghost leads (dead but still 'active' in the registry)
+    # don't wrongly count against the concurrency cap and block a real spawn.
+    active = _reconcile_active()
     if len(active) >= MAX_CONCURRENT:
         raise RuntimeError(
             f"already at concurrency cap ({MAX_CONCURRENT}); "
@@ -74,7 +96,7 @@ def spawn_project_impl(
 
 
 def list_projects_impl() -> list[dict]:
-    rows = _reg().list_active()
+    rows = _reconcile_active()
     now = time.time()
     return [
         {
@@ -112,9 +134,15 @@ def get_status_impl(name: str) -> dict:
     p = _reg().get(name)
     if not p:
         raise RuntimeError(f"no project named {name!r}")
+    # Reconcile: if the registry thinks it's active but the tmux session is
+    # gone, the lead vanished -- report (and persist) 'dead' rather than lie.
+    status = p["status"]
+    if status == "active" and not is_lead_alive(name):
+        _reg().set_status(name, "dead", bump_activity=False)
+        status = "dead"
     return {
         "name": p["name"], "agent_id": p["agent_id"], "type": p["type"],
-        "cwd": p["cwd"], "rc_url": p["rc_url"], "status": p["status"],
+        "cwd": p["cwd"], "rc_url": p["rc_url"], "status": status,
         "spawned_at": p["spawned_at"],
         "idle_for_seconds": _reg().idle_for(name),
     }
