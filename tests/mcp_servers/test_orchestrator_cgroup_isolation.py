@@ -109,6 +109,8 @@ def test_spawned_lead_lives_in_its_own_cgroup_not_the_channel(tmp_path, monkeypa
     monkeypatch.setattr(spawner, "CLAUDE_BIN", str(stub))
     monkeypatch.setattr(spawner, "RC_URL_POLL_SECONDS", 0)  # don't poll for a URL
     monkeypatch.setenv("HERMES_CLAUDE_GLOBAL_JSON", str(tmp_path / "claude.json"))
+    # Tee pane logging into tmp_path, not the real /var/log/claude-soma.
+    monkeypatch.setenv("HERMES_LEAD_LOG_DIR", str(tmp_path / "logs"))
     env_file = tmp_path / "lead.env"
     env_file.write_text("CLAUDE_CODE_OAUTH_TOKEN=fake-token-for-test\n")
     monkeypatch.setattr(spawner, "LEAD_ENV_FILE", str(env_file))

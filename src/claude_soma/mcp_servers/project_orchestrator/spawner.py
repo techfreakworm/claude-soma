@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import shlex
 import shutil
 import subprocess
 import tempfile
@@ -48,6 +49,13 @@ LEAD_PATH = os.environ.get(
     "/opt/claude-soma/.venv/bin:/home/ubuntu/.local/bin:/home/ubuntu/bin:"
     "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/snap/bin",
 )
+
+# Each lead's pane output is teed to <log dir>/<name>.log so a dead lead's
+# output survives for forensics. The env var is read at call time (via
+# _lead_log_path) so tests can redirect it off /var/log. The CLAUDE.md canonical
+# log dir is /var/log/claude-soma (ubuntu-owned, so the orchestrator can create
+# the file).
+LEAD_LOG_DIR_DEFAULT = "/var/log/claude-soma"
 
 # systemd-run returns quickly once the oneshot ExecStart (tmux new-session -d)
 # detaches; 20s is generous headroom for talking to PID 1 under load.
@@ -126,6 +134,11 @@ def _lead_socket(name: str) -> str:
 
 def _lead_unit(name: str) -> str:
     return f"{LEAD_UNIT_PREFIX}{name}.service"
+
+
+def _lead_log_path(name: str) -> Path:
+    base = os.environ.get("HERMES_LEAD_LOG_DIR", LEAD_LOG_DIR_DEFAULT)
+    return Path(base) / f"{name}.log"
 
 
 def _wrap_in_transient_unit(name: str, inner_argv: list[str]) -> list[str]:
@@ -276,11 +289,29 @@ def spawn_background_lead(
         claude_argv.extend(extra_args)
     claude_argv.append(brief)
 
+    # Tee the lead's pane output to its own log so a dead lead's last output
+    # survives. Best-effort: create the dir if we can, but never fail the spawn
+    # over logging -- if the dir is unwritable the chained `cat` just exits and
+    # the pane is unaffected.
+    log_path = _lead_log_path(name)
+    try:
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        pass
+
     # tmux on the lead's OWN socket, wrapped in its OWN transient systemd unit
-    # so the server is parented to the lead's cgroup, not the channel's.
+    # so the server is parented to the lead's cgroup, not the channel's. The
+    # `;` is tmux's command separator: chaining pipe-pane into the SAME
+    # invocation tees the pane from the moment the session is born, adds no
+    # extra spawn subprocess, and -- because the `cat` writer is forked by the
+    # tmux server (the lead's cgroup) -- the logging survives a channel restart
+    # exactly like the lead does. -O pipes output only; -o is a no-op if a pipe
+    # already exists (idempotent).
     tmux_argv: list[str] = [
         _tmux(), "-L", socket, "new-session", "-d", "-s", session,
         "-c", str(cwd), *claude_argv,
+        ";", "pipe-pane", "-O", "-o", "-t", session,
+        f"cat >> {shlex.quote(str(log_path))}",
     ]
     cmd: list[str] = _wrap_in_transient_unit(name, tmux_argv)
 

@@ -14,6 +14,8 @@ from claude_soma.mcp_servers.project_orchestrator import spawner
 def _isolate_registry(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("HERMES_ORCH_DB", str(tmp_path / "reg.sqlite"))
     monkeypatch.setenv("HERMES_PROJECTS_ROOT", str(tmp_path / "projects"))
+    # spawn creates the per-lead log dir for real; keep it off /var/log.
+    monkeypatch.setenv("HERMES_LEAD_LOG_DIR", str(tmp_path / "leadlogs"))
     orch._reset_singletons_for_tests()
 
 
