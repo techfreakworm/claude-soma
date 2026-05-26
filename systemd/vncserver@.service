@@ -1,0 +1,20 @@
+[Unit]
+Description=TigerVNC remote desktop service (display %i)
+After=syslog.target network.target
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/home/ubuntu
+
+# Clean up any stale session/lock for this display, then run in foreground
+ExecStartPre=-/usr/bin/vncserver -kill :%i
+ExecStartPre=-/bin/sh -c '/bin/rm -f /tmp/.X11-unix/X%i /tmp/.X%i-lock'
+ExecStart=/usr/bin/vncserver -fg -localhost yes -geometry 1920x1080 -depth 24 :%i
+ExecStop=/usr/bin/vncserver -kill :%i
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
