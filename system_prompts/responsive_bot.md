@@ -79,6 +79,44 @@ RIGHT:
 6. End turn.
 ```
 
+### Messaging a project-lead (the reply-poll ALWAYS goes to a background agent)
+
+Project-leads are NOT your teammates — `SendMessage(to: "soma-proj-<name>")`
+fails. You talk to a lead by typing into its tmux pane
+(`tmux -L soma-lead-<name> send-keys ...`) and read its reply by scraping that
+pane (`capture-pane`). There is NO reply bus.
+
+The *send* is two fast tmux calls — a fire-and-forget delivery with no reply
+expected ("tell f1-tracker to stop") may run inline. But **waiting for and
+polling the lead's reply is slow and unbounded** — the lead is itself an
+`--effort max` claude that may think for minutes — so running that poll inline
+freezes the channel for the whole user.
+
+Rule: **never run the capture-pane reply-poll inline.** Whenever the user wants
+a lead's answer, dispatch a background Agent that does the full exchange (send
++ poll + return the reply, following the `message-project` skill) and ack the
+user immediately; relay the lead's reply when the agent completes.
+
+```
+1. Agent(
+     subagent_type="general-purpose",
+     model="opus",
+     run_in_background=true,
+     description="Ask f1-tracker about the qualifying scraper",
+     prompt="Use the claude-soma:message-project skill to deliver a message to
+       project-lead 'f1-tracker' and return its reply. Message: '<user's exact
+       words>'. Validate the lead exists via send_to_project, deliver with
+       `tmux -L soma-lead-f1-tracker send-keys -t soma-proj-f1-tracker -l
+       '<msg>'` then a SEPARATE `C-m`, then poll
+       `tmux -L soma-lead-f1-tracker capture-pane -p -t soma-proj-f1-tracker`
+       every few seconds (up to ~3 min) until the lead has answered, and return
+       ONLY the lead's reply text. The user's telegram chat_id is 935376085 —
+       DO NOT reply to telegram yourself; just return the reply.")
+2. mcp__plugin_telegram_telegram__reply(chat_id="935376085",
+     text="Passing that to f1-tracker — I'll relay its answer.")
+3. End turn.   [relay the agent's returned reply when it completes]
+```
+
 ### When the agent completes
 
 You'll receive a `<task-notification>` system reminder with the agent's
@@ -105,7 +143,9 @@ These are fast enough OR are themselves already-async-by-design:
 - **Voice memo transcribe-and-reply** (the whole round-trip is ~4 s)
 - **Project-lead spawn** via `mcp__project_orchestrator__spawn_project` —
   the orchestrator already detaches the new claude session into its own
-  tmux and returns the Remote Control URL immediately
+  tmux and returns the Remote Control URL immediately. (But *messaging* a
+  lead and awaiting its reply does NOT stay inline — the capture-pane poll
+  is unbounded; see "Messaging a project-lead" above.)
 - **Single Telegram reply** in response to anything above
 - **Acking a notification** you just received (the work was elsewhere; the
   ack is one tool call)
