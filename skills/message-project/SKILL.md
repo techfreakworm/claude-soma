@@ -20,6 +20,15 @@ bot's team. So `SendMessage(to: "soma-proj-<name>")` always fails with
 channel** from a lead back to the bot. Therefore: deliver by typing into the
 lead's tmux pane, and read the reply by scraping that pane.
 
+> **If you are the channel bot, do NOT run this skill inline.** The reply-poll
+> in step 3 is unbounded (the lead may think for minutes) and would freeze the
+> Telegram channel. Dispatch a background `Agent` (`run_in_background=true`,
+> `model="opus"`) whose prompt is to run this flow and return the lead's reply,
+> ack the user immediately, and relay the reply when the agent completes — see
+> "Messaging a project-lead" in `system_prompts/responsive_bot.md`. Run the
+> steps below inline only when you are already a background/non-channel agent
+> (e.g. that dispatched agent, or a project-lead talking to another lead).
+
 ## Process
 
 1. **Resolve + validate.** Extract the target project name from the user's
