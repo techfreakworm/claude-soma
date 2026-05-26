@@ -102,6 +102,32 @@ fi
 echo 'export PATH="$HOME/.local/bin:$PATH"' | tee -a "$HOME/.bashrc" >/dev/null
 "$HOME/.local/bin/claude" --version 2>/dev/null || claude --version
 
+step "6b/9  claude-safe wrapper (interactive claude must not hijack the bot poller)"
+# A bare interactive `claude` loads the user-scope telegram plugin, which SIGTERMs
+# the live bot's Telegram poller (docs/KNOWN_BUGS.md #1). Install a wrapper that
+# injects --setting-sources project,local for non-bot sessions, and shadow
+# interactive `claude` with it for the ubuntu user. systemd services and the
+# orchestrator spawner call claude by absolute path, so they are unaffected; this
+# only catches a human typing `claude` at a shell.
+CLAUDE_SAFE_SRC="$(dirname "${BASH_SOURCE[0]}")/claude-safe.sh"
+[ -f "$CLAUDE_SAFE_SRC" ] || CLAUDE_SAFE_SRC=/opt/claude-soma/scripts/claude-safe.sh
+if [ -f "$CLAUDE_SAFE_SRC" ]; then
+    sudo install -m 755 "$CLAUDE_SAFE_SRC" /usr/local/bin/claude-safe
+    if ! grep -q 'claude-safe wrapper' "$HOME/.bashrc" 2>/dev/null; then
+        cat >> "$HOME/.bashrc" <<'RC'
+
+# claude-safe wrapper (docs/KNOWN_BUGS.md #1): a bare interactive `claude` would
+# load the user-scope telegram plugin and hijack the live bot's poller. Route
+# interactive invocations through the wrapper, which skips the user-scope plugin.
+# Absolute-path callers (systemd services, the orchestrator spawner) are unaffected.
+claude() { /usr/local/bin/claude-safe "$@"; }
+RC
+    fi
+    echo "claude-safe installed at /usr/local/bin/claude-safe; interactive 'claude' shadowed for ubuntu"
+else
+    echo "WARN: claude-safe.sh not found next to bootstrap or in /opt/claude-soma; skipping wrapper install" >&2
+fi
+
 step "7/9  Bun (telegram plugin's MCP server runtime)"
 if ! command -v bun >/dev/null 2>&1; then
     curl -fsSL https://bun.sh/install | bash
