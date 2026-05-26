@@ -14,13 +14,19 @@
 # drift. This script must be exec'd inside a tmux pane (claude needs a real PTY;
 # it drops to --print mode on a pipe).
 #
-# This is the bot session -- it INTENTIONALLY loads the user-scope telegram
-# plugin (via --channels) so it owns the Telegram poller. Do NOT add
-# --setting-sources here; that is for non-bot sessions only (see
-# scripts/claude-safe.sh and docs/KNOWN_BUGS.md #1).
+# This is the bot session -- it owns the Telegram poller. Telegram is NO LONGER
+# enabled in user scope (that let every other claude session load the plugin and
+# hijack the poller; docs/KNOWN_BUGS.md #1, scripts/disable-user-telegram-plugin.sh).
+# The bot opts in EXPLICITLY via --settings (verified 2026-05-26 to load the
+# plugin even when telegram is absent from user/project/local, and to merge
+# additively so the bot keeps its other user-scope settings). Non-bot sessions
+# load only the default scopes -- no telegram, and never this --settings file --
+# so they no longer steal the poller. Do NOT add --setting-sources here (it would
+# change which scopes the bot loads).
 
 exec /home/ubuntu/.local/bin/claude \
     --channels plugin:telegram@claude-plugins-official \
+    --settings /opt/claude-soma/config/claude/channel-settings.json \
     --plugin-dir /opt/claude-soma \
     --add-dir /home/ubuntu/hermes-work \
     --dangerously-skip-permissions \
