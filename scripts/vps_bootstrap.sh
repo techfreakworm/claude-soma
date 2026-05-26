@@ -128,6 +128,18 @@ else
     echo "WARN: claude-safe.sh not found next to bootstrap or in /opt/claude-soma; skipping wrapper install" >&2
 fi
 
+# somux: list/attach/peek the per-socket project-lead tmux sessions. Each lead
+# runs its OWN tmux server on socket soma-lead-<name>, so a plain `tmux ls`
+# can't see them -- somux discovers them via the sockets + systemd units.
+# Symlink it onto PATH pointing at the deploy-stable path, so a deploy that
+# updates scripts/somux is picked up automatically. Idempotent (ln -sf).
+if [ -e /opt/claude-soma/scripts/somux ]; then
+    sudo ln -sf /opt/claude-soma/scripts/somux /usr/local/bin/somux
+    echo "somux installed at /usr/local/bin/somux (somux ls | a <name> | peek <name>)"
+else
+    echo "WARN: /opt/claude-soma/scripts/somux not found; skipping somux symlink" >&2
+fi
+
 step "7/9  Bun (telegram plugin's MCP server runtime)"
 if ! command -v bun >/dev/null 2>&1; then
     curl -fsSL https://bun.sh/install | bash

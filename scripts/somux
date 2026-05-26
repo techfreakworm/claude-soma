@@ -1,0 +1,243 @@
+#!/usr/bin/env bash
+#
+# somux ("soma + tmux") — list and attach to Claude Soma project sessions.
+#
+# Background on the socket/session layout this wraps:
+#   - The Telegram channel bot runs in tmux session `hermes` on the DEFAULT
+#     tmux socket (plain `tmux`, i.e. socket file .../default).
+#   - Each project-lead runs in its OWN tmux server on a DEDICATED socket
+#     named `soma-lead-<name>` (invoked as `tmux -L soma-lead-<name>`), with
+#     tmux session name `soma-proj-<name>`, supervised by systemd unit
+#     `claude-soma-lead-<name>.service`.
+#   - Because leads live on private sockets, a plain `tmux ls` on the default
+#     socket only shows `hermes`. This wrapper discovers the leads (via their
+#     sockets in /tmp/tmux-<uid>/soma-lead-* and via systemd units) and gives
+#     short verbs to list / attach / peek.
+#
+# Subcommands:
+#   somux ls                 aligned table of channel + all leads
+#   somux a|attach [-t] NAME  attach (hermes -> default socket; lead -> its socket)
+#   somux peek NAME [N]       read-only: last N (default 40) pane lines
+#   somux help                usage
+#
+# No emoji. Dependency-free (no jq). Pure bash.
+
+set -euo pipefail
+
+TMUX_BIN=/usr/bin/tmux
+CHANNEL_NAME=hermes
+CHANNEL_SESSION=hermes
+SOCKET_DIR="/tmp/tmux-$(id -u)"
+PEEK_DEFAULT_LINES=40
+
+usage() {
+    cat <<'EOF'
+somux — list and attach to Claude Soma sessions
+
+USAGE:
+  somux ls                    List the channel + all project-leads (table).
+  somux a|attach [-t] NAME    Attach to a session by friendly name.
+  somux peek NAME [N]         Read-only: print last N pane lines (default 40).
+  somux help                  Show this help.
+
+NAMES:
+  Use the bare friendly name (e.g. hello-world). Any leading
+  'soma-proj-' or 'soma-lead-' prefix is stripped automatically.
+  'hermes' is the Telegram channel session on the default tmux socket.
+
+EXAMPLES:
+  somux ls
+  somux a hello-world
+  somux attach -t hermes
+  somux peek soma-improver 80
+
+Detach from an attached session with: Ctrl-b then d
+EOF
+}
+
+# Strip a soma-proj-/soma-lead- prefix to get the bare friendly name.
+strip_prefix() {
+    local n="$1"
+    n="${n#soma-proj-}"
+    n="${n#soma-lead-}"
+    printf '%s' "$n"
+}
+
+# Is the channel (hermes) session alive on the default socket?
+channel_alive() {
+    "$TMUX_BIN" has-session -t "$CHANNEL_SESSION" 2>/dev/null
+}
+
+# Is a given lead alive? Args: <name>
+lead_alive() {
+    local name="$1"
+    "$TMUX_BIN" -L "soma-lead-${name}" has-session -t "soma-proj-${name}" 2>/dev/null
+}
+
+# systemd active-state for a lead unit, or "-" if no such unit. Args: <name>
+lead_unit_state() {
+    local name="$1" state
+    state="$(systemctl is-active "claude-soma-lead-${name}.service" 2>/dev/null || true)"
+    [ -n "$state" ] && printf '%s' "$state" || printf -- '-'
+}
+
+# Does a lead have a systemd unit at all? Args: <name>
+lead_has_unit() {
+    local name="$1"
+    systemctl list-unit-files "claude-soma-lead-${name}.service" --no-legend 2>/dev/null \
+        | grep -q . && return 0
+    # list-unit-files misses transient (systemd-run) units; check loaded units too.
+    systemctl list-units --all "claude-soma-lead-${name}.service" --no-legend --plain 2>/dev/null \
+        | grep -q . && return 0
+    return 1
+}
+
+# Print the set of lead names (one per line, deduped, sorted), discovered from
+# BOTH the socket dir and systemd units. A name is included if it either has a
+# systemd unit OR a live session on its socket — this filters out stale dead
+# sockets (e.g. leftover test sockets with no unit) while still surfacing any
+# DEAD-but-still-has-unit lead.
+enumerate_leads() {
+    {
+        # From sockets: soma-lead-<name>
+        if [ -d "$SOCKET_DIR" ]; then
+            for sock in "$SOCKET_DIR"/soma-lead-*; do
+                [ -S "$sock" ] || continue
+                local base name
+                base="${sock##*/}"          # soma-lead-<name>
+                name="${base#soma-lead-}"
+                # Only keep socket-discovered leads that are actually alive
+                # or that own a systemd unit.
+                if lead_alive "$name" || lead_has_unit "$name"; then
+                    printf '%s\n' "$name"
+                fi
+            done
+        fi
+        # From systemd units: claude-soma-lead-<name>.service
+        systemctl list-units --all 'claude-soma-lead-*' --no-legend --plain 2>/dev/null \
+            | awk '{print $1}' \
+            | sed -e 's/^claude-soma-lead-//' -e 's/\.service$//' \
+            | grep -v '^$' || true
+    } | sort -u
+}
+
+cmd_ls() {
+    local fmt="%-18s %-26s %-26s %-7s %-10s\n"
+    printf "$fmt" "NAME" "SESSION" "SOCKET" "STATE" "UNIT"
+    printf "$fmt" "----" "-------" "------" "-----" "----"
+
+    # Channel first.
+    local cstate
+    if channel_alive; then cstate="ALIVE"; else cstate="DEAD"; fi
+    printf "$fmt" "$CHANNEL_NAME" "$CHANNEL_SESSION" "default" "$cstate" "-"
+
+    # Then leads, alphabetically.
+    local name state unit
+    while IFS= read -r name; do
+        [ -n "$name" ] || continue
+        if lead_alive "$name"; then state="ALIVE"; else state="DEAD"; fi
+        unit="$(lead_unit_state "$name")"
+        printf "$fmt" "$name" "soma-proj-${name}" "soma-lead-${name}" "$state" "$unit"
+    done < <(enumerate_leads)
+}
+
+# Build a comma-free, space-joined list of available names for error messages.
+available_names() {
+    {
+        printf '%s\n' "$CHANNEL_NAME"
+        enumerate_leads
+    } | paste -sd' ' -
+}
+
+cmd_attach() {
+    local name="${1:-}"
+    if [ -z "$name" ]; then
+        echo "somux attach: missing session name" >&2
+        echo "Available: $(available_names)" >&2
+        exit 2
+    fi
+    name="$(strip_prefix "$name")"
+
+    if [ "$name" = "$CHANNEL_NAME" ]; then
+        if ! channel_alive; then
+            echo "somux: channel session '$CHANNEL_SESSION' is not running (default socket)." >&2
+            echo "Available: $(available_names)" >&2
+            exit 1
+        fi
+        echo "Attaching to '$CHANNEL_NAME' (default socket). Detach with: Ctrl-b then d"
+        exec "$TMUX_BIN" attach -t "$CHANNEL_SESSION"
+    fi
+
+    if ! lead_alive "$name"; then
+        echo "somux: no live session for '$name'." >&2
+        echo "Available: $(available_names)" >&2
+        exit 1
+    fi
+    echo "Attaching to '$name' (socket soma-lead-${name}). Detach with: Ctrl-b then d"
+    exec "$TMUX_BIN" -L "soma-lead-${name}" attach -t "soma-proj-${name}"
+}
+
+cmd_peek() {
+    local name="${1:-}" lines="${2:-$PEEK_DEFAULT_LINES}"
+    if [ -z "$name" ]; then
+        echo "somux peek: missing session name" >&2
+        echo "Available: $(available_names)" >&2
+        exit 2
+    fi
+    name="$(strip_prefix "$name")"
+
+    case "$lines" in
+        ''|*[!0-9]*)
+            echo "somux peek: N must be a positive integer, got '$lines'" >&2
+            exit 2
+            ;;
+    esac
+
+    if [ "$name" = "$CHANNEL_NAME" ]; then
+        if ! channel_alive; then
+            echo "somux: channel session '$CHANNEL_SESSION' is not running." >&2
+            exit 1
+        fi
+        "$TMUX_BIN" capture-pane -p -t "$CHANNEL_SESSION" | tail -n "$lines"
+        return
+    fi
+
+    if ! lead_alive "$name"; then
+        echo "somux: no live session for '$name'." >&2
+        echo "Available: $(available_names)" >&2
+        exit 1
+    fi
+    "$TMUX_BIN" -L "soma-lead-${name}" capture-pane -p -t "soma-proj-${name}" | tail -n "$lines"
+}
+
+main() {
+    local sub="${1:-help}"
+    shift || true
+
+    case "$sub" in
+        ls|list)
+            cmd_ls
+            ;;
+        a|attach)
+            # Accept: `a NAME`, `a -t NAME`, `attach -t NAME`.
+            if [ "${1:-}" = "-t" ]; then
+                shift
+            fi
+            cmd_attach "${1:-}"
+            ;;
+        peek)
+            cmd_peek "${1:-}" "${2:-}"
+            ;;
+        help|-h|--help)
+            usage
+            ;;
+        *)
+            echo "somux: unknown subcommand '$sub'" >&2
+            echo >&2
+            usage >&2
+            exit 2
+            ;;
+    esac
+}
+
+main "$@"
