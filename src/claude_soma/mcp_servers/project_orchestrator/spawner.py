@@ -307,7 +307,12 @@ def spawn_background_lead(
         claude_argv += ["--mcp-config", lead_mcp_config]
     if extra_args:
         claude_argv.extend(extra_args)
-    claude_argv.append(brief)
+    # The brief is the positional prompt and MUST be guarded by a `--`
+    # end-of-options separator. claude's --mcp-config is variadic ("<configs...>"),
+    # so a bare trailing brief right after --mcp-config <path> gets swallowed as a
+    # second config-file path -> ENAMETOOLONG -> the lead crashes at startup
+    # (regression fixed here). `--` also protects a brief that starts with `-`.
+    claude_argv += ["--", brief]
 
     # Tee the lead's pane output to its own log so a dead lead's last output
     # survives. Best-effort: create the dir if we can, but never fail the spawn
