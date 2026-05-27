@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import threading
 import time
 from pathlib import Path
 from typing import Any
@@ -48,12 +49,24 @@ CREATE INDEX IF NOT EXISTS idx_routines_kind ON routines(kind);
 
 
 class Registry:
+    # One Registry instance is a long-lived singleton shared across threads:
+    # the orchestrator MCP server uses it, and the FastAPI dashboard runs sync
+    # route handlers in a threadpool, so .get()/.list_*() get called from worker
+    # threads other than the one that opened the connection. sqlite forbids using
+    # a connection across threads by default, which 500'd /api/projects/{name}/team.
+    # We open with check_same_thread=False and serialize every connection access
+    # behind a single lock -- a lone connection + lock also avoids the
+    # "database is locked" contention multiple connections can hit.
     def __init__(self, db_path: str | Path) -> None:
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
-        self._conn = sqlite3.connect(self.db_path, isolation_level=None)
+        self._lock = threading.Lock()
+        self._conn = sqlite3.connect(
+            self.db_path, isolation_level=None, check_same_thread=False
+        )
         self._conn.row_factory = sqlite3.Row
-        self._conn.executescript(SCHEMA)
+        with self._lock:
+            self._conn.executescript(SCHEMA)
 
     def register(
         self,
@@ -67,69 +80,77 @@ class Registry:
         brief: str | None = None,
     ) -> None:
         now = time.time()
-        self._conn.execute(
-            """
-            INSERT INTO projects(name, agent_id, type, cwd, rc_url, status,
-                                 permission_mode, spawned_at, last_activity, brief)
-            VALUES(?, ?, ?, ?, ?, 'active', ?, ?, ?, ?)
-            ON CONFLICT(name) DO UPDATE SET
-                agent_id=excluded.agent_id, type=excluded.type, cwd=excluded.cwd,
-                rc_url=excluded.rc_url, status='active',
-                permission_mode=excluded.permission_mode,
-                last_activity=excluded.last_activity, brief=excluded.brief
-            """,
-            (name, agent_id, type_, cwd, rc_url, permission_mode, now, now, brief),
-        )
+        with self._lock:
+            self._conn.execute(
+                """
+                INSERT INTO projects(name, agent_id, type, cwd, rc_url, status,
+                                     permission_mode, spawned_at, last_activity, brief)
+                VALUES(?, ?, ?, ?, ?, 'active', ?, ?, ?, ?)
+                ON CONFLICT(name) DO UPDATE SET
+                    agent_id=excluded.agent_id, type=excluded.type, cwd=excluded.cwd,
+                    rc_url=excluded.rc_url, status='active',
+                    permission_mode=excluded.permission_mode,
+                    last_activity=excluded.last_activity, brief=excluded.brief
+                """,
+                (name, agent_id, type_, cwd, rc_url, permission_mode, now, now, brief),
+            )
 
     def get(self, name: str) -> dict[str, Any] | None:
-        row = self._conn.execute(
-            "SELECT * FROM projects WHERE name = ?", (name,)
-        ).fetchone()
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT * FROM projects WHERE name = ?", (name,)
+            ).fetchone()
         return dict(row) if row else None
 
     def list_active(self) -> list[dict[str, Any]]:
-        rows = self._conn.execute(
-            "SELECT * FROM projects WHERE status = 'active' ORDER BY last_activity DESC"
-        ).fetchall()
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT * FROM projects WHERE status = 'active' ORDER BY last_activity DESC"
+            ).fetchall()
         return [dict(r) for r in rows]
 
     def list_all(self) -> list[dict[str, Any]]:
-        rows = self._conn.execute(
-            "SELECT * FROM projects ORDER BY last_activity DESC"
-        ).fetchall()
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT * FROM projects ORDER BY last_activity DESC"
+            ).fetchall()
         return [dict(r) for r in rows]
 
     def set_status(self, name: str, status: str, *, bump_activity: bool = True) -> None:
         # bump_activity=False is for liveness reconciliation: flipping a vanished
         # lead to 'dead' is bookkeeping, not activity, so it must not reset the
         # idle clock (which would make a long-dead lead look freshly active).
-        if bump_activity:
-            self._conn.execute(
-                "UPDATE projects SET status = ?, last_activity = ? WHERE name = ?",
-                (status, time.time(), name),
-            )
-        else:
-            self._conn.execute(
-                "UPDATE projects SET status = ? WHERE name = ?",
-                (status, name),
-            )
+        with self._lock:
+            if bump_activity:
+                self._conn.execute(
+                    "UPDATE projects SET status = ?, last_activity = ? WHERE name = ?",
+                    (status, time.time(), name),
+                )
+            else:
+                self._conn.execute(
+                    "UPDATE projects SET status = ? WHERE name = ?",
+                    (status, name),
+                )
 
     def touch(self, name: str) -> None:
-        self._conn.execute(
-            "UPDATE projects SET last_activity = ? WHERE name = ?",
-            (time.time(), name),
-        )
+        with self._lock:
+            self._conn.execute(
+                "UPDATE projects SET last_activity = ? WHERE name = ?",
+                (time.time(), name),
+            )
 
     def idle_for(self, name: str) -> float:
-        row = self._conn.execute(
-            "SELECT last_activity FROM projects WHERE name = ?", (name,)
-        ).fetchone()
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT last_activity FROM projects WHERE name = ?", (name,)
+            ).fetchone()
         if not row:
             return 0.0
         return max(0.0, time.time() - float(row["last_activity"]))
 
     def delete(self, name: str) -> None:
-        self._conn.execute("DELETE FROM projects WHERE name = ?", (name,))
+        with self._lock:
+            self._conn.execute("DELETE FROM projects WHERE name = ?", (name,))
 
     def register_routine(
         self,
@@ -154,39 +175,43 @@ class Registry:
             )
         now = time.time()
         meta_json = json.dumps(metadata) if metadata is not None else None
-        self._conn.execute(
-            """
-            INSERT INTO routines(name, kind, schedule, target_skill, description,
-                                 last_run, next_run, created_by, created_at, metadata)
-            VALUES(?, ?, ?, ?, ?, NULL, NULL, ?, ?, ?)
-            ON CONFLICT(name) DO UPDATE SET
-                kind=excluded.kind,
-                schedule=excluded.schedule,
-                target_skill=excluded.target_skill,
-                description=excluded.description,
-                created_by=excluded.created_by,
-                metadata=excluded.metadata
-            """,
-            (
-                name, kind, schedule, target_skill, description,
-                created_by, now, meta_json,
-            ),
-        )
+        with self._lock:
+            self._conn.execute(
+                """
+                INSERT INTO routines(name, kind, schedule, target_skill, description,
+                                     last_run, next_run, created_by, created_at, metadata)
+                VALUES(?, ?, ?, ?, ?, NULL, NULL, ?, ?, ?)
+                ON CONFLICT(name) DO UPDATE SET
+                    kind=excluded.kind,
+                    schedule=excluded.schedule,
+                    target_skill=excluded.target_skill,
+                    description=excluded.description,
+                    created_by=excluded.created_by,
+                    metadata=excluded.metadata
+                """,
+                (
+                    name, kind, schedule, target_skill, description,
+                    created_by, now, meta_json,
+                ),
+            )
 
     def list_routines(self) -> list[dict[str, Any]]:
-        rows = self._conn.execute(
-            "SELECT * FROM routines ORDER BY name ASC"
-        ).fetchall()
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT * FROM routines ORDER BY name ASC"
+            ).fetchall()
         return [self._row_to_routine(r) for r in rows]
 
     def get_routine(self, name: str) -> dict[str, Any] | None:
-        row = self._conn.execute(
-            "SELECT * FROM routines WHERE name = ?", (name,)
-        ).fetchone()
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT * FROM routines WHERE name = ?", (name,)
+            ).fetchone()
         return self._row_to_routine(row) if row else None
 
     def delete_routine(self, name: str) -> None:
-        self._conn.execute("DELETE FROM routines WHERE name = ?", (name,))
+        with self._lock:
+            self._conn.execute("DELETE FROM routines WHERE name = ?", (name,))
 
     def update_routine_run(
         self,
@@ -206,10 +231,11 @@ class Registry:
         if not sets:
             return
         params.append(name)
-        self._conn.execute(
-            f"UPDATE routines SET {', '.join(sets)} WHERE name = ?",
-            params,
-        )
+        with self._lock:
+            self._conn.execute(
+                f"UPDATE routines SET {', '.join(sets)} WHERE name = ?",
+                params,
+            )
 
     @staticmethod
     def _row_to_routine(row: sqlite3.Row) -> dict[str, Any]:
@@ -225,4 +251,5 @@ class Registry:
         return d
 
     def close(self) -> None:
-        self._conn.close()
+        with self._lock:
+            self._conn.close()

@@ -65,3 +65,28 @@ def test_set_status_no_bump_preserves_last_activity(tmp_path: Path) -> None:
     r.set_status("x", "dead", bump_activity=False)
     assert r.get("x")["status"] == "dead"
     assert r.get("x")["last_activity"] == before
+
+
+def test_registry_usable_from_other_threads(tmp_path: Path) -> None:
+    """Regression: the connection is opened on THIS thread but FastAPI runs sync
+    route handlers in a threadpool, so .get()/.list_*()/.set_status() get called
+    from other threads. Before check_same_thread=False + the lock this raised
+    `sqlite3.ProgrammingError: SQLite objects created in a thread can only be
+    used in that same thread` (it 500'd /api/projects/{name}/team)."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    r = Registry(tmp_path / "reg.sqlite")  # opened on the main/test thread
+    r.register("p", agent_id="soma-proj-p", type_="custom", cwd="/x", rc_url="https://x")
+
+    def worker(_: int) -> str:
+        # Runs on a DIFFERENT thread than the one that opened the connection.
+        assert r.get("p")["name"] == "p"
+        assert any(row["name"] == "p" for row in r.list_active())
+        r.touch("p")
+        r.set_status("p", "active")
+        return r.get("p")["status"]
+
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        results = [f.result() for f in [pool.submit(worker, i) for i in range(16)]]
+    assert results == ["active"] * 16  # no ProgrammingError raised in any worker
+    r.close()
