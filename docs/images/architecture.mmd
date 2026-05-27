@@ -1,0 +1,55 @@
+flowchart TB
+  subgraph devices["Your devices"]
+    tg["Telegram (text + voice)"]
+    phone["Claude mobile app / claude.ai code"]
+  end
+
+  subgraph vps["Oracle Cloud Ubuntu ARM VPS"]
+    caddy["Caddy - TLS reverse proxy"]
+
+    subgraph channel["claude-soma-channel.service (tmux: hermes)"]
+      bot["claude --channels telegram<br/>the orchestrator bot"]
+    end
+
+    subgraph mcp["MCP servers (.mcp.json)"]
+      voice["voice-stt (whisper.cpp)<br/>voice-tts (piper)"]
+      orch["project-orchestrator"]
+      hapi["hermes-api (state bridge)"]
+      pw["playwright x5<br/>X / LinkedIn / Medium"]
+    end
+
+    subgraph dash["Dashboard"]
+      api["FastAPI :9000"]
+      fe["Next.js :3000"]
+    end
+
+    leads["project-leads<br/>cgroup-isolated tmux units"]
+    reg[("registry.sqlite")]
+  end
+
+  subgraph anthropic["Anthropic-hosted (Claude Max)"]
+    routines["Cloud routines (cron)"]
+    rc["Remote Control + mobile push"]
+  end
+
+  tg --> bot
+  bot --> voice
+  bot --> orch
+  bot --> pw
+  orch --> leads
+  orch --> reg
+  leads --> pw
+  hapi --> api
+  caddy --> api
+  caddy --> fe
+  fe --> api
+  phone -. attach .-> leads
+  bot -. Max OAuth .-> anthropic
+  leads -. Max OAuth .-> anthropic
+
+  classDef ext fill:#e8eefc,stroke:#4661c5,color:#1a2540;
+  classDef host fill:#eafaf1,stroke:#27ae60,color:#14361f;
+  classDef cloud fill:#fdf0e6,stroke:#e08e3c,color:#3d2a16;
+  class tg,phone ext;
+  class caddy,bot,voice,orch,hapi,pw,api,fe,leads,reg host;
+  class routines,rc cloud;

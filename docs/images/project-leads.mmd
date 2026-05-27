@@ -1,0 +1,35 @@
+flowchart TB
+  bot["Orchestrator bot<br/>(claude-soma-channel.service)"]
+
+  subgraph isolation["Each lead = its own transient systemd unit + tmux socket (cgroup-isolated)"]
+    direction LR
+    subgraph leadA["claude-soma-lead-f1-scraper.service"]
+      a["claude --remote-control<br/>own cwd - own MCPs (no telegram)"]
+      a --> ateam["agent team:<br/>db / playwright / backend engineers"]
+    end
+    subgraph leadB["claude-soma-lead-social-manager.service"]
+      b["claude --remote-control<br/>own cwd - own MCPs (no telegram)"]
+      b --> bteam["agent team:<br/>writer / poster subagents"]
+    end
+  end
+
+  bot -- "sudo systemd-run + tmux<br/>(spawn-project)" --> leadA
+  bot -- "sudo systemd-run + tmux" --> leadB
+  bot -- "tmux send-keys<br/>(message-project)" --> a
+
+  phone["Claude mobile app / claude.ai code"]
+  phone -. "Remote Control URL" .-> a
+  phone -. "Remote Control URL" .-> b
+
+  note["A channel restart can't kill a lead:<br/>sibling cgroups, separate tmux servers."]
+
+  classDef boot fill:#e8eefc,stroke:#4661c5,color:#1a2540;
+  classDef lead fill:#eafaf1,stroke:#27ae60,color:#14361f;
+  classDef team fill:#fdf6e3,stroke:#caa53d,color:#3d3316;
+  classDef ctl fill:#f3e8fc,stroke:#8e44ad,color:#2b1640;
+  classDef n fill:#fff,stroke:#bbb,color:#555,stroke-dasharray:4 3;
+  class bot boot;
+  class a,b lead;
+  class ateam,bteam team;
+  class phone ctl;
+  class note n;

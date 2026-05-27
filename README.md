@@ -1,268 +1,195 @@
-# Claude Soma
+<p align="center">
+  <img src="docs/images/banner.png" alt="Claude Soma - a body for Claude. Hermes-Agent's product surface in ~10% the code." width="100%">
+</p>
 
-> A body for Claude. Hermes-Agent's value in ~10% the code, by riding Claude Code's native rails.
+<p align="center">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
+  <img src="https://img.shields.io/badge/python-3.12%2B-blue.svg" alt="Python 3.12+">
+  <img src="https://img.shields.io/badge/auth-Claude%20Max%20OAuth-8A2BE2.svg" alt="Claude Max OAuth, no API keys">
+  <img src="https://img.shields.io/badge/host-1%20Oracle%20Cloud%20ARM%20VPS-27ae60.svg" alt="Runs on one OCI ARM VPS">
+</p>
 
-**[claude.mayankgupta.in](https://claude.mayankgupta.in)** · MIT · By [Mayank Gupta](https://mayankgupta.in)
-
-Claude Soma (Greek *soma*: "body") wraps Claude Code with a Telegram channel, voice in/out, a project orchestrator that spawns persistent independent agent teams per workstream, and a showcase dashboard. Authed via Claude Max subscription only — **no Anthropic API keys**. Runs on a single Oracle Cloud Ubuntu ARM free-tier VPS.
+<p align="center">
+  <b><a href="https://soma.mayankgupta.in">soma.mayankgupta.in</a></b> &middot; by <a href="https://mayankgupta.in">Mayank Gupta</a>
+</p>
 
 ---
+
+**Claude Soma** (Greek *soma*, "body") gives Claude Code a body: a Telegram
+channel, voice in and out, a project orchestrator that spawns persistent,
+independent agent teams per workstream, social posting, and a showcase
+dashboard. It is authed entirely through a **Claude Max subscription — no
+Anthropic API keys** — and runs on a single Oracle Cloud Ubuntu ARM free-tier VPS.
 
 ## The thesis
 
-[Hermes-Agent](https://github.com/NousResearch/hermes-agent) by Nous Research is a remarkable 27,000-line platform for self-improving messaging agents: channels, cron, skills, memory curation, sandbox backends, trajectory tooling. After studying it, the question this project answers is:
+[Hermes-Agent](https://github.com/NousResearch/hermes-agent) by Nous Research is
+a ~27,000-line platform for self-improving messaging agents: channels, cron,
+skills, memory curation, sandbox backends, trajectory tooling. After studying it,
+the question this project answers is:
 
 > What if your engine is Claude Code? How much do you actually need to build?
 
-The answer is **~4,000 lines.** Channels (Telegram, Discord, iMessage, custom), agent teams, server-hosted scheduled routines, Remote Control, mobile push, MCP, hooks, plugins, and auto-memory are all native to Claude Code if you know where to look. The platform layer collapses. Hermes-Claude — sorry, *Claude Soma* — is the missing 5%: a voice pipeline, a project orchestrator, a dashboard, and curated workflows.
+The answer is **a few thousand lines.** Channels (Telegram, Discord, custom),
+agent teams, server-hosted scheduled routines, Remote Control, mobile push, MCP,
+hooks, plugins, and auto-memory are all native to Claude Code if you know where
+to look. The platform layer collapses; Claude Soma is the missing slice — a voice
+pipeline, a project orchestrator, social posting, a dashboard, and curated
+workflows — riding Claude Code's native rails.
 
----
+## Features
 
-## What you do with it
-
-```
-You (phone, Telegram)              Claude Soma                    Outcomes
-────────────────────              ──────────────                  ────────
-"What am I working                 channel → portfolio-status     Voice or text reply
- on?"  (voice memo)                skill                          listing repos + active
-                                                                  project-leads
-
-"Build me a scraper                channel → spawn-project        Background claude --bg
- for the F1 standings              skill → orchestrator MCP →     session "f1-scraper-lead"
- that tweets on change"            claude --bg + TeamCreate       owns its own cwd, its
-                                                                  own team (db engineer,
-                                                                  playwright engineer,
-                                                                  backend engineer), its
-                                                                  own Remote Control URL.
-
-"Tell f1-scraper-lead              channel → message-project →    SendMessage forwarded
- to use httpx not                  SendMessage(to: <agentId>)     into the project-lead's
- requests"                                                        session.
-
-"Draw me a diagram of              channel → codex-image-gen      Image generated via
- the system architecture"          → shells out to Codex CLI      Codex CLI (consumes
-                                                                  your ChatGPT sub, not
-                                                                  your Max sub) and
-                                                                  returned as a Telegram
-                                                                  photo.
-
-"Every weekday at 8am IST,         channel → schedule-routine     Cloud-hosted routine
- send me a morning brief"          → RemoteTrigger.create()       fires on Anthropic
-                                                                  infrastructure — no
-                                                                  local machine needed
-                                                                  while you sleep.
-```
-
-You can also attach to any project-lead directly from your phone (Claude mobile app) or laptop (claude.ai/code) via its Remote Control URL, chat with it, watch its tool calls live, then go back to talking to the orchestrator on Telegram. **Three control surfaces, one Max account.**
-
----
+- **Telegram channel** — DM the bot (text or voice); it replies in text or voice.
+  The bot is an *orchestrator*: anything slow is dispatched to a background
+  subagent and acked immediately, so your chat never blocks.
+- **Voice in / out** — `voice-stt` (whisper.cpp) transcribes voice memos;
+  `voice-tts` (piper -> opus) speaks replies.
+- **Project orchestration** — spin up a persistent **project-lead** per
+  workstream. Each lead is an independent Claude Code session in its own working
+  directory, with its own Remote Control URL, that can run its own **agent team**.
+- **cgroup-isolated leads** — every lead runs in its own transient `systemd` unit
+  and tmux server, so a channel restart can't take it down.
+- **Social posting** — per-platform Playwright MCP servers post to X, LinkedIn,
+  and Medium using a shared, persistent browser-auth store (log in once via VNC,
+  reused everywhere, refreshed weekly).
+- **Scheduled routines** — server-hosted cron via Claude's cloud routines, plus
+  `systemd` timers and crontab, all surfaced together.
+- **Dashboard** — a FastAPI + Next.js admin/showcase site behind Caddy, gated by
+  GitHub OAuth, reading live Claude state over a Unix-socket bridge.
+- **Max OAuth only** — every Claude call draws on your Max plan; there is no
+  Anthropic API key anywhere in the system.
 
 ## Architecture
 
+The Telegram session is an **orchestrator**, not a team-lead. It spawns multiple
+independent project-leads, each in its own cgroup, each able to run its own agent
+team — sidestepping Claude Code's "one team per lead" constraint while giving you
+per-project specialization.
+
+<p align="center"><img src="docs/images/architecture.png" alt="Claude Soma architecture: devices to the VPS (orchestrator bot, MCP servers, dashboard, project-leads) to Anthropic-hosted Max services" width="100%"></p>
+
+A request flows in on Telegram (text or voice); fast work is answered inline,
+slow work is dispatched to a background subagent so the channel stays responsive.
+Messaging a project-lead is delivered by typing into its tmux pane and reading
+the reply back from it — leads are independent processes, not chat teammates.
+
+<p align="center"><img src="docs/images/request-flow.png" alt="Request flow: Telegram DM, optional transcription, inline-vs-background dispatch, lead spawn/message or social post, optional voice reply" width="92%"></p>
+
+Each project-lead is spawned via `sudo systemd-run` into its own transient unit
+and dedicated tmux socket, inherits all MCP servers **except** Telegram, and can
+be attached to directly from the Claude mobile app or `claude.ai/code` via its
+Remote Control URL. Three control surfaces, one Max account.
+
+<p align="center"><img src="docs/images/project-leads.png" alt="Project-lead model: the orchestrator spawns cgroup-isolated leads, each running its own agent team, attachable via Remote Control" width="100%"></p>
+
+> Diagram sources (Mermaid) live next to the images in [`docs/images/`](docs/images/).
+> Full design: [`docs/superpowers/specs/2026-05-22-hermes-claude-design.md`](docs/superpowers/specs/2026-05-22-hermes-claude-design.md).
+
+## How you use it
+
+| You say (Telegram) | Claude Soma does | You get |
+|---|---|---|
+| "What am I working on?" (voice) | `portfolio-status` skill | Voice/text reply listing repos + active project-leads |
+| "Build a scraper for the F1 standings that tweets on change" | `spawn-project` -> orchestrator spawns a cgroup-isolated lead (`sudo systemd-run` + tmux) running its own agent team | A persistent `f1-scraper` lead with its own cwd, team, and Remote Control URL |
+| "Tell f1-scraper to use httpx" | `message-project` -> `tmux send-keys` into the lead's pane; reply scraped back | The message delivered to the lead; its answer relayed to you |
+| "Post this to LinkedIn" | a `playwright-linkedin` MCP session using the shared auth store | Posted, no per-task login |
+| "Draw the system architecture" | `codex-image-gen` -> Codex CLI (your ChatGPT sub, not Max) | The image returned as a Telegram photo |
+| "Every weekday 8am IST, send me a brief" | `schedule-routine` -> a cloud routine on Anthropic infra | Fires while you sleep; no local machine needed |
+
+## Quickstart
+
+Claude Soma targets a single Ubuntu ARM VPS (Oracle Cloud free tier fits). The
+full, copy-pasteable bring-up — VPS provisioning, Max OAuth token, whisper/piper,
+Telegram pairing, systemd + Caddy — lives in [`NEXT.md`](NEXT.md). In brief:
+
+```bash
+# On a fresh Ubuntu ARM VPS, as the deploy user:
+git clone https://github.com/techfreakworm/claude-soma.git /opt/claude-soma
+cd /opt/claude-soma
+bash scripts/vps_bootstrap.sh            # node, bun, caddy, claude, helpers (incl. somux)
+python3.12 -m venv .venv && .venv/bin/pip install -e ".[dev]"
+# put your Max token in /etc/claude-soma/secrets.env (CLAUDE_CODE_OAUTH_TOKEN=...)
+./scripts/deploy.sh                       # sync, build the dashboard, (re)start services
 ```
-                              EXTERNAL WORLD
-              ┌────────────────────────────────────────────────┐
-              │  Telegram (V1)                                  │
-              │  Discord / iMessage / WhatsApp / Signal / Email │
-              │  / Slack — V2                                   │
-              └────────────────────────┬───────────────────────┘
-                                       │
-                                       ▼
-              ┌────────────────────────────────────────────────┐
-              │  Oracle Cloud Ubuntu ARM VPS (4 vCPU / 24 GB)   │
-              │                                                 │
-              │  systemd: claude-soma-channel.service           │
-              │  └─ tmux: claude --channels plugin:telegram@... │
-              │              --plugin-dir /opt/claude-soma      │
-              │  (authed via CLAUDE_CODE_OAUTH_TOKEN — Max)     │
-              │                                                 │
-              │  /opt/claude-soma/.mcp.json wires:              │
-              │  ├─ voice-stt    (whisper.cpp ARM)              │
-              │  ├─ voice-tts    (piper ARM → ffmpeg → opus)    │
-              │  ├─ project-orchestrator  (spawns project-leads)│
-              │  └─ hermes-api   (state bridge to dashboard)    │
-              │                                                 │
-              │  systemd: claude-soma-{api,frontend}.service    │
-              │  └─ Caddy :443 → /api/* → :9000 (FastAPI)       │
-              │             → / → :3000 (Next.js standalone)    │
-              └────────────────────────────────────────────────┘
 
-         ┌──────────────────────────────────────────────────────┐
-         │  ANTHROPIC-HOSTED (drawn from Max plan, no machine)   │
-         │   • /schedule Routines — cloud cron                   │
-         │   • Claude on Web — for V2 cloud sessions             │
-         │   • Mobile push via PushNotification + Remote Control │
-         └──────────────────────────────────────────────────────┘
-```
+Then install the systemd units in [`systemd/`](systemd/), pair the Telegram bot,
+and point Caddy at your domain — see `NEXT.md`.
 
-The Telegram channel session is an **orchestrator**, not a team-lead. It spawns multiple independent project-leads as `claude --bg` background sessions, each in its own cwd, each running its own agent team via `TeamCreate`. This sidesteps Claude Code's "one team per lead / no nested teams" constraint while still giving you per-project specialization.
+## Configuration
 
-Full design: [`docs/superpowers/specs/2026-05-22-hermes-claude-design.md`](docs/superpowers/specs/2026-05-22-hermes-claude-design.md).
-Full implementation plan (49 tasks, ~4 weeks): [`docs/superpowers/plans/2026-05-22-hermes-claude-v1.md`](docs/superpowers/plans/2026-05-22-hermes-claude-v1.md).
+- **Auth:** Claude Max OAuth only. The token lives in
+  `/etc/claude-soma/secrets.env` as `CLAUDE_CODE_OAUTH_TOKEN`; nothing reads an
+  Anthropic API key.
+- **Telegram:** the bot opts into the Telegram plugin via
+  `config/claude/channel-settings.json` (so it never leaks into project-leads).
+- **Social auth:** run `node scripts/pw-login.js` once on the VNC desktop to log
+  into X / LinkedIn / Medium; `pw-refresh` keeps the sessions warm.
+- **Sessions:** `somux ls | a <name> | peek <name>` lists/attaches/peeks the
+  channel + every project-lead (each on its own tmux socket).
 
----
+### Forking — replace the author's personal defaults
 
-## Status
+The repo ships with the author's live deployment as the worked example, so a few
+personal values appear as defaults. If you stand up your own instance,
+find-replace your domain, Let's Encrypt email, and GitHub handle across
+`Caddyfile`, `systemd/*.service`, `src/claude_soma/api/main.py`,
+`src/claude_soma/wizard/init.py`, the frontend landing components, and
+`.claude-plugin/*.json`. `HERMES_ALLOWED_GITHUB_HANDLES` (the dashboard's
+single-user gate) is set via `/etc/claude-soma/secrets.env`. The
+`docs/superpowers/` specs are frozen historical artifacts — leave them as-is.
 
-**In development.** This is a personal-use-first build that will become a portfolio showcase once V1 is stable.
-
-| Phase | State |
-|---|---|
-| Spec + plan | ✅ Done |
-| **Week 1 — Plugin skeleton + voice STT + Telegram channel + hooks + systemd** | ✅ Code complete (`week-1-code-complete` tag) |
-| **Week 2 — Voice TTS + Codex skill + project orchestrator + 11 skills + 1 agent + 5 templates** | ✅ Code complete (`week-2-code-complete` tag) |
-| Week 3 — Dashboard (FastAPI + Next.js + Auth.js + 7 admin pages + landing) | ⏳ Pending |
-| Week 4 — Setup wizard + reaper + scheduled jobs + README polish + marketplace publish | ⏳ Pending |
-| **User-action: OCI VPS provisioning + OAuth tokens + Telegram bot pairing + systemd installs** | ⏳ Pending |
-
-What's runnable today: every test passes locally (skipping voice tests where whisper/piper aren't installed). The Telegram bridge will come online as soon as the user-action checklist in [`NEXT.md`](NEXT.md) is executed.
-
----
-
-## Repository layout
+## Project layout
 
 ```
 claude-soma/
-├─ .claude-plugin/                  Claude Code plugin metadata
-│   └─ plugin.json
-├─ .mcp.json                        wires voice-stt + voice-tts + project-orchestrator
-├─ pyproject.toml                   Python package config (claude-soma 0.1.0)
-│
-├─ src/claude_soma/
-│   ├─ mcp_servers/
-│   │   ├─ voice_stt/server.py      whisper.cpp wrapper, 60s/300s timeouts
-│   │   ├─ voice_tts/server.py      piper + ffmpeg → opus, 60s timeouts
-│   │   ├─ project_orchestrator/    Registry + spawner + templates + server
-│   │   └─ hermes_api/              (stub; impl lands in Week 3)
-│   ├─ api/                         (stub; Week 3 FastAPI lands here)
-│   └─ wizard/                      (stub; Week 4 setup wizard lands here)
-│
-├─ skills/                          11 Claude Code skills
-│   ├─ codex-image-gen              delegates image-gen to Codex CLI
-│   ├─ respond-with-voice           TTS reply path
-│   ├─ voice-action                 voice-intent routing
-│   ├─ spawn-project, list-projects, message-project,
-│   │   kill-project, project-status      orchestration suite
-│   ├─ schedule-routine             wraps RemoteTrigger API
-│   ├─ portfolio-status             "what am I working on" summary
-│   └─ usage-report                 surface /usage in chat
-│
-├─ agents/
-│   └─ project-lead.md              subagent template for spawned project-leads
-│
-├─ templates/projects/              5 project templates
-│   └─ web-scraper.json, llm-app.json, server-app.json,
-│      agentic-coding.json, custom.json
-│
-├─ hooks/hooks.json                 SessionStart + UserPromptSubmit + PostToolUse
-├─ scripts/
-│   ├─ voice_intake.sh              env-var path passing (no Python injection)
-│   ├─ session_start_context.sh     loads active projects + recent commits
-│   ├─ log_activity.sh              fire-and-forget activity logger
-│   └─ deploy.sh                    rsync to OCI + venv bootstrap
-├─ systemd/
-│   └─ claude-soma-channel.service  tmux-wrapped persistent claude session
-│
-├─ tests/                           29 tests across 4 MCP servers
-│
-└─ docs/superpowers/
-    ├─ specs/2026-05-22-hermes-claude-design.md      design (frozen)
-    └─ plans/2026-05-22-hermes-claude-v1.md          49-task implementation plan
+  .claude-plugin/        Claude Code plugin + marketplace metadata
+  .mcp.json              wires the MCP servers into the bot
+  config/claude/         channel-settings.json (telegram opt-in), lead-mcp.json
+  src/claude_soma/
+    mcp_servers/
+      voice_stt/         whisper.cpp wrapper
+      voice_tts/         piper + ffmpeg -> opus
+      project_orchestrator/   registry + spawner + templates + server
+      hermes_api/        Unix-socket state bridge for the dashboard
+    api/                 FastAPI dashboard backend (routes/, auth, SSE)
+    wizard/              interactive setup wizard
+  frontend/              Next.js dashboard (standalone build)
+  skills/                11 Claude Code skills (spawn/message/kill/list project,
+                         schedule-routine, portfolio-status, voice, codex-image-gen, ...)
+  agents/                subagent template(s) for spawned leads
+  templates/projects/    project-type templates (web-scraper, llm-app, ...)
+  hooks/                 SessionStart + UserPromptSubmit + PostToolUse hooks
+  scripts/               deploy, bootstrap, healthcheck, voice intake, somux,
+                         pw-login / pw-refresh, ...
+  systemd/               channel, api, frontend, timers (healthcheck, reaper, ...)
+  tests/                 pytest suite across the MCP servers + API
+  docs/                  design spec + plan, images, engineering notes
 ```
 
----
+## Status
 
-## Forking — replace the author's personal defaults
-
-The repo ships with my (Mayank Gupta's) live deployment as the worked example, so a few personal values appear as defaults. If you're standing up your own instance, find-replace these:
-
-| Where | Default value | What to change it to |
-|---|---|---|
-| `Caddyfile` server block + `email` | `soma.mayankgupta.in`, `mayank@mayankgupta.in` | your domain, your Let's Encrypt email |
-| `systemd/claude-soma-api.service` `HERMES_API_CORS_ORIGINS` | `https://soma.mayankgupta.in,http://localhost:3000` | your domain + localhost |
-| `src/claude_soma/api/main.py` CORS default | `claude.mayankgupta.in` | your domain (this is only the dev/test fallback; production reads the env var) |
-| `src/claude_soma/wizard/init.py` default-domain prompt | `claude.mayankgupta.in` | your domain |
-| `tests/wizard/test_init.py` test data | `claude.mayankgupta.in` | your domain (or any valid subdomain — it's just regex test data) |
-| `frontend/components/landing/Architecture.tsx` ASCII diagram | `claude.mayankgupta.in` | your domain |
-| `frontend/components/landing/Footer.tsx` "Built by" link | `https://mayankgupta.in` | your personal site / GitHub profile |
-| `.claude-plugin/{plugin,marketplace}.json` `homepage` / `author.url` | `https://claude.mayankgupta.in`, `https://mayankgupta.in` | your URLs |
-| `HERMES_ALLOWED_GITHUB_HANDLES` default | `techfreakworm` | your GitHub handle (set this via `/etc/claude-soma/secrets.env` env override; the in-code default is just for tests) |
-
-Quick one-liner sweep (zsh/bash) once you've decided on your domain + handle:
-
-```bash
-DOMAIN=soma.yourdomain.com EMAIL=you@yourdomain.com HANDLE=your-handle \
-  git ls-files | xargs grep -l -E 'mayankgupta\.in|techfreakworm' \
-  -- ':!docs/superpowers/' \
-  | xargs sed -i '' "s|soma.mayankgupta.in|$DOMAIN|g; s|claude.mayankgupta.in|$DOMAIN|g; s|mayank@mayankgupta.in|$EMAIL|g; s|https://mayankgupta.in|https://github.com/$HANDLE|g"
-```
-
-The `docs/superpowers/specs/` and `docs/superpowers/plans/` files are intentionally excluded — they're frozen historical design artifacts.
-
----
-
-## Quick install (when V1 is shipped)
-
-The setup wizard isn't implemented yet (Week 4). Until then, follow [`NEXT.md`](NEXT.md) for the manual checklist.
-
-Once `hermes-init` lands:
-
-```bash
-# On a fresh Ubuntu ARM VPS
-sudo apt install -y git python3.12 python3.12-venv
-git clone https://github.com/techfreakworm/claude-soma.git /opt/claude-soma
-cd /opt/claude-soma
-python3.12 -m venv .venv && source .venv/bin/activate
-pip install -e ".[dev]"
-sudo $(which soma-init)   # interactive wizard
-```
-
----
-
-## Inspecting running sessions — `somux`
-
-Each project-lead runs in its own tmux server on a private socket
-(`soma-lead-<name>`), so a plain `tmux ls` shows only the Telegram channel
-session. `somux` (put on PATH by `scripts/vps_bootstrap.sh`) discovers and
-drives them:
-
-```bash
-somux ls               # table of the channel + every lead (ALIVE/DEAD + unit state)
-somux a <name>         # attach to a lead by friendly name (somux a hermes = channel)
-somux peek <name> [N]  # read-only: last N pane lines (default 40), no attach
-```
-
----
-
-## What you'll need
-
-| Requirement | Why |
-|---|---|
-| Claude Max subscription | The engine. The whole project is designed around Max-OAuth auth. |
-| Codex CLI subscription (optional but recommended) | Image generation delegates here so it doesn't burn Max credits. |
-| Oracle Cloud account (or any Linux ARM/x86 VPS) | Always-on host. OCI free tier is sized for this. |
-| A Telegram account + Telegram bot via @BotFather | Messaging surface. |
-| GitHub OAuth app | Single-user auth gate for the dashboard. |
-| A domain (e.g. `claude.yourdomain.com`) | Public dashboard URL with auto-HTTPS via Caddy. |
-
----
+A personal-use-first build, deployed and actively developed on a single OCI ARM
+VPS, on its way to a polished portfolio showcase. The Telegram orchestrator,
+cgroup-isolated project-lead spawning, the MCP toolset, and the dashboard are in
+place; the voice and social-posting pipelines are wired and in bring-up. Docs
+that lag the code are noted as such — trust the code and `git log`.
 
 ## Contributing
 
-Personal-use-first; not actively soliciting contributions during V1. After V1.5 polish, contributions welcome — see the [implementation plan](docs/superpowers/plans/2026-05-22-hermes-claude-v1.md) for the roadmap.
-
-If you're forking for your own use: the entire project is MIT-licensed.
-
----
-
-## Acknowledgments
-
-- [Nous Research](https://nousresearch.com) for [Hermes-Agent](https://github.com/NousResearch/hermes-agent) — the inspiration, and the comparison point that made the "ride the native rails" thesis crisp.
-- [Anthropic](https://www.anthropic.com) for the platform this rides on.
-- The [Superpowers](https://github.com/anthropics/claude-plugins-official) skill suite for the spec → plan → subagent-driven-development workflow that built it.
-
----
+Issues and PRs welcome. Repo conventions live in
+[`CLAUDE.md`](CLAUDE.md): Python 3.12, `ruff` (line length 100), `mypy --strict`,
+`pytest` (`asyncio_mode = "auto"`); conventional-style commit subjects; no emoji
+in code or commits. Run the suite with `pytest -v` (voice tests skip without
+whisper/piper installed).
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+[MIT](LICENSE) (c) Mayank Gupta.
+
+## Acknowledgements
+
+- [Hermes-Agent](https://github.com/NousResearch/hermes-agent) (Nous Research) —
+  the platform whose product surface this project distills onto Claude Code.
+- [Anthropic Claude Code](https://docs.claude.com/en/docs/claude-code) — the
+  engine: channels, agent teams, Remote Control, MCP, hooks, routines.
+- whisper.cpp, piper, Playwright, Caddy, FastAPI, and Next.js.
