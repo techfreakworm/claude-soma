@@ -11,6 +11,13 @@ description: |
 
 The user spoke a request. The transcript is already in your context.
 
+## Always echo the transcript first
+
+Before routing or answering, ALWAYS begin your reply with a short line echoing
+what was heard: `Heard: "<the transcript>"`. Do it every time, concisely, so the
+user can gauge STT accuracy (model: `base.en`) and flag mis-hearings. Then route
+or answer per below.
+
 ## Routing heuristics
 
 1. **"Build / make / set up / create me X"** → invoke `spawn-project` with
