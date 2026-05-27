@@ -9,7 +9,7 @@
       ],
       "env": {
         "HERMES_WHISPER_BIN": "/opt/whisper.cpp/build/bin/whisper-cli",
-        "HERMES_WHISPER_MODEL": "/opt/whisper.cpp/models/ggml-large-v3-turbo.bin"
+        "HERMES_WHISPER_MODEL": "/opt/whisper.cpp/models/ggml-base.en.bin"
       },
       "alwaysLoad": true
     },
@@ -97,6 +97,13 @@
         "@modelcontextprotocol/server-sequential-thinking"
       ],
       "env": {}
+    },
+    "huggingface": {
+      "type": "http",
+      "url": "https://huggingface.co/mcp",
+      "headers": {
+        "Authorization": "Bearer ${HF_TOKEN}"
+      }
     }
   }
 }
