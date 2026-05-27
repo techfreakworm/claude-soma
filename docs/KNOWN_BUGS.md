@@ -3,6 +3,12 @@
 Living list of known, unresolved (or only partially resolved) bugs in Claude Soma.
 Each entry records symptom, trigger, mechanism, status, and pointers.
 
+Status: planning (awaiting approval) for the newly-added entries (#3–#9) and the
+"Resolved recently" section. Date of this pass: 2026-05-27. Entries #1–#2 are unchanged.
+Severity scale: **P0** (breaks the product / data loss) · **P1** (major feature broken or
+silent failure) · **P2** (degraded / annoying) · **P3** (minor / cosmetic / forensic).
+Only evidenced issues are listed; suspected-but-unverified risks are labelled **suspected**.
+
 ---
 
 ## 1. New Claude sessions on the VPS hijack the Telegram poller / restart the orchestrator
@@ -208,3 +214,262 @@ off instead of starting cold.
 - Lead liveness/teardown context: `docs/notes/2026-05-25-project-lead-cgroup-teardown.md`
   ("Known limitations / follow-ups" - liveness reconciliation)
 - Claude Code flags: `--session-id`, `--resume`, `--continue`, `--fork-session`
+
+---
+
+## 3. `kill_project` leaves the lead's tmux server + transient unit running
+
+- Status: OPEN (not implemented)
+- Severity: P1 - the operator believes a project is gone; it is still consuming RAM and a
+  cgroup, and the name can't be re-spawned without a manual `systemctl stop`
+- Documented: 2026-05-27 (tracked since the spawner rewrite as CHECKLIST item #36)
+
+### Symptom
+
+Telling the bot "shut down <name>" marks the registry row `status='killed'` but the lead's
+`claude` process, its dedicated tmux server, and its transient
+`claude-soma-lead-<name>.service` keep running. A later re-spawn of the same name fails
+loudly ("a systemd unit for project <name> already exists").
+
+### Mechanism
+
+The spawner gained `kill_session()` (best-effort `systemctl stop` of the unit + `tmux
+kill-session` on the lead's socket) during the cgroup-isolation work, but
+`project_orchestrator/server.py::kill_project_impl` was never updated to call it — it still
+only does `set_status(name, 'killed')`. So the registry and reality diverge.
+
+### Fix
+
+~10-line change: have `kill_project_impl` call `spawner.kill_session(name)` before (or after)
+flipping the registry status. Liveness reconciliation (note below) already demotes a
+vanished lead to `dead`, but a *deliberately* killed lead should be torn down immediately, not
+left for the reconciler.
+
+### Pointers
+
+- `src/claude_soma/mcp_servers/project_orchestrator/server.py` (`kill_project_impl`)
+- `src/claude_soma/mcp_servers/project_orchestrator/spawner.py` (`kill_session`, already present)
+- Tracking note: `docs/CHECKLIST.md` -> "V1.5 backlog" #36
+
+---
+
+## 4. The routines registry table is never populated (dashboard `created_by` is synthesized)
+
+- Status: OPEN (not implemented)
+- Severity: P2 - `/api/routines` still renders (it falls back to synthesized entries), but
+  provenance is wrong: a bot- or user-created routine never shows canonical `bot`/`user`
+- Documented: 2026-05-27 (CHECKLIST items #37/#38-adjacent)
+
+### Symptom
+
+`/api/routines` aggregates registry + systemd timers + cron + cloud, but the **registry**
+source is always empty because nothing calls `register_routine()` at creation time. Every row
+therefore comes from the synthesized systemd/cron/cloud sources, so `created_by` is always
+`system`/`cron`/`cloud` — never the canonical `bot` or `user`.
+
+### Mechanism / gaps
+
+Three call sites need to register on creation:
+1. `skills/schedule-routine/` — after creating a cloud RemoteTrigger, call
+   `register_routine(name, kind="cloud", ..., created_by="user")`.
+2. Bot-created local timers (e.g. `portfolio-oneliner`) — `created_by="bot"`.
+3. `soma-init` wizard — `created_by="system"` for the 4 default timers. (The wizard *does*
+   call a `_backfill_default_routines()` helper, but only the wizard path runs it; bot- and
+   user-created routines remain unrecorded.)
+
+A related sub-item: store the systemd unit name in `metadata.unit` so the merger stops relying
+on heuristic `<name>` ↔ `claude-soma-<name>.timer` aliasing.
+
+### Pointers
+
+- `src/claude_soma/api/routes/routines.py` (the merger)
+- `src/claude_soma/mcp_servers/project_orchestrator/registry.py` (`register_routine`)
+- `src/claude_soma/wizard/init.py` (`_backfill_default_routines`)
+- Aggregation/perf context: `docs/notes/2026-05-26-routines-aggregate-and-perf.md`
+
+---
+
+## 5. Per-lead logs (and channel/api logs) grow unbounded — no rotation
+
+- Status: OPEN (not implemented)
+- Severity: P2 - a long-lived lead or a busy channel can fill `/var/log/claude-soma` over time
+- Documented: 2026-05-27 (follow-up flagged in the per-lead-logging note)
+
+### Symptom
+
+`/var/log/claude-soma/<name>.log` (per lead), `channel.log`, `api.log`, `healthcheck.log`,
+etc. are append-only with no logrotate stanza. A lead that runs for days writes raw PTY bytes
+continuously.
+
+### Mechanism
+
+Per-lead logging tees the pane via `tmux pipe-pane … cat >> <name>.log`; nothing truncates or
+rotates it. The channel log is similarly an append `pipe-pane`.
+
+### Fix
+
+Add a logrotate config for `/var/log/claude-soma/*.log` (size- or time-based, `copytruncate`
+since the writers hold the fd open). Low effort.
+
+### Related caveat (P3, forensic)
+
+Those logs are **raw PTY bytes** — full-screen TUI escape sequences and redraws, not clean
+text. They are forensic ("what did the lead say before it died"), not readable; pipe through
+`cat -v` / an ANSI stripper. A clean transcript would need claude-side support.
+
+### Pointers
+
+- `docs/notes/2026-05-26-per-lead-logging.md` ("Known caveats / follow-ups")
+- `spawner.py` (`_lead_log_path`, the `pipe-pane` chain), `HERMES_LEAD_LOG_DIR`
+
+---
+
+## 6. whisper model mismatch: `.mcp.json` expects `base.en`, bootstrap builds `large-v3-turbo`
+
+- Status: OPEN (needs-verification) — likely a real install-time footgun
+- Severity: P1 if it bites (voice STT fails to start on a fresh box), P3 if the operator
+  happens to have both models
+- Documented: 2026-05-27
+
+### Symptom (predicted)
+
+On a freshly bootstrapped box, `voice-stt` is configured to load
+`/opt/whisper.cpp/models/ggml-base.en.bin` (`.mcp.json` `HERMES_WHISPER_MODEL`), but
+`scripts/vps_bootstrap.sh` step 13/15 only downloads
+`/opt/whisper.cpp/models/ggml-large-v3-turbo.bin`. If `base.en` is absent, transcription
+errors at first use.
+
+### Mechanism
+
+The STT default was switched to `base.en` (English-only, ~13× faster — commit `3322e96`) and
+`.mcp.json` + `voice_stt/server.py` point at it, but `vps_bootstrap.sh` still references the
+older `large-v3-turbo` model it was written against. The live VPS (per `docs/CHECKLIST.md`)
+was provisioned with `large-v3-turbo`, which is why this hasn't surfaced there yet — but a
+clean bootstrap would land the wrong model for the current config.
+
+### Fix
+
+Make bootstrap download `base.en` (the documented default) and optionally `large-v3-turbo`
+behind a flag; or have `voice_stt` fall back across both. Reconcile the three references:
+`.mcp.json`, `scripts/vps_bootstrap.sh`, and `NEXT.md` B4 (which already documents `base.en`
+as default + `large-v3-turbo` as optional).
+
+### How to verify
+
+On a box with only `large-v3-turbo`, unset/leave `HERMES_WHISPER_MODEL` at its `.mcp.json`
+default and send a voice note; expect a "model not found" style failure from `whisper-cli`.
+
+### Pointers
+
+- `.mcp.json` (`voice-stt` → `HERMES_WHISPER_MODEL=/opt/whisper.cpp/models/ggml-base.en.bin`)
+- `scripts/vps_bootstrap.sh` step 13/15 (downloads `large-v3-turbo`)
+- `NEXT.md` B4 (correct intent: `base.en` default)
+
+---
+
+## 7. Telegram poller-hijack: subagent vector still open (residual of bug #1)
+
+- Status: OPEN (mitigated for manual shells + leads; the subagent vector is the residual)
+- Severity: P1 - the bot's PRIMARY workflow (dispatching background Agents) can still drop the
+  poller if `--settings` turns out to be inherited by subagents
+- Documented: 2026-05-26 (carried forward here for visibility; see bug #1 for the full writeup)
+
+### Why this is called out separately
+
+Bug #1 above documents the hijack and its shipped fixes in full. This entry exists so a
+re-reader doesn't assume #1 is closed: the **one residual** is whether Claude Code propagates
+the parent's `--settings` flag to Agent/Task subagents. If it does, a dispatched subagent
+reads `channel-settings.json`, loads telegram, and re-introduces the hijack. This is the bot's
+main path ("when in doubt, dispatch"), not an edge case.
+
+### Status of verification
+
+Must be confirmed in a maintenance window (the bot restarts): dispatch one trivial background
+Agent and watch ~30 s for a second `bun server.ts` / a changed `bot.pid`. If a second bun
+appears, pivot to routing heavy work through orchestrator-spawned leads (already
+plugin-skipped + cgroup-isolated) via `system_prompts/responsive_bot.md`.
+
+### Pointers
+
+- Full entry + fix design: bug #1 above; `docs/notes/2026-05-26-telegram-plugin-scope-isolation.md`
+  ("Residual to verify in the maintenance window")
+- `scripts/channel-claude.sh` (`--settings` opt-in), `system_prompts/responsive_bot.md` (fallback)
+
+---
+
+## 8. Playwright social auth rots silently; "needs re-auth" is not surfaced to the user
+
+- Status: OPEN (mitigated — sentinel + journal exist; user-facing surfacing not built)
+- Severity: P2 - a scheduled or ad-hoc social post fails at a login wall with no prior warning
+- Documented: 2026-05-27 (follow-up from the shared-playwright-auth note)
+
+### Symptom
+
+When a platform's session cookie expires, `pw-refresh.js` correctly declines to overwrite the
+good `state-<platform>.json` and drops a `~/.claude-pw/NEEDS_REAUTH-<platform>` sentinel +
+a journal line — but nothing tells the user. The first they learn of it is a failed post.
+
+### Fix
+
+Have the healthcheck (or a small bot routine) notice the sentinels and DM the user "X needs
+re-auth — VNC in and run `pw-login`." Low effort; explicitly called out as a follow-up in the
+note.
+
+### Pointers
+
+- `docs/notes/2026-05-26-shared-playwright-auth.md` ("Surfacing needs re-auth")
+- `scripts/pw-refresh.js` (writes the sentinel), `scripts/pw-login.js` (the re-auth flow)
+
+---
+
+## 9. T1 project-spawn end-to-end is only soft-verified after the spawner rewrite
+
+- Status: needs-verification (the rewrite that fixes the original blocker is merged; the live
+  end-to-end T1–T5 checklist tests have not been re-run green)
+- Severity: P2 - core "build me X" flow is believed working but unproven on the live bot
+- Documented: 2026-05-27 (reconciling `docs/CHECKLIST.md` "Pending" against `git log`)
+
+### Background
+
+The checklist records T1 (project spawn) as "soft pass via fallback; orchestrator path
+BLOCKED" because Claude Code 2.1.150 removed `claude --bg`. That blocker is **fixed** in code:
+the spawner was rewritten to tmux-wrapped per-project sessions (commit `d31df9a`) and further
+hardened (cgroup isolation, `--` brief guard, RC-URL capture). What remains is that the live
+acceptance tests T1–T5 (spawn → status → kill → message → schedule) in `docs/CHECKLIST.md` are
+still marked Pending and have not been re-run against the deployed bot since the rewrite.
+
+### What to do
+
+Re-run T1–T5 from Telegram against the live bot and update the checklist. Note that T3 (kill)
+will *also* exercise bug #3 above — until `kill_session()` is wired in, a "killed" project's
+unit/tmux survives, so T3's verification (`status='killed'`) passes in the registry while the
+process lingers.
+
+### Pointers
+
+- `docs/CHECKLIST.md` "Verification tests" → T1–T5 (Pending)
+- Spawner rewrite: commit `d31df9a`; `spawner.py`
+
+---
+
+## Resolved recently
+
+So re-readers don't re-chase issues that are already fixed. These were live bugs; they are
+**closed** (verified or merged to `main`). Kept short — see the linked note/commit for detail.
+
+| Was | Resolution | Evidence |
+|---|---|---|
+| Channel restart killed every running project-lead (shared cgroup) | Each lead now spawns in its own transient `systemd-run` unit + dedicated tmux socket (sibling cgroup) | `ae7d7be`/`346af89`; `docs/notes/2026-05-25-project-lead-cgroup-teardown.md`; test `test_orchestrator_cgroup_isolation.py` |
+| Registry reported a vanished lead as `active` forever | `_reconcile_active()` cross-checks `tmux has-session` and flips dead rows to `dead` (distinct from operator `killed`) | `a974011`; `docs/notes/2026-05-26-liveness-reconciliation.md` |
+| Dashboard rendered completely unstyled (every `/_next/static/*` 404) | `build_frontend.sh` (standalone static copy) wired into `deploy.sh` + made rebuild-safe | `7f7b729`/`9542e98`; `docs/notes/2026-05-26-dashboard-unstyled-static-assets.md` |
+| `/api/routines` slow (~12 s) and missing cron/system timers | Cloud query cached (`HERMES_ROUTINES_CLOUD_TTL`) + parallelized + capped at 30 s; cron + all timers aggregated | `9a76a75`; `docs/notes/2026-05-26-routines-aggregate-and-perf.md` |
+| Project spawn broke when `claude --bg` was removed in 2.1.150 | Spawner rewritten to tmux-wrapped sessions; `--` guards the brief from variadic `--mcp-config` | `d31df9a`/`659fed6` (live T1–T5 re-run still pending — see #9) |
+| Remote Control URL never captured (regex only matched legacy `rc.claude.com`) | Regex updated for `claude.ai/code/session_*` with the legacy form as fallback; poll-retry loop | `c2a59e8`; `spawner.py` `RC_URL_RX` |
+| Leads needed hand-wired per-cwd `.mcp.json` bridges | Leads inherit `user,project,local` + curated `lead-mcp.json` (all MCPs except telegram/hermes-api/orchestrator) | `6ac7ed2`; `docs/notes/2026-05-26-leads-inherit-all-mcps.md` |
+| `pw-refresh` falsely reported logged-out sessions as authed (landing-URL heuristic) | Authed-ness now decided by the platform session cookie, not the URL; never overwrites good auth | `920f506`; `docs/notes/2026-05-26-shared-playwright-auth.md` |
+| Healthcheck restarted the channel from root (no tmux server) every 10 min, killing leads | Healthcheck checks tmux as `ubuntu`; missing-bun recovery is in-pane (`respawn-pane`), not a destructive `systemctl restart` | `ef18ee3`/`ca758d0` |
+| `hermes_api` public-stats returned 500 (socket read via `readline`) | Read the socket response to EOF instead | `20e1fb3` |
+| Registry sqlite connection not thread-safe under the API's threadpool | Connection made thread-safe | `44e2c66` |
+
+> Note: KNOWN_BUGS #1 (poller hijack) and #2 (killed-lead resume) remain **OPEN** above; they
+> are intentionally NOT in this table. #1's subagent residual is broken out as #7.
