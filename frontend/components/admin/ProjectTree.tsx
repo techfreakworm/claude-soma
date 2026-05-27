@@ -13,8 +13,13 @@ const STATUS_COLOR: Record<string, string> = {
 };
 
 function statusOf(p: Project): string {
-  if (p.status !== "active") return p.status;
-  return p.idle_for_seconds > 3600 ? "idle" : "active";
+  // /api/projects -> list_projects_impl -> _reconcile_active() already filters to
+  // genuinely-running leads (is_lead_alive: tmux + systemd), so any project shown
+  // here is really active. The old `idle_for_seconds > 3600 -> "idle"` heuristic
+  // was misleading: idle_for measures time since the orchestrator last MESSAGED
+  // the lead, not the lead's real work, so an actively-working lead read "idle"
+  // after an hour. Reflect the real reconciled status instead.
+  return p.status;
 }
 
 export function ProjectTree({ projects }: { projects: Project[] }) {
