@@ -219,3 +219,21 @@ def test_register_routine_is_upsert() -> None:
     assert got is not None
     assert got["schedule"] == "*-*-* 02:00:00"
     assert got["description"] == "second"
+
+
+def test_get_team_impl_returns_roster(monkeypatch) -> None:
+    _no_url_poll(monkeypatch)
+    with patch("subprocess.run", side_effect=_tmux_side_effect("")):
+        orch.spawn_project_impl(name="tm", type_="custom",
+                                brief="x", permission_mode="default")
+    roster = [{"handle": "teammate-1", "role": "writer", "status": "active"}]
+    with patch.object(orch, "discover_team", return_value=roster) as dt:
+        t = orch.get_team_impl("tm")
+    # discover_team is called with the lead's agent_id (soma-proj-<name>).
+    assert dt.call_args_list[0].args[0] == "soma-proj-tm"
+    assert t == {"name": "tm", "team": roster}
+
+
+def test_get_team_impl_unknown_project_raises() -> None:
+    with pytest.raises(RuntimeError):
+        orch.get_team_impl("does-not-exist")

@@ -519,3 +519,32 @@ def test_spawn_pipe_pane_logging_is_best_effort_on_unwritable_dir(
         )
     assert result["agent_id"] == "soma-proj-stillspawns"
     assert ";" in run.call_args_list[0][0][0]  # chain still present
+
+
+def test_discover_team_returns_panes_beyond_lead() -> None:
+    """A lead's agent-team teammates show up as split panes; discover_team reads
+    them live, treating the first pane as the lead and the rest as teammates,
+    with status from pane_dead."""
+    out = "0\t0\tlead pane\n1\t0\twriter working\n2\t1\tposter done\n"
+    with patch("subprocess.run", return_value=_ok(out)) as run:
+        team = spawner.discover_team("demoteam")
+    cmd = run.call_args_list[0][0][0]
+    assert cmd[cmd.index("-L") + 1] == "soma-lead-demoteam"
+    assert "list-panes" in cmd
+    assert [m["handle"] for m in team] == ["teammate-1", "teammate-2"]
+    assert team[0] == {"handle": "teammate-1", "role": "writer working", "status": "active"}
+    assert team[1]["status"] == "dead"  # pane_dead=1
+
+
+def test_discover_team_empty_when_only_lead_pane() -> None:
+    with patch("subprocess.run", return_value=_ok("0\t0\tjust the lead\n")):
+        assert spawner.discover_team("solo") == []
+
+
+def test_discover_team_empty_on_dead_session_or_error() -> None:
+    gone = _ok("")
+    gone.returncode = 1
+    with patch("subprocess.run", return_value=gone):
+        assert spawner.discover_team("ghost") == []
+    with patch("subprocess.run", side_effect=sp.TimeoutExpired(cmd=["tmux"], timeout=10)):
+        assert spawner.discover_team("ghost") == []

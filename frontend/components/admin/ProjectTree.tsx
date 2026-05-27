@@ -3,9 +3,10 @@ import { useMemo } from "react";
 import ReactFlow, { Background, Controls, Edge, Node } from "reactflow";
 import "reactflow/dist/style.css";
 
+type TeamMember = { handle: string; role: string; status: string };
 type Project = {
   name: string; agent_id: string; type: string; rc_url: string;
-  status: string; idle_for_seconds: number;
+  status: string; idle_for_seconds: number; team?: TeamMember[];
 };
 
 const STATUS_COLOR: Record<string, string> = {
@@ -40,9 +41,10 @@ export function ProjectTree({ projects }: { projects: Project[] }) {
     projects.forEach((p, idx) => {
       const status = statusOf(p);
       const color = STATUS_COLOR[status] || "#94a3b8";
+      const px = (idx - (projects.length - 1) / 2) * 220;
       n.push({
         id: p.name,
-        position: { x: (idx - (projects.length - 1) / 2) * 220, y: 200 },
+        position: { x: px, y: 200 },
         data: {
           label: (
             <div className="text-left">
@@ -65,6 +67,35 @@ export function ProjectTree({ projects }: { projects: Project[] }) {
       e.push({
         id: `orch-${p.name}`, source: "orchestrator", target: p.name,
         style: { stroke: color, strokeWidth: 1.5 }, animated: status === "active",
+      });
+
+      // Third tier: the lead's agent-team teammates (live, from its tmux panes).
+      const team = p.team ?? [];
+      team.forEach((tm, tIdx) => {
+        const tColor = tm.status === "dead" ? "#64748b" : "#34d399";
+        const tid = `${p.name}::${tm.handle}`;
+        n.push({
+          id: tid,
+          position: { x: px + (tIdx - (team.length - 1) / 2) * 150, y: 400 },
+          data: {
+            label: (
+              <div className="text-left">
+                <div className="font-mono text-xs">{tm.handle}</div>
+                <div className="text-[10px] text-slate-400 truncate" style={{ maxWidth: 130 }}>
+                  {tm.role}
+                </div>
+              </div>
+            ),
+          },
+          style: {
+            background: "#0b1220", color: "#cbd5e1",
+            border: `1px solid ${tColor}`, padding: 6, borderRadius: 6, width: 150,
+          },
+        });
+        e.push({
+          id: `${p.name}-${tid}`, source: p.name, target: tid,
+          style: { stroke: tColor, strokeWidth: 1 }, animated: tm.status !== "dead",
+        });
       });
     });
     return { nodes: n, edges: e };
