@@ -397,20 +397,24 @@ def test_lead_mcp_config_is_curated_tool_set() -> None:
     - the TOOL servers must equal the bot's .mcp.json MINUS the control-plane
       ones (hermes-api clobbers the dashboard socket; project-orchestrator
       shares the registry / could recursively spawn leads),
-    - sequential-thinking is added explicitly (user-scope loading is cwd/timing
-      flaky, so we guarantee it via --mcp-config),
+    - lead-only additions NOT in .mcp.json: sequential-thinking (user-scope
+      loading is cwd/timing flaky, so we guarantee it via --mcp-config) and
+      huggingface (hosted HF MCP: docs semantic-search + Hub tools, for leads),
     - the control-plane servers and telegram are never present.
-    Each tool stanza must match .mcp.json byte-for-byte (catches path drift)."""
+    Each MIRRORED tool stanza must match .mcp.json byte-for-byte (catches path
+    drift)."""
     import json
     repo = Path(__file__).resolve().parents[2]
     full = json.loads((repo / ".mcp.json").read_text())["mcpServers"]
     lead = json.loads((repo / "config/claude/lead-mcp.json").read_text())["mcpServers"]
     assert "hermes-api" not in lead and "project-orchestrator" not in lead
     assert "telegram" not in lead and not any("telegram" in k for k in lead)
-    assert "sequential-thinking" in lead
-    tool_servers = set(lead) - {"sequential-thinking"}
-    assert tool_servers == set(full) - {"hermes-api", "project-orchestrator"}
-    for name in tool_servers:
+    # Lead-only extras (present in lead-mcp.json, intentionally absent from .mcp.json).
+    lead_only = {"sequential-thinking", "huggingface"}
+    assert lead_only <= set(lead)
+    mirrored = set(lead) - lead_only
+    assert mirrored == set(full) - {"hermes-api", "project-orchestrator"}
+    for name in mirrored:
         assert lead[name] == full[name], f"{name} drifted from .mcp.json"
 
 
