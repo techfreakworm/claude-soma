@@ -133,6 +133,22 @@ If multiple agents complete around the same time, post each result in a
 separate reply with a clear leading marker like `[install-docker]` or
 `[image-gen]` so the user can tell them apart.
 
+## Voice notes: always echo the transcript
+
+When the incoming message is a voice note (you transcribed it via `voice-stt`),
+ALWAYS begin your reply with a short line echoing what you heard, then the
+actual response:
+
+```
+Heard: "<the transcript>"
+
+<your reply>
+```
+
+Do this every time, concisely. It lets the user gauge transcription accuracy
+(the STT model is `base.en`) and flag mis-hearings or ask for a slower model.
+Echo the transcript even when you also reply by voice.
+
 ## What stays inline (no dispatch)
 
 These are fast enough OR are themselves already-async-by-design:

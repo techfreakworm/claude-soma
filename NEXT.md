@@ -157,8 +157,12 @@ sudo install -d -o ubuntu -g ubuntu /opt
 cd /opt
 git clone https://github.com/ggml-org/whisper.cpp.git
 cd whisper.cpp && make -j4
-bash ./models/download-ggml-model.sh large-v3-turbo
-# Smoke: ./build/bin/whisper-cli -m models/ggml-large-v3-turbo.bin -f samples/jfk.wav -otxt -of /tmp/jfk -nt
+# base.en is the default STT model (English-only, ~13x faster -- ~9s vs ~121s on
+# a 77s note); it is what voice_stt/server.py + .mcp.json point at. Required.
+bash ./models/download-ggml-model.sh base.en
+# Optional, higher accuracy / multilingual (set HERMES_WHISPER_MODEL to use it):
+# bash ./models/download-ggml-model.sh large-v3-turbo
+# Smoke: ./build/bin/whisper-cli -m models/ggml-base.en.bin -f samples/jfk.wav -l en -otxt -of /tmp/jfk -nt
 
 # piper ARM binary + ryan voice
 sudo install -d -o ubuntu -g ubuntu /opt/piper && cd /opt/piper

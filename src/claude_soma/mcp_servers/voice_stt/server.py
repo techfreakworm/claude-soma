@@ -15,8 +15,11 @@ from mcp.server.fastmcp import FastMCP
 WHISPER_BIN = os.environ.get(
     "HERMES_WHISPER_BIN", "/opt/whisper.cpp/build/bin/whisper-cli"
 )
+# base.en (English-only) is ~13x faster than large-v3-turbo here -- measured
+# ~9s vs ~121s on a 77s note -- which matters for a responsive Telegram bot.
+# Pair it with `-l en` below (auto-detect is meaningless for an en-only model).
 WHISPER_MODEL = os.environ.get(
-    "HERMES_WHISPER_MODEL", "/opt/whisper.cpp/models/ggml-large-v3-turbo.bin"
+    "HERMES_WHISPER_MODEL", "/opt/whisper.cpp/models/ggml-base.en.bin"
 )
 
 
@@ -67,7 +70,10 @@ def transcribe_impl(audio_path: str, language: str = "auto") -> dict:
         _convert_to_wav(path, wav_path)
         out_prefix = Path(tmpdir) / "out"
 
-        lang_flag = "auto" if language in ("auto", "", None) else language
+        # Hard-set English: base.en is English-only, so auto-detect is pointless
+        # (and slower). "auto"/unset -> "en"; a caller may still force a specific
+        # language, but the default path never passes -l auto.
+        lang_flag = "en" if language in ("auto", "", None) else language
         try:
             result = subprocess.run(
                 [binary, "-m", WHISPER_MODEL, "-f", str(wav_path),
