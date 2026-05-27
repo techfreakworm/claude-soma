@@ -1,0 +1,28 @@
+sequenceDiagram
+  actor U as You (Telegram)
+  participant Bot as Orchestrator bot
+  participant V as voice-stt / voice-tts
+  participant Sub as Background subagent
+  participant Lead as project-lead
+  participant Ext as X / LinkedIn / Medium
+
+  U->>Bot: DM (text or voice memo)
+  opt voice memo
+    Bot->>V: transcribe (whisper)
+    V-->>Bot: text
+  end
+  Note over Bot: Quick task -> answer inline.<br/>Slow/long task -> dispatch + ack now<br/>(channel never blocks).
+  Bot-->>U: "On it - I'll message you when it's done."
+  Bot->>Sub: dispatch (run_in_background)
+  alt spawn / message a project-lead
+    Sub->>Lead: spawn (systemd-run + tmux) or send-keys
+    Lead-->>Sub: reply (scraped from pane)
+  else post to a platform
+    Sub->>Ext: playwright (shared auth)
+  end
+  Sub-->>Bot: result (task notification)
+  opt voice reply
+    Bot->>V: synthesize (piper)
+    V-->>Bot: opus audio
+  end
+  Bot-->>U: reply (text or voice)

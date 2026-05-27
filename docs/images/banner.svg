@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="320" viewBox="0 0 1280 320" role="img" aria-label="Claude Soma">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1b1235"/>
+      <stop offset="0.55" stop-color="#2c1d57"/>
+      <stop offset="1" stop-color="#3b2470"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#c98b5e"/>
+      <stop offset="1" stop-color="#e0a96d"/>
+    </linearGradient>
+  </defs>
+  <rect width="1280" height="320" fill="url(#bg)"/>
+  <!-- subtle orbiting "body/cell" motif on the right -->
+  <g opacity="0.5" fill="none" stroke="#7d6bc4" stroke-width="2">
+    <circle cx="1070" cy="160" r="118"/>
+    <circle cx="1070" cy="160" r="78"/>
+    <ellipse cx="1070" cy="160" rx="118" ry="44"/>
+  </g>
+  <circle cx="1070" cy="160" r="20" fill="url(#accent)"/>
+  <circle cx="1188" cy="160" r="7" fill="#e0a96d"/>
+  <circle cx="1070" cy="42" r="6" fill="#9d8be0"/>
+  <circle cx="992" cy="160" r="5" fill="#9d8be0"/>
+  <text x="80" y="150" font-family="Georgia, 'Times New Roman', serif" font-size="84" font-weight="700" fill="#ffffff">Claude Soma</text>
+  <text x="84" y="200" font-family="-apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="27" fill="#d9d2f2">A body for Claude &#8212; Hermes-Agent&#8217;s product surface in ~10% the code.</text>
+  <text x="84" y="250" font-family="ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace" font-size="19" fill="#e0a96d">Telegram &#183; voice I/O &#183; project orchestration &#183; agent teams &#183; dashboard</text>
+  <text x="84" y="288" font-family="-apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="17" fill="#a89ecf">Claude Max OAuth only &#183; no API keys &#183; one Oracle Cloud ARM VPS</text>
+</svg>
