@@ -355,6 +355,42 @@ def test_spawn_omits_mcp_config_when_absent(tmp_path: Path, monkeypatch) -> None
     assert "--mcp-config" not in args
 
 
+def test_brief_is_guarded_by_dashdash_after_mcp_config(tmp_path: Path, monkeypatch) -> None:
+    """Regression (commit 6ac7ed2): claude's --mcp-config is variadic
+    ("<configs...>"), so a bare trailing brief right after `--mcp-config <path>`
+    is swallowed as a SECOND config-file path -> ENAMETOOLONG -> the lead crashes
+    at startup. The brief must be preceded by a `--` end-of-options separator and
+    must never be the token immediately following --mcp-config."""
+    cfg = tmp_path / "lead-mcp.json"
+    cfg.write_text('{"mcpServers": {}}')
+    monkeypatch.setenv("HERMES_LEAD_MCP_CONFIG", str(cfg))
+    cwd = tmp_path / "g"
+    cwd.mkdir()
+    brief = "You are the lead; do the thing."
+    with patch("subprocess.run", side_effect=[_ok(), _ok("")]) as run:
+        spawn_background_lead(name="g", brief=brief, cwd=cwd, permission_mode="acceptEdits")
+    args = run.call_args_list[0][0][0]
+    assert "--mcp-config" in args
+    # --mcp-config is followed by the config PATH, not the brief.
+    assert args[args.index("--mcp-config") + 1] == str(cfg)
+    # The brief is the positional prompt, guarded by `--`.
+    assert args[args.index(brief) - 1] == "--"
+
+
+def test_brief_is_guarded_by_dashdash_without_mcp_config(tmp_path: Path, monkeypatch) -> None:
+    """The `--` guard is present even when --mcp-config is omitted, so a brief
+    that starts with '-' can't be misparsed as a flag."""
+    monkeypatch.setenv("HERMES_LEAD_MCP_CONFIG", str(tmp_path / "absent.json"))
+    cwd = tmp_path / "g2"
+    cwd.mkdir()
+    brief = "-x is a weird brief"
+    with patch("subprocess.run", side_effect=[_ok(), _ok("")]) as run:
+        spawn_background_lead(name="g2", brief=brief, cwd=cwd, permission_mode="acceptEdits")
+    args = run.call_args_list[0][0][0]
+    assert "--mcp-config" not in args
+    assert args[args.index(brief) - 1] == "--"
+
+
 def test_lead_mcp_config_is_curated_tool_set() -> None:
     """Drift guard for the shipped config/claude/lead-mcp.json:
 
