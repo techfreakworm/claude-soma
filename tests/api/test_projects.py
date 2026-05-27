@@ -39,15 +39,14 @@ def test_project_team_returns_roster(tmp_path, monkeypatch) -> None:
     db = tmp_path / "reg.sqlite"
     monkeypatch.setenv("HERMES_ORCH_DB", str(db))
     from claude_soma.mcp_servers.project_orchestrator import server as orch
-    from claude_soma.mcp_servers.project_orchestrator.registry import Registry
 
-    # Register via a throwaway connection (autocommits to the file), then reset
-    # the singleton so the route handler opens its OWN connection in the request
-    # worker thread (a singleton created here would be used cross-thread).
-    reg = Registry(db)
-    reg.register("tm", agent_id="soma-proj-tm", type_="custom", cwd="/x", rc_url=None)
-    reg.close()
+    # Create + populate the registry SINGLETON on THIS (test) thread, exactly as
+    # the live orchestrator does, then hit the endpoint -- whose sync handler runs
+    # in a Starlette threadpool worker. This reproduces the cross-thread access
+    # that 500'd in production; with the thread-safe Registry it returns 200.
     orch._reset_singletons_for_tests()
+    orch._reg().register("tm", agent_id="soma-proj-tm", type_="custom",
+                         cwd="/x", rc_url=None)
     roster = [{"handle": "teammate-1", "role": "writer", "status": "active"}]
     monkeypatch.setattr(orch, "discover_team", lambda agent_id: roster)
 
@@ -56,4 +55,4 @@ def test_project_team_returns_roster(tmp_path, monkeypatch) -> None:
     r = client.get("/api/projects/tm/team", headers=HEADERS)
     assert r.status_code == 200
     assert r.json() == {"name": "tm", "team": roster}
-    orch._reset_singletons_for_tests()  # don't leak this thread's connection
+    orch._reset_singletons_for_tests()  # don't leak this test's singleton
