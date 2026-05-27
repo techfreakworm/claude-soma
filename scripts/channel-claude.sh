@@ -23,9 +23,15 @@
 # load only the default scopes -- no telegram, and never this --settings file --
 # so they no longer steal the poller. Do NOT add --setting-sources here (it would
 # change which scopes the bot loads).
+#
+# --continue resumes the most-recent /opt/claude-soma session on restart instead of
+# starting fresh; the channel owns that cwd exclusively, so --continue
+# deterministically picks the bot's own session. Covers BOTH the systemd start and
+# the healthcheck in-pane respawn (both go through this wrapper).
 
 exec /home/ubuntu/.local/bin/claude \
     --channels plugin:telegram@claude-plugins-official \
+    --continue \
     --settings /opt/claude-soma/config/claude/channel-settings.json \
     --plugin-dir /opt/claude-soma \
     --add-dir /home/ubuntu/hermes-work \
