@@ -102,8 +102,14 @@ export function ProjectTree({ projects }: { projects: Project[] }) {
   }, [projects]);
 
   return (
-    <div className="h-[600px] rounded-lg border border-slate-800 bg-slate-900/40">
-      <ReactFlow nodes={nodes} edges={edges} fitView>
+    <div className="h-[360px] sm:h-[480px] lg:h-[600px] rounded-lg border border-slate-800 bg-slate-900/40">
+      <ReactFlow
+        nodes={nodes}
+        edges={edges}
+        fitView
+        minZoom={0.2}
+        proOptions={{ hideAttribution: true }}
+      >
         <Background gap={24} color="#1e293b" />
         <Controls className="!bg-slate-800 !border-slate-700" />
       </ReactFlow>

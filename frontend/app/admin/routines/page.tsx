@@ -1,4 +1,5 @@
 import { api } from "@/lib/api";
+import { RunRoutineButton } from "@/components/admin/RunRoutineButton";
 
 type Routine = {
   name: string;
@@ -41,7 +42,7 @@ const ORIGIN_STYLE: Record<string, string> = {
 export default async function RoutinesPage() {
   const routines = await api<Routine[]>("/api/routines").catch(() => []);
   return (
-    <div className="p-8 space-y-6">
+    <div className="p-4 sm:p-6 lg:p-8 space-y-6">
       <h1 className="text-2xl font-bold">Routines</h1>
       <p className="text-sm text-slate-500">
         Create routines from Telegram: &ldquo;schedule a morning brief every weekday at 9am.&rdquo;
@@ -66,18 +67,21 @@ export default async function RoutinesPage() {
                 {r.description && (
                   <div className="text-xs text-slate-400">{r.description}</div>
                 )}
-                <div className="text-xs text-slate-500 space-x-3 font-mono">
+                <div className="text-xs text-slate-500 flex flex-wrap gap-x-3 gap-y-1 font-mono">
                   <span>
                     schedule: <code className="text-indigo-300">{r.schedule || "—"}</code>
                   </span>
-                  <span className="text-slate-600">·</span>
+                  <span className="text-slate-600 hidden sm:inline">·</span>
                   <span>
                     next: <span className="text-slate-300">{fmtIST(r.next_run)}</span>
                   </span>
-                  <span className="text-slate-600">·</span>
+                  <span className="text-slate-600 hidden sm:inline">·</span>
                   <span>
                     last: <span className="text-slate-400">{fmtIST(r.last_run)}</span>
                   </span>
+                </div>
+                <div className="pt-1">
+                  <RunRoutineButton name={r.name} kind={r.kind} />
                 </div>
               </li>
             ))}

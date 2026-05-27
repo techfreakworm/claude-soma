@@ -23,9 +23,9 @@ export default async function UsagePage() {
     trend: [] as Snapshot[],
   }));
   return (
-    <div className="p-8 space-y-6">
+    <div className="p-4 sm:p-6 lg:p-8 space-y-6">
       <h1 className="text-2xl font-bold">Usage</h1>
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
         <KpiCard label="Interactive used today"
                  value={Math.round(usage.interactive.today)}
                  hint={`${Math.round(usage.interactive.remaining_pct)}% left`} />
@@ -37,7 +37,7 @@ export default async function UsagePage() {
         <KpiCard label="Agent SDK ceiling"
                  value={Math.round(usage.agent_sdk.ceiling)} />
       </div>
-      <div className="rounded-lg border border-slate-800 bg-slate-900/40 p-6">
+      <div className="rounded-lg border border-slate-800 bg-slate-900/40 p-4 sm:p-6">
         <h2 className="text-xs uppercase tracking-wider text-slate-500 mb-4">
           30-day trend
         </h2>

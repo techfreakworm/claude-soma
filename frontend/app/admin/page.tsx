@@ -1,6 +1,7 @@
 import { api } from "@/lib/api";
 import { KpiCard } from "@/components/admin/KpiCard";
 import { ActivityFeed } from "@/components/admin/ActivityFeed";
+import { OperatorActions } from "@/components/admin/OperatorActions";
 
 type Health = { status: string; uptime_seconds: number };
 type Project = { name: string };
@@ -15,15 +16,15 @@ export default async function OverviewPage() {
   ]);
 
   return (
-    <div className="p-8 space-y-8">
-      <header className="flex items-baseline justify-between">
+    <div className="p-4 sm:p-6 lg:p-8 space-y-6 sm:space-y-8">
+      <header className="flex flex-wrap items-baseline justify-between gap-2">
         <h1 className="text-2xl font-bold">Overview</h1>
         <span className={`text-xs font-mono ${health.status === "ok" ? "text-emerald-400" : "text-rose-400"}`}>
           ● {health.status} · uptime {Math.round(health.uptime_seconds / 60)}m
         </span>
       </header>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
         <KpiCard label="Active projects" value={projects.length} />
         <KpiCard label="Interactive credit left"
                  value={`${Math.round(usage.interactive.remaining_pct)}%`} />
@@ -31,6 +32,8 @@ export default async function OverviewPage() {
                  value={`${Math.round(health.uptime_seconds / 3600)}h`} />
         <KpiCard label="Status" value={health.status} />
       </div>
+
+      <OperatorActions />
 
       <ActivityFeed />
     </div>
