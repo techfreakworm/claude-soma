@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from claude_soma.api.auth import require_authed_user
 from claude_soma.mcp_servers.project_orchestrator.server import (
     get_status_impl,
+    get_team_impl,
     kill_project_impl,
     list_projects_impl,
     send_to_project_impl,
@@ -23,6 +24,15 @@ def list_projects() -> list[dict]:
 def project_detail(name: str) -> dict:
     try:
         return get_status_impl(name)
+    except RuntimeError:
+        raise HTTPException(status_code=404, detail=f"project {name!r} not found")
+
+
+@router.get("/{name}/team")
+def project_team(name: str) -> dict:
+    """Live agent-team roster for a project-lead (teammates in its tmux panes)."""
+    try:
+        return get_team_impl(name)
     except RuntimeError:
         raise HTTPException(status_code=404, detail=f"project {name!r} not found")
 

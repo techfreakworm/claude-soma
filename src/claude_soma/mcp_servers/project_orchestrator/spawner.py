@@ -397,6 +397,49 @@ def is_lead_alive(name: str) -> bool:
     return result.returncode == 0
 
 
+def discover_team(name: str) -> list[dict[str, str]]:
+    """Best-effort roster of a lead's agent-team teammates, read live from its
+    tmux panes.
+
+    With CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 a lead spawns its teammates as
+    split panes in its window (see docs/KNOWN_BUGS.md), so every pane beyond the
+    lead's own is a teammate. We read it live (rather than persist a table)
+    because teammates are ephemeral -- they die with the session -- so a cached
+    roster would go stale. Returns [] if the lead is gone or has no team.
+
+    Coarse by design: the pane view gives a teammate's live activity + status but
+    not its exact TeamCreate handle (@ping, ...). Exact handles would need leads
+    to self-report into a registry table -- a noted enhancement.
+    """
+    bare = _bare_name(name)
+    session = _session_name(bare)
+    socket = _lead_socket(bare)
+    try:
+        result = subprocess.run(
+            [_tmux(), "-L", socket, "list-panes", "-s", "-t", session,
+             "-F", "#{pane_index}\t#{pane_dead}\t#{pane_title}"],
+            capture_output=True, text=True, timeout=10,
+        )
+    except (subprocess.SubprocessError, OSError):
+        return []
+    if result.returncode != 0:
+        return []
+    lines = [ln for ln in result.stdout.splitlines() if ln.strip()]
+    # The first pane is the lead itself; the rest are its teammates.
+    team: list[dict[str, str]] = []
+    for i, line in enumerate(lines[1:], start=1):
+        parts = line.split("\t")
+        if len(parts) < 3:
+            continue
+        idx, dead, title = parts[0], parts[1], parts[2]
+        team.append({
+            "handle": f"teammate-{idx}",
+            "role": title.strip() or "teammate",
+            "status": "dead" if dead == "1" else "active",
+        })
+    return team
+
+
 def kill_session(name: str) -> None:
     bare = _bare_name(name)
     session = _session_name(bare)

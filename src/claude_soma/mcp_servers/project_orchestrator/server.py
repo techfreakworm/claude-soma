@@ -10,7 +10,7 @@ from mcp.server.fastmcp import FastMCP
 
 from .registry import Registry
 from .spawner import (
-    spawn_background_lead, kill_session, is_lead_alive,
+    spawn_background_lead, kill_session, is_lead_alive, discover_team,
 )
 from .templates import load_template, list_template_names, TemplateNotFound
 
@@ -146,6 +146,15 @@ def get_status_impl(name: str) -> dict:
         "spawned_at": p["spawned_at"],
         "idle_for_seconds": _reg().idle_for(name),
     }
+
+
+def get_team_impl(name: str) -> dict:
+    """Return a lead's live agent-team roster (teammates discovered from its tmux
+    panes). Raises if there's no such project."""
+    p = _reg().get(name)
+    if not p:
+        raise RuntimeError(f"no project named {name!r}")
+    return {"name": p["name"], "team": discover_team(p["agent_id"])}
 
 
 mcp = FastMCP("project_orchestrator")
