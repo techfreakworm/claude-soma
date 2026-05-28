@@ -39,6 +39,7 @@ soma-orchestrator = "claude_soma.mcp_servers.project_orchestrator.server:main"
 soma-api-mcp = "claude_soma.mcp_servers.hermes_api.server:main"
 soma-api = "claude_soma.api.main:run"
 soma-init = "claude_soma.wizard.init:main"
+soma-install = "claude_soma.install:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/claude_soma"]

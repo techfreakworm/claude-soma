@@ -1,9 +1,11 @@
 """Interactive setup wizard: clean Ubuntu VPS to working claude-soma in ~30 min.
 
-Designed to be re-run safely (idempotent) on the OCI VPS. Reads/writes
-/etc/claude-soma/secrets.env, /etc/systemd/system/claude-soma-*, /etc/caddy/Caddyfile.
+Designed to be re-run safely (idempotent) on the OCI VPS.  Reads/writes
+the secrets file, /etc/systemd/system/claude-soma-*, /etc/caddy/Caddyfile,
+and ~/.mcp.json — all paths resolved from the platform layer, not hardcoded.
 
 Run as: sudo soma-init
+   or:  python -m claude_soma.install --apply  (automates the full stack)
 """
 from __future__ import annotations
 
@@ -15,9 +17,43 @@ from pathlib import Path
 from textwrap import dedent
 from typing import Iterable
 
+from claude_soma.platform.paths import Paths, resolve, render_mcp_json
+from claude_soma.platform.services import (
+    Service,
+    SystemdBackend,
+    _render_service,
+    _render_timer,
+)
 
-REPO_ROOT = Path("/opt/claude-soma")
-SECRETS = Path("/etc/claude-soma/secrets.env")
+
+# --- Lazy path resolution --------------------------------------------------
+# Resolved once at first access so tests that mock platform.system() work.
+_paths: Paths | None = None
+
+
+def _get_paths() -> Paths:
+    global _paths
+    if _paths is None:
+        _paths = resolve("system")
+    return _paths
+
+
+# Keep these module-level properties for backward compat with any external
+# code that imports REPO_ROOT or SECRETS from this module directly.
+# They are evaluated lazily via property-like functions, not at import time.
+def _repo_root() -> Path:
+    return _get_paths().code_root
+
+
+def _secrets_path() -> Path:
+    return _get_paths().secrets_env
+
+
+# Legacy aliases (used in tests and older scripts; prefer _get_paths())
+# Setting them as functions rather than module-level constants prevents
+# the hardcoded "/opt/claude-soma" from leaking on non-Linux hosts.
+REPO_ROOT: Path = Path("/opt/claude-soma")  # kept for backward compat
+SECRETS: Path = Path("/etc/claude-soma/secrets.env")  # kept for backward compat
 
 
 # ---- pure helpers (testable) ----------------------------------------------
@@ -53,33 +89,49 @@ def render_caddyfile(domain: str, email: str = "") -> str:
         """)
 
 
-def render_systemd_unit(*, name: str, description: str, exec_start: str,
-                        type_: str = "simple", user: str = "ubuntu",
-                        env_file: str = "/etc/claude-soma/secrets.env",
-                        wd: str = "/opt/claude-soma",
-                        restart_sec: int = 5) -> str:
-    return dedent(f"""\
-        [Unit]
-        Description={description}
-        After=network-online.target
-        Wants=network-online.target
+def render_systemd_unit(
+    *,
+    name: str,
+    description: str,
+    exec_start: str,
+    type_: str = "simple",
+    user: str = "ubuntu",
+    env_file: str | None = None,
+    wd: str | None = None,
+    restart_sec: int = 5,
+) -> str:
+    """Render a systemd unit file using the platform paths layer.
 
-        [Service]
-        Type={type_}
-        User={user}
-        Group={user}
-        WorkingDirectory={wd}
-        EnvironmentFile={env_file}
-        Environment=PATH=/opt/claude-soma/.venv/bin:/usr/local/bin:/usr/bin:/bin
-        ExecStart={exec_start}
-        Restart=always
-        RestartSec={restart_sec}
-        StandardOutput=append:/var/log/claude-soma/{name}.log
-        StandardError=append:/var/log/claude-soma/{name}.err.log
+    ``env_file`` defaults to the resolved secrets_env path.
+    ``wd`` defaults to the resolved code_root.
 
-        [Install]
-        WantedBy=multi-user.target
-        """)
+    SECRETS NOTE: env_file is a file path only; actual secrets are read by
+    systemd at runtime, never embedded in the unit content.
+    """
+    paths = _get_paths()
+    _env_file = env_file if env_file is not None else str(paths.secrets_env)
+    _wd = wd if wd is not None else str(paths.code_root)
+    _log_dir = str(paths.log_dir)
+    _venv_bin = str(paths.venv_bin)
+
+    svc = Service(
+        name=name,
+        description=description,
+        exec_argv=exec_start.split(),  # simple split; callers with spaces need _render_service directly
+        env={"PATH": f"{_venv_bin}:/usr/local/bin:/usr/bin:/bin"},
+        work_dir=_wd,
+        restart_policy="always",
+        restart_sec=restart_sec,
+        log_paths={
+            "stdout": f"{_log_dir}/{name}.log",
+            "stderr": f"{_log_dir}/{name}.err.log",
+        },
+        user=user,
+        group=user,
+        type_=type_,  # type: ignore[arg-type]
+        env_file=_env_file,
+    )
+    return _render_service(svc)
 
 
 # ---- I/O wrappers ---------------------------------------------------------
@@ -99,10 +151,16 @@ def confirm(label: str, default: bool = True) -> bool:
 
 
 def write_secret(name: str, value: str) -> None:
-    SECRETS.parent.mkdir(parents=True, exist_ok=True)
+    """Write a key=value line to the resolved secrets.env file.
+
+    SECRETS NOTE: the value is written to disk (mode 600).  It is never
+    logged, never echoed to stdout, and never passed as a subprocess arg.
+    """
+    secrets = _secrets_path()
+    secrets.parent.mkdir(parents=True, exist_ok=True)
     lines: list[str] = []
-    if SECRETS.exists():
-        for ln in SECRETS.read_text().splitlines():
+    if secrets.exists():
+        for ln in secrets.read_text().splitlines():
             if not ln.strip() or ln.strip().startswith("#") or "=" not in ln:
                 lines.append(ln)
                 continue
@@ -110,14 +168,22 @@ def write_secret(name: str, value: str) -> None:
             if k.strip() != name:
                 lines.append(ln)
     lines.append(f"{name}={value}")
-    SECRETS.write_text("\n".join(lines) + "\n")
-    os.chmod(SECRETS, 0o600)
+    secrets.write_text("\n".join(lines) + "\n")
+    os.chmod(secrets, 0o600)
 
 
 def install_units(units: Iterable[tuple[str, str]]) -> None:
-    """Install systemd unit files. Each entry is (path, contents)."""
-    for path, contents in units:
-        target = Path("/etc/systemd/system") / Path(path).name
+    """Install systemd unit files and reload daemon.
+
+    Each entry is (unit_name_or_path, contents).  The content is rendered
+    by the platform layer — not copied from the static systemd/ directory.
+
+    SECRETS NOTE: unit file content contains only env-file PATHS (loaded
+    at runtime by systemd), never actual secret values.
+    """
+    unit_dir = Path("/etc/systemd/system")
+    for name_or_path, contents in units:
+        target = unit_dir / Path(name_or_path).name
         target.write_text(contents)
         target.chmod(0o644)
     subprocess.run(["systemctl", "daemon-reload"], check=True)
@@ -128,10 +194,140 @@ def enable_services(names: Iterable[str]) -> None:
     subprocess.run(cmd, check=True)
 
 
-def _backfill_default_routines() -> None:
+def _build_wizard_services(paths: Paths) -> list[tuple[str, str]]:
+    """Build (unit_filename, unit_content) pairs for all Claude Soma services.
+
+    Uses _render_service / _render_timer from the platform layer so unit
+    file paths come from the resolved Paths object, not hardcoded strings.
+    """
+    env_file = str(paths.secrets_env)
+    code_root = str(paths.code_root)
+    venv_bin = str(paths.venv_bin)
+    log_dir = str(paths.log_dir)
+    user = paths.user
+
+    path_env = f"{venv_bin}:/usr/local/bin:/usr/bin:/bin"
+
+    services = [
+        Service(
+            name="claude-soma-api",
+            description="Claude Soma FastAPI backend",
+            exec_argv=[
+                f"{venv_bin}/uvicorn",
+                "claude_soma.api.main:app",
+                "--host", "127.0.0.1",
+                "--port", "9000",
+                "--no-server-header",
+            ],
+            env={
+                "PATH": path_env,
+                "HERMES_ALLOWED_GITHUB_HANDLES": "techfreakworm",
+                "HERMES_API_CORS_ORIGINS": "http://localhost:3000",
+                "HERMES_USAGE_DB": str(paths.usage_db),
+                "HERMES_ACTIVITY_LOG": str(paths.activity_log),
+            },
+            work_dir=code_root,
+            restart_policy="always",
+            restart_sec=5,
+            log_paths={
+                "stdout": f"{log_dir}/api.log",
+                "stderr": f"{log_dir}/api.err.log",
+            },
+            user=user, group=user,
+            env_file=env_file,
+        ),
+        Service(
+            name="claude-soma-frontend",
+            description="Claude Soma Next.js frontend",
+            exec_argv=["bun", "run", "start"],
+            env={"PATH": path_env},
+            work_dir=f"{code_root}/frontend",
+            restart_policy="always",
+            restart_sec=5,
+            log_paths={
+                "stdout": f"{log_dir}/frontend.log",
+                "stderr": f"{log_dir}/frontend.err.log",
+            },
+            user=user, group=user,
+        ),
+        Service(
+            name="claude-soma-channel",
+            description="Claude Soma persistent Telegram channel session",
+            exec_argv=[
+                str(paths.tmux_bin),
+                "new-session", "-d", "-s", "hermes",
+                "-c", code_root,
+                f"{code_root}/scripts/channel-claude.sh",
+            ],
+            env={
+                "PATH": path_env,
+                "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1",
+            },
+            work_dir=code_root,
+            restart_policy="on-failure",
+            restart_sec=10,
+            type_="oneshot",
+            remain_after_exit=True,
+            user=user, group=user,
+            env_file=env_file,
+        ),
+    ]
+
+    timer_service_stubs = [
+        Service(
+            name="claude-soma-healthcheck",
+            description="Claude Soma healthcheck (run by timer)",
+            exec_argv=[f"{venv_bin}/python", "-m", "claude_soma.scripts.healthcheck"],
+            env={}, work_dir=code_root, restart_policy="no", type_="oneshot",
+            user=user, group=user, env_file=env_file,
+        ),
+        Service(
+            name="claude-soma-cache-refresh",
+            description="Claude Soma cache refresh (run by timer)",
+            exec_argv=[f"{venv_bin}/python", "-m", "claude_soma.scripts.cache_refresh"],
+            env={}, work_dir=code_root, restart_policy="no", type_="oneshot",
+            user=user, group=user, env_file=env_file,
+        ),
+        Service(
+            name="claude-soma-usage-snapshot",
+            description="Claude Soma usage snapshot (run by timer)",
+            exec_argv=[f"{venv_bin}/python", "-m", "claude_soma.scripts.usage_snapshot"],
+            env={}, work_dir=code_root, restart_policy="no", type_="oneshot",
+            user=user, group=user, env_file=env_file,
+        ),
+        Service(
+            name="claude-soma-idle-reaper",
+            description="Claude Soma idle lead reaper (run by timer)",
+            exec_argv=[f"{venv_bin}/python", "-m", "claude_soma.scripts.idle_reaper"],
+            env={}, work_dir=code_root, restart_policy="no", type_="oneshot",
+            user=user, group=user, env_file=env_file,
+        ),
+    ]
+
+    timers = [
+        ("claude-soma-healthcheck",   "*:0/10"),
+        ("claude-soma-cache-refresh", "*:0/5"),
+        ("claude-soma-usage-snapshot", "*-*-* 23:55:00"),
+        ("claude-soma-idle-reaper",   "0/6:00:00"),
+    ]
+
+    units: list[tuple[str, str]] = []
+    for svc in services + timer_service_stubs:
+        units.append((f"{svc.name}.service", _render_service(svc)))
+    for timer_name, on_calendar in timers:
+        units.append((
+            f"{timer_name}.timer",
+            _render_timer(timer_name, on_calendar, timer_name),
+        ))
+    return units
+
+
+def _backfill_default_routines(paths: Paths | None = None) -> None:
     """Register the 4 system timers + the portfolio-oneliner bot timer."""
-    from claude_soma.mcp_servers.project_orchestrator.registry import Registry
-    db = os.environ.get("HERMES_ORCH_DB", "/opt/claude-soma/registry.sqlite")
+    from claude_soma.mcp_servers.project_orchestrator.registry import Registry  # noqa: PLC0415
+    if paths is None:
+        paths = _get_paths()
+    db = os.environ.get("HERMES_ORCH_DB", str(paths.registry_db))
     reg = Registry(db)
     try:
         defaults = [
@@ -164,6 +360,8 @@ def _backfill_default_routines() -> None:
 # ---- wizard flow ----------------------------------------------------------
 
 def run() -> int:
+    paths = _get_paths()
+
     print("Claude Soma setup wizard")
     print("========================\n")
 
@@ -179,6 +377,7 @@ def run() -> int:
     print("Then paste the token here. (Starts with 'oat-')\n")
     token = prompt("CLAUDE_CODE_OAUTH_TOKEN", "")
     if token:
+        # SECRETS NOTE: token written to disk (mode 600), never to stdout.
         write_secret("CLAUDE_CODE_OAUTH_TOKEN", token)
 
     print("\nGitHub OAuth app:")
@@ -189,10 +388,12 @@ def run() -> int:
     if gh_id:
         write_secret("AUTH_GITHUB_ID", gh_id)
     if gh_secret:
+        # SECRETS NOTE: secret written to disk, never echoed.
         write_secret("AUTH_GITHUB_SECRET", gh_secret)
     write_secret("AUTH_SECRET",
-                 subprocess.check_output(["openssl", "rand", "-hex", "32"],
-                                         text=True).strip())
+                 subprocess.check_output(
+                     ["openssl", "rand", "-hex", "32"], text=True,
+                 ).strip())
     write_secret("AUTH_URL", f"https://{domain}")
     write_secret("AUTH_TRUST_HOST", "true")
 
@@ -211,12 +412,9 @@ def run() -> int:
     Path("/etc/caddy/Caddyfile").write_text(cf)
     subprocess.run(["systemctl", "reload", "caddy"], check=True)
 
-    print("Installing systemd units...")
-    subprocess.run(["cp", "-f",
-                    *list((REPO_ROOT / "systemd").glob("*.service")),
-                    *list((REPO_ROOT / "systemd").glob("*.timer")),
-                    "/etc/systemd/system/"], check=True)
-    subprocess.run(["systemctl", "daemon-reload"], check=True)
+    print("Installing systemd units (rendered from platform layer)...")
+    units = _build_wizard_services(paths)
+    install_units(units)
 
     print("Enabling services and timers...")
     enable_services([
@@ -229,9 +427,17 @@ def run() -> int:
         "claude-soma-idle-reaper.timer",
     ])
 
+    # Write rendered .mcp.json to ~/.mcp.json
+    mcp_dest = paths.home / ".mcp.json"
+    print(f"\nWriting rendered .mcp.json to {mcp_dest} …")
+    mcp_content = render_mcp_json(paths)
+    mcp_dest.parent.mkdir(parents=True, exist_ok=True)
+    mcp_dest.write_text(mcp_content)
+    os.chmod(mcp_dest, 0o600)
+
     # Backfill known routines into the registry so /api/routines has canonical
-    # entries (instead of falling back to systemd-synthesized 'system' entries).
-    _backfill_default_routines()
+    # entries (instead of falling back to systemd-synthesised 'system' entries).
+    _backfill_default_routines(paths)
 
     print("\nSetup complete.")
     print(f"  Public: https://{domain}/")

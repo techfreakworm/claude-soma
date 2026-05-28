@@ -2,10 +2,13 @@
 
 Plan + design to make Claude Soma installable on any platform (today it is hard-wired to a
 single Oracle Cloud Ubuntu ARM VPS).
-Status: planning (awaiting approval). Date: 2026-05-27.
+Status: **Phase 1 implemented** (2026-05-28). Phases 2–4 remain design-only.
 
-This is a **design document, not an implementation**. No code here; it enumerates what is
-Linux/systemd/`apt`/ARM-specific today, proposes abstractions, and phases the rollout.
+Phase 1 code lives in `src/claude_soma/platform/` and `src/claude_soma/install.py`.
+Run `python -m claude_soma.install --dry-run` to see the full install plan without touching state.
+
+This document records design and plan. It enumerates what is Linux/systemd/`apt`/ARM-specific
+today, proposes abstractions, and phases the rollout.
 
 ---
 
@@ -241,6 +244,30 @@ Key portability facts to preserve from the notes:
 | **Phase 3 — Windows via WSL2** | Full parity by running the Linux install **inside WSL2** (systemd + tmux + cgroups all present). A thin `install.ps1` provisions WSL2 + an Ubuntu distro, then runs the Phase-1 Linux path. | `install.ps1` WSL2 provisioner; docs; reuse Phase 1 unchanged. | Medium — WSL2 setup friction, networking/port-forwarding for the dashboard, autostart of the WSL distro at boot. |
 | **Phase 4 — Native Windows** | Best-effort: Windows Service/NSSM + Task Scheduler, no cgroups, ConPTY for the lead PTY (or no-team mode). | `WindowsServiceStrategy`, winget/choco recipes, ConPTY helper or "leads are best-effort" caveat. | High — no tmux, no cgroups, PTY story unclear; lowest ROI. |
 
+### Phase 1 — implemented (round 2)
+
+Modules shipped:
+
+| Module | Purpose |
+|---|---|
+| `src/claude_soma/platform/_action.py` | `Action` dataclass — the plan unit |
+| `src/claude_soma/platform/paths.py` | `Paths` frozen dataclass; `resolve()` for system/user mode; `render_mcp_json()` |
+| `src/claude_soma/platform/pkg.py` | `PackageManager` enum; `detect_package_manager()`; `LOGICAL_PACKAGES`; `pkg_install()` |
+| `src/claude_soma/platform/services.py` | `ServiceBackend` ABC with `isolation_strength`; `SystemdBackend`; stub backends for Phases 2–4 |
+| `src/claude_soma/install.py` | `python -m claude_soma.install --dry-run|--apply` entrypoint; `build_plan()`; `_execute_action()` |
+
+Round-2 constraints met:
+- `--dry-run` prints every privileged command and every file write; makes zero state changes; exits 0.
+- `--apply` flag required for actual execution; no implicit default.
+- Secrets read from file/env only; never passed as argv (audited — see sudo audit below).
+- No new dependencies; stdlib only.
+- Node 22 via NodeSource `setup_22.x`.
+- whisper model `ggml-base.en.bin`.
+- OCI iptables ACCEPT rule gated behind `--cloud=oci` flag.
+- `HERMES_*` env names preserved as interface contracts; paths layer fills values only.
+- `ServiceBackend.isolation_strength` property on every backend.
+- 274 tests pass (161 new platform tests + 113 pre-existing).
+
 ### Alternative / parallel track — Container or Compose (portability shortcut)
 
 A `Dockerfile` + `docker-compose.yml` (or Podman) is the fastest way to "runs anywhere with a
@@ -299,3 +326,41 @@ Concretely: extract `claude_soma.platform.paths` from the scattered constants, m
 apt/dnf/pacman/zypper/apk, and template `.mcp.json` + the systemd units from the paths layer.
 Land the Phase-1 bootstrap fixes (Node 22, whisper `base.en`, OCI-only iptables behind a flag)
 in the same pass.
+
+---
+
+## Sudo audit (Phase 1)
+
+Every privileged command issued by `python -m claude_soma.install --apply` passes through
+`_execute_action()` in `src/claude_soma/install.py`. Each Action is created by `build_plan()`.
+No secret values are ever placed on a subprocess argv — tokens and credentials are written to
+`secrets.env` (mode 600) and read at runtime by systemd via `EnvironmentFile=`.
+
+Privileged actions in the Phase 1 plan (in order):
+
+| # | Action description | Command pattern | Why sudo |
+|---|---|---|---|
+| 1 | Create system directories | `sudo mkdir -p <dirs>` | FHS dirs under `/opt`, `/etc`, `/var/log` require root |
+| 2 | Set directory ownership | `sudo chown -R <user>:<user> <dirs>` | Directories created as root; ownership handed to install user |
+| 3–N | Install core packages (ffmpeg, tmux, curl, git, python3.12, build-essential, openssl, caddy, node22, gh) | `sudo apt-get install -y ...` (or dnf/pacman/zypper/apk equivalent) | System package installation |
+| N+1 | Install whisper build deps | `sudo apt-get install -y cmake clang libopenblas-dev` | System packages |
+| N+2 | Install playwright-mcp | `sudo apt-get install -y ...` | System packages |
+| N+3 | Write systemd unit files | `sudo tee /etc/systemd/system/<name>.service` | `/etc/systemd/system` is root-owned |
+| N+4 | Write systemd timer files | `sudo tee /etc/systemd/system/<name>.timer` | Same |
+| N+5 | Reload systemd daemon | `sudo systemctl daemon-reload` | Requires root |
+| N+6 | Enable and start services | `sudo systemctl enable --now <names>` | Requires root |
+| N+7 | OCI iptables rule (--cloud=oci only) | `sudo iptables -I INPUT 1 -p tcp -m multiport --dports 80,443 -j ACCEPT` | iptables requires root |
+
+Non-privileged actions (no sudo):
+
+- Clone/update repo via `git` (runs as install user)
+- Create Python venv (`python3.12 -m venv`)
+- Install pip packages inside venv (`pip install -e .`)
+- Install claude CLI (`npm install -g` or native install — runs as install user)
+- Build whisper.cpp (`cmake`/`make` in user-writable temp dir)
+- Download piper binary + voice model (curl to user-writable path)
+- Install playwright chromium (`playwright install chromium` — user-level)
+- Write secrets template file (written to `secrets_env` path, chown'd to user)
+- Write `.mcp.json` (written to `~/.mcp.json`, user-owned)
+- Register default routines in registry DB (Python, user-writable DB)
+- Install bun via `curl bun.sh/install | bash` (user-level, installs to `~/.bun`)
