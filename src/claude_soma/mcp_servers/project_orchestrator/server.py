@@ -121,11 +121,22 @@ def kill_project_impl(*, name: str, archive: bool = True) -> dict:
     p = _reg().get(name)
     if not p:
         raise RuntimeError(f"no project named {name!r}")
-    # Terminate the tmux-wrapped claude session first (it's the actual running
-    # process); then mark the registry row as killed so list_active hides it.
-    # kill_session is best-effort — if the tmux session is already gone we
-    # still want to update the registry.
+    # kill_session stops the systemd unit then the tmux session (both best-effort
+    # internally). We verify post-kill liveness and retry once before accepting
+    # the result: silent subprocess swallows inside kill_session can leave the
+    # lead alive while the registry would show it as killed, hiding zombie leads.
+    # If the lead survives both kill attempts we raise instead of flipping the
+    # registry, so the caller can investigate and retry.
     kill_session(p["agent_id"])
+    if is_lead_alive(p["agent_id"]):
+        kill_session(p["agent_id"])
+        if is_lead_alive(p["agent_id"]):
+            agent_id = p["agent_id"]
+            bare = agent_id[len("soma-proj-"):] if agent_id.startswith("soma-proj-") else agent_id
+            raise RuntimeError(
+                f"kill_project: agent {agent_id!r} is still alive after two kill attempts; "
+                f"check tmux socket soma-lead-{bare} and unit claude-soma-lead-{bare}.service"
+            )
     _reg().set_status(name, "killed")
     return {"name": name, "killed_at": time.time()}
 

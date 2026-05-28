@@ -82,18 +82,38 @@ def test_spawn_project_registers_and_returns_url() -> None:
 def test_kill_project_marks_killed_and_terminates_tmux(monkeypatch) -> None:
     # side_effect is a callable so the test is independent of how many
     # capture-pane polls spawn does (here, zero, since RC_URL_POLL_SECONDS=0).
-    # kill_session runs after spawn, so the LAST call is still tmux kill-session.
+    # kill_session runs after spawn, so the LAST subprocess call is still tmux
+    # kill-session. is_lead_alive is patched to False so the post-kill
+    # verification confirms the lead is gone and the happy path completes.
     _no_url_poll(monkeypatch)
     with patch("subprocess.run", side_effect=_tmux_side_effect("")) as run_mock:
-        orch.spawn_project_impl(name="beta", type_="custom",
-                                brief="Test.", permission_mode="default")
-        r = orch.kill_project_impl(name="beta", archive=True)
+        with patch.object(orch, "is_lead_alive", return_value=False):
+            orch.spawn_project_impl(name="beta", type_="custom",
+                                    brief="Test.", permission_mode="default")
+            r = orch.kill_project_impl(name="beta", archive=True)
     assert r["killed_at"] is not None
     assert all(p["name"] != "beta" for p in orch.list_projects_impl())
     # Last subprocess.run was the kill_session: tmux kill-session -t soma-proj-beta
     last_cmd = run_mock.call_args_list[-1].args[0]
     assert "kill-session" in last_cmd
     assert "soma-proj-beta" in last_cmd
+
+
+def test_kill_project_raises_if_lead_survives_kill(monkeypatch) -> None:
+    """kill_project_impl must raise RuntimeError and NOT flip the registry to
+    'killed' when is_lead_alive returns True after both kill attempts."""
+    _no_url_poll(monkeypatch)
+    with patch("subprocess.run", side_effect=_tmux_side_effect("")):
+        orch.spawn_project_impl(name="zombie-kill", type_="custom",
+                                brief="x", permission_mode="default")
+    with patch.object(orch, "kill_session") as mock_kill:
+        with patch.object(orch, "is_lead_alive", return_value=True):
+            with pytest.raises(RuntimeError, match="still alive"):
+                orch.kill_project_impl(name="zombie-kill", archive=True)
+    # kill_session must have been called twice (initial attempt + one retry).
+    assert mock_kill.call_count == 2
+    # Registry must NOT have been flipped to "killed".
+    assert orch._reg().get("zombie-kill")["status"] == "active"
 
 
 def test_get_status_returns_idle_for(monkeypatch) -> None:
