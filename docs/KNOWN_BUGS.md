@@ -219,7 +219,7 @@ off instead of starting cold.
 
 ## 3. `kill_project` leaves the lead's tmux server + transient unit running
 
-- Status: RESOLVED — see Resolved recently (commit `238f78f`)
+- Status: RESOLVED — see Resolved recently (commits `238f78f`, `c99c743`); hardened with post-kill liveness verification + retry in `c99c743`
 - Severity: P1 - the operator believes a project is gone; it is still consuming RAM and a
   cgroup, and the name can't be re-spawned without a manual `systemctl stop`
 - Documented: 2026-05-27 (tracked since the spawner rewrite as CHECKLIST item #36)
@@ -460,6 +460,7 @@ So re-readers don't re-chase issues that are already fixed. These were live bugs
 | Was | Resolution | Evidence |
 |---|---|---|
 | `kill_project` only set registry `status='killed'`; lead's tmux server + transient unit kept running (RAM + cgroup leak, re-spawn collision) | `kill_project_impl` now calls `kill_session(agent_id)` before flipping registry status | `238f78f`; `src/claude_soma/mcp_servers/project_orchestrator/server.py` (`kill_project_impl`) |
+| `kill_project_impl` flipped registry to `killed` even when `kill_session`'s subprocess calls silently failed, leaving alive leads hidden behind a `killed` row (3 zombie leads observed 2026-05-28) | Post-kill `is_lead_alive()` verification + one retry before accepting result; raises `RuntimeError` naming agent_id + unit/socket if lead survives both attempts; registry only updated on confirmed death | `c99c743`; `src/claude_soma/mcp_servers/project_orchestrator/server.py` (`kill_project_impl`) |
 | Channel restart killed every running project-lead (shared cgroup) | Each lead now spawns in its own transient `systemd-run` unit + dedicated tmux socket (sibling cgroup) | `ae7d7be`/`346af89`; `docs/notes/2026-05-25-project-lead-cgroup-teardown.md`; test `test_orchestrator_cgroup_isolation.py` |
 | Registry reported a vanished lead as `active` forever | `_reconcile_active()` cross-checks `tmux has-session` and flips dead rows to `dead` (distinct from operator `killed`) | `a974011`; `docs/notes/2026-05-26-liveness-reconciliation.md` |
 | Dashboard rendered completely unstyled (every `/_next/static/*` 404) | `build_frontend.sh` (standalone static copy) wired into `deploy.sh` + made rebuild-safe | `7f7b729`/`9542e98`; `docs/notes/2026-05-26-dashboard-unstyled-static-assets.md` |
