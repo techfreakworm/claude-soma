@@ -99,11 +99,26 @@ Verify: `ssh oci-hermes 'uname -a && free -h && nproc'`.
 
 ### B2 — OS bootstrap on the VPS
 
+Use `scripts/vps_bootstrap.sh` — it is idempotent and handles all of the below.
+For an OCI box, pass `--cloud=oci` so the script gates the iptables-ordering step
+(Oracle's default INPUT chain ends with a REJECT that must be preceded by the new
+ACCEPT rules — inserting them after the REJECT silently breaks public access to Caddy).
+
 ```bash
 ssh oci-hermes
-# On VPS:
-sudo iptables -I INPUT 6 -m state --state NEW -p tcp --dport 80  -j ACCEPT
-sudo iptables -I INPUT 6 -m state --state NEW -p tcp --dport 443 -j ACCEPT
+# Clone the repo first (or rsync via deploy.sh), then run:
+bash /opt/claude-soma/scripts/vps_bootstrap.sh --cloud=oci
+```
+
+If bootstrapping manually instead:
+
+```bash
+ssh oci-hermes
+# On VPS — OCI-specific iptables fix (ACCEPT must precede Oracle's REJECT at pos 5):
+reject_line=$(sudo iptables -L INPUT --line-numbers -n | awk '/REJECT.*icmp-host-prohibited/ {print $1; exit}')
+for port in 443 80; do
+    sudo iptables -I INPUT "${reject_line}" -m state --state NEW -p tcp --dport "$port" -j ACCEPT
+done
 sudo netfilter-persistent save
 
 sudo apt-get update
@@ -112,8 +127,8 @@ sudo apt-get install -y build-essential git curl wget pkg-config \
     ffmpeg cmake clang tmux jq sqlite3 libsox-dev libssl-dev \
     debian-keyring debian-archive-keyring apt-transport-https
 
-# Node 20 + pnpm
-curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+# Node 22 + pnpm
+curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
 sudo apt-get install -y nodejs
 sudo npm install -g pnpm
 
@@ -149,17 +164,24 @@ claude -p 'reply with exactly the word OK' --output-format text
 
 ### B4 — Install whisper.cpp + piper on the VPS
 
+Handled by `scripts/vps_bootstrap.sh` steps 12–13.  The default STT model is
+`ggml-base.en.bin` (English-only, ~13× faster: ~9 s vs ~121 s on a 77 s note);
+this is what `voice_stt/server.py` and `.mcp.json` (`HERMES_WHISPER_MODEL`) expect.
+Pass `--with-large-whisper` (or `WHISPER_INCLUDE_LARGE=1`) to also download the
+`ggml-large-v3-turbo` model for multilingual/higher-accuracy use.
+
+If bootstrapping manually:
+
 ```bash
 ssh oci-hermes
 
-# whisper.cpp ARM build
+# whisper.cpp ARM build (cmake — the Makefile approach also works but cmake is what bootstrap uses)
 sudo install -d -o ubuntu -g ubuntu /opt
-cd /opt
-git clone https://github.com/ggml-org/whisper.cpp.git
-cd whisper.cpp && make -j4
-# base.en is the default STT model (English-only, ~13x faster -- ~9s vs ~121s on
-# a 77s note); it is what voice_stt/server.py + .mcp.json point at. Required.
-bash ./models/download-ggml-model.sh base.en
+git clone https://github.com/ggerganov/whisper.cpp.git /opt/whisper.cpp
+cmake -S /opt/whisper.cpp -B /opt/whisper.cpp/build
+cmake --build /opt/whisper.cpp/build --config Release -j$(nproc)
+# base.en is the default STT model — Required.
+cd /opt/whisper.cpp && bash ./models/download-ggml-model.sh base.en
 # Optional, higher accuracy / multilingual (set HERMES_WHISPER_MODEL to use it):
 # bash ./models/download-ggml-model.sh large-v3-turbo
 # Smoke: ./build/bin/whisper-cli -m models/ggml-base.en.bin -f samples/jfk.wav -l en -otxt -of /tmp/jfk -nt

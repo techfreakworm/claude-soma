@@ -1,0 +1,16 @@
+# logrotate config for Claude Soma log directory.
+# Installed by vps_bootstrap.sh at /etc/logrotate.d/claude-soma.
+# copytruncate is required because writers (tmux pipe-pane, uvicorn) hold
+# the file descriptor open; rename-and-reopen would leave them writing to
+# the old inode.
+/var/log/claude-soma/*.log {
+    daily
+    rotate 14
+    size 50M
+    compress
+    delaycompress
+    missingok
+    notifempty
+    copytruncate
+    create 0644 ubuntu ubuntu
+}

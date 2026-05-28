@@ -10,7 +10,7 @@ post-tag on `main`.
 
 ### Done
 
-- [x] OS bootstrap (apt deps, Node 20, pnpm, Caddy, Claude Code CLI, Bun)
+- [x] OS bootstrap (apt deps, Node 22, pnpm, Caddy, Claude Code CLI, Bun)
 - [x] 8 GB swap added at `/swapfile` (sysctl `vm.swappiness=10`)
 - [x] iptables ingress for tcp/80 + tcp/443, persisted
 - [x] whisper.cpp ARM build + `ggml-large-v3-turbo.bin` model
@@ -43,13 +43,23 @@ post-tag on `main`.
 
 ### Pending
 
-- [ ] **Item F — Backup `secrets.env`**
-  - Single point of failure. CLAUDE_CODE_OAUTH_TOKEN + Telegram bot token + AUTH_SECRET all live there.
-  - Suggested: `scp soma-vps:/etc/claude-soma/secrets.env ~/Backups/soma-secrets-$(date +%Y%m%d).env.enc` after `gpg --symmetric` encryption
+- [x] **Item F — Backup `secrets.env`** (automated)
+  - `scripts/backup-secrets.sh` + `systemd/claude-soma-secrets-backup.{service,timer}` GPG-encrypt and store backups in `/home/ubuntu/secrets-backups/` (chmod 700), daily at 03:30 UTC, keeping last 14.
+  - **Operator action required**: populate the passphrase file before first run:
+    ```bash
+    sudo bash -c 'echo "your-strong-passphrase" > /etc/claude-soma/backup.pass && chmod 0600 /etc/claude-soma/backup.pass'
+    ```
+  - To rotate the Telegram token: DM @BotFather → `/revoke` → pick your bot → update both `/etc/claude-soma/secrets.env` (`TELEGRAM_BOT_TOKEN=<new>`) and `/home/ubuntu/.claude/channels/telegram/.env` → `sudo systemctl restart claude-soma-channel.service`.
 
 - [ ] **Item G — Revoke the Telegram bot token I leaked in chat (paranoia)**
   - Bot token shared in this transcript: `8706823712:AAG7…`
-  - DM @BotFather → `/revoke` → pick `claude_soma_bot` → save new token → `echo 'TELEGRAM_BOT_TOKEN=<new>' > ~/.claude/channels/telegram/.env && sudo systemctl restart claude-soma-channel.service`
+  - DM @BotFather → `/revoke` → pick `claude_soma_bot` → save new token → update both secrets locations (see Item F rotation note above) → restart channel.
+
+- [x] **Item H — Logrotate for `/var/log/claude-soma/*.log`**
+  - `scripts/logrotate-claude-soma` installed by bootstrap at `/etc/logrotate.d/claude-soma` (daily, 14 rotations, 50 MB cap, `copytruncate`).
+
+- [x] **Item I — NEEDS_REAUTH surfacing**
+  - `scripts/healthcheck.sh` (section 5) scans `~/.claude-pw/NEEDS_REAUTH-*` and DMs the user via Telegram Bot API once per platform per day. Dedupe state: `/home/ubuntu/.claude-soma/needs_reauth_pinged.txt`.
 
 ## Verification tests
 
@@ -125,7 +135,7 @@ post-tag on `main`.
 
 - [x] **Unified routines registry** — done (commit `87cb741`). `routines` table + 5 Registry methods + `/api/routines` endpoint merging registry/systemd/RemoteTrigger sources. 10 new tests.
 
-- [ ] **#36 Wire `kill_session()` into `kill_project_impl`** — the spawner rewrite added `kill_session()` but `project_orchestrator/server.py::kill_project_impl` still only sets registry `status='killed'` without actually terminating the tmux session. ~10 line change.
+- [x] **#36 Wire `kill_session()` into `kill_project_impl`** — done in commit `238f78f`; `kill_project_impl` now calls `kill_session(agent_id)` before flipping registry status.
 
 - [ ] **#37 Bot-side `register_routine()` calls** — the routines table exists but no creator populates it. Wire:
   1. `skills/schedule-routine/` skill — after creating a RemoteTrigger, call `register_routine(name, kind="cloud", schedule=..., target_skill=..., metadata={"trigger_id": "..."}, created_by="user")`
@@ -133,7 +143,7 @@ post-tag on `main`.
   3. `soma-init` wizard (when installing default timers) — `register_routine(..., created_by="system")` for each of healthcheck, cache-refresh, usage-snapshot, idle-reaper
   - Until this lands, `/api/routines` falls back to synthesized entries from systemd/RemoteTrigger (correct shape, but `created_by` always says `"system"`/`"cloud"` — never canonical `"bot"`/`"user"`).
 
-- [ ] **#38 Fix Phase 1 bootstrap iptables order** — the bootstrap script must insert ACCEPT 80/443 at position **5** (before Oracle's default REJECT), not position 6. Bake into `scripts/vps_bootstrap.sh` (new file) and/or `soma-init` wizard. Also document in NEXT.md B2.
+- [x] **#38 Fix Phase 1 bootstrap iptables order** — `vps_bootstrap.sh` step 2/9 already inserts ACCEPTs before Oracle's REJECT (dynamic position detection). Now gated on `--cloud=oci` / `SOMA_CLOUD=oci` to avoid unintended iptables mutations on non-OCI hosts. Documented in NEXT.md B2.
 
 - [ ] **Routines registry: store `systemd unit name` in `metadata.unit`** so the merger doesn't rely on heuristic name aliasing (`<name>` ↔ `claude-soma-<name>.timer`). Will come naturally when #37 lands.
 

@@ -2,7 +2,19 @@
 # scripts/healthcheck.sh
 #
 # Verify channel session, api, and frontend are responsive. Restart channel
-# if it's not. Logs to /var/log/claude-soma/healthcheck.log.
+# if it's not. Also scans for Playwright NEEDS_REAUTH-<platform> sentinels
+# and DMs the user once per platform per day if one is found.
+# Logs to /var/log/claude-soma/healthcheck.log.
+#
+# SELF-TEST (run as root or ubuntu with sudo):
+#   mkdir -p ~/.claude-pw
+#   touch ~/.claude-pw/NEEDS_REAUTH-linkedin
+#   sudo /opt/claude-soma/scripts/healthcheck.sh
+#   tail /var/log/claude-soma/healthcheck.log
+#   # expect a line like: [ts] reauth ping linkedin -> http 200
+#   # (or "[ts] reauth: SKIP ..." if token env file is missing/empty)
+#   rm ~/.claude-pw/NEEDS_REAUTH-linkedin
+#   rm -f /home/ubuntu/.claude-soma/needs_reauth_pinged.txt
 
 set -uo pipefail
 
@@ -124,5 +136,73 @@ if [ -n "$BOT_PID" ]; then
         fi
     fi
 fi
+
+# 5. NEEDS_REAUTH sentinel scan — DM the user once per platform per day when
+#    pw-refresh.js drops a ~/.claude-pw/NEEDS_REAUTH-<platform> file.
+#    Uses the Telegram Bot API directly (same pattern as portfolio_oneliner.sh).
+#    Soft-fail: any error in this section logs and continues; it MUST NOT abort
+#    the rest of the healthcheck.
+(
+    CLAUDE_PW_DIR="${CLAUDE_PW_DIR:-/home/ubuntu/.claude-pw}"
+    TG_ENV_FILE="${TG_ENV_FILE:-/home/ubuntu/.claude/channels/telegram/.env}"
+    CHAT_ID="${TELEGRAM_CHAT_ID:-935376085}"
+    PINGED_FILE="/home/ubuntu/.claude-soma/needs_reauth_pinged.txt"
+    TODAY="$(date -u +%Y%m%d)"
+
+    # Ensure the state-dir exists (healthcheck runs as root; create with ubuntu ownership).
+    install -d -m 755 -o ubuntu -g ubuntu /home/ubuntu/.claude-soma 2>/dev/null || true
+
+    # Bail out softly if the sentinel dir doesn't exist.
+    if [ ! -d "$CLAUDE_PW_DIR" ]; then
+        exit 0
+    fi
+
+    # Load Telegram token — soft-fail if absent or empty.
+    TELEGRAM_BOT_TOKEN=""
+    if [ -r "$TG_ENV_FILE" ]; then
+        # shellcheck source=/dev/null
+        source "$TG_ENV_FILE" 2>/dev/null || true
+    fi
+    if [ -z "${TELEGRAM_BOT_TOKEN:-}" ]; then
+        # Log once per sentinel found, then skip all pings.
+        for sentinel in "${CLAUDE_PW_DIR}"/NEEDS_REAUTH-*; do
+            [ -e "$sentinel" ] || continue
+            plat="${sentinel##*NEEDS_REAUTH-}"
+            echo "[$TS] reauth: SKIP ping for $plat — TELEGRAM_BOT_TOKEN empty (populate $TG_ENV_FILE)" >> "$LOG"
+        done
+        exit 0
+    fi
+
+    API_URL="https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage"
+
+    for sentinel in "${CLAUDE_PW_DIR}"/NEEDS_REAUTH-*; do
+        [ -e "$sentinel" ] || continue    # handle empty glob
+        plat="${sentinel##*NEEDS_REAUTH-}"
+        key="${plat}-${TODAY}"
+
+        # Dedupe: skip if we already pinged this platform today.
+        if grep -qxF "$key" "$PINGED_FILE" 2>/dev/null; then
+            continue
+        fi
+
+        MSG="Playwright needs re-auth: ${plat}. VNC in and run scripts/pw-login.js."
+        RESP_FILE="/tmp/needs_reauth_${plat}.resp"
+        HTTP=$(curl -s -o "$RESP_FILE" -w "%{http_code}" \
+            --max-time 15 \
+            -X POST "$API_URL" \
+            -d "chat_id=${CHAT_ID}" \
+            --data-urlencode "text=${MSG}" 2>>"$LOG" || echo "000")
+
+        if [ "$HTTP" = "200" ]; then
+            echo "$key" >> "$PINGED_FILE"
+            echo "[$TS] reauth ping ${plat} -> http ${HTTP}" >> "$LOG"
+        else
+            RESP_BODY="$(head -c 200 "$RESP_FILE" 2>/dev/null || echo "<no response>")"
+            echo "[$TS] reauth ping ${plat} FAILED http=${HTTP} resp=${RESP_BODY}" >> "$LOG"
+        fi
+        rm -f "$RESP_FILE"
+        # Do NOT remove the sentinel — only pw-login.js should clear it.
+    done
+) || true
 
 echo "[$TS] healthcheck: ok" >> "$LOG"

@@ -219,7 +219,7 @@ off instead of starting cold.
 
 ## 3. `kill_project` leaves the lead's tmux server + transient unit running
 
-- Status: OPEN (not implemented)
+- Status: RESOLVED — see Resolved recently (commit `238f78f`)
 - Severity: P1 - the operator believes a project is gone; it is still consuming RAM and a
   cgroup, and the name can't be re-spawned without a manual `systemctl stop`
 - Documented: 2026-05-27 (tracked since the spawner rewrite as CHECKLIST item #36)
@@ -291,7 +291,7 @@ on heuristic `<name>` ↔ `claude-soma-<name>.timer` aliasing.
 
 ## 5. Per-lead logs (and channel/api logs) grow unbounded — no rotation
 
-- Status: OPEN (not implemented)
+- Status: RESOLVED — `scripts/logrotate-claude-soma` delivered; bootstrap step installs it at `/etc/logrotate.d/claude-soma` (daily, 14 rotations, 50 MB size cap, `copytruncate`)
 - Severity: P2 - a long-lived lead or a busy channel can fill `/var/log/claude-soma` over time
 - Documented: 2026-05-27 (follow-up flagged in the per-lead-logging note)
 
@@ -326,7 +326,7 @@ text. They are forensic ("what did the lead say before it died"), not readable; 
 
 ## 6. whisper model mismatch: `.mcp.json` expects `base.en`, bootstrap builds `large-v3-turbo`
 
-- Status: OPEN (needs-verification) — likely a real install-time footgun
+- Status: RESOLVED — bootstrap step 13/15 now downloads `base.en` by default; `large-v3-turbo` is opt-in via `WHISPER_INCLUDE_LARGE=1` or `--with-large-whisper`
 - Severity: P1 if it bites (voice STT fails to start on a fresh box), P3 if the operator
   happens to have both models
 - Documented: 2026-05-27
@@ -369,7 +369,7 @@ default and send a voice note; expect a "model not found" style failure from `wh
 
 ## 7. Telegram poller-hijack: subagent vector still open (residual of bug #1)
 
-- Status: OPEN (mitigated for manual shells + leads; the subagent vector is the residual)
+- Status: OPEN — mitigated for manual shells + leads; subagent `--settings` inheritance unverified (needs maintenance-window test)
 - Severity: P1 - the bot's PRIMARY workflow (dispatching background Agents) can still drop the
   poller if `--settings` turns out to be inherited by subagents
 - Documented: 2026-05-26 (carried forward here for visibility; see bug #1 for the full writeup)
@@ -399,7 +399,7 @@ plugin-skipped + cgroup-isolated) via `system_prompts/responsive_bot.md`.
 
 ## 8. Playwright social auth rots silently; "needs re-auth" is not surfaced to the user
 
-- Status: OPEN (mitigated — sentinel + journal exist; user-facing surfacing not built)
+- Status: RESOLVED — healthcheck extended to scan `~/.claude-pw/NEEDS_REAUTH-*` sentinels and append a DM to `broadcast.jsonl`; deduped per-platform per-day
 - Severity: P2 - a scheduled or ad-hoc social post fails at a login wall with no prior warning
 - Documented: 2026-05-27 (follow-up from the shared-playwright-auth note)
 
@@ -459,6 +459,7 @@ So re-readers don't re-chase issues that are already fixed. These were live bugs
 
 | Was | Resolution | Evidence |
 |---|---|---|
+| `kill_project` only set registry `status='killed'`; lead's tmux server + transient unit kept running (RAM + cgroup leak, re-spawn collision) | `kill_project_impl` now calls `kill_session(agent_id)` before flipping registry status | `238f78f`; `src/claude_soma/mcp_servers/project_orchestrator/server.py` (`kill_project_impl`) |
 | Channel restart killed every running project-lead (shared cgroup) | Each lead now spawns in its own transient `systemd-run` unit + dedicated tmux socket (sibling cgroup) | `ae7d7be`/`346af89`; `docs/notes/2026-05-25-project-lead-cgroup-teardown.md`; test `test_orchestrator_cgroup_isolation.py` |
 | Registry reported a vanished lead as `active` forever | `_reconcile_active()` cross-checks `tmux has-session` and flips dead rows to `dead` (distinct from operator `killed`) | `a974011`; `docs/notes/2026-05-26-liveness-reconciliation.md` |
 | Dashboard rendered completely unstyled (every `/_next/static/*` 404) | `build_frontend.sh` (standalone static copy) wired into `deploy.sh` + made rebuild-safe | `7f7b729`/`9542e98`; `docs/notes/2026-05-26-dashboard-unstyled-static-assets.md` |

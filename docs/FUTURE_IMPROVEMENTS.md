@@ -49,13 +49,13 @@ So the future list below isn't confused with finished work. Summarized from `git
 
 | # | Item | Theme | Effort | Why it's near the top |
 |---|---|---|---|---|
-| 1 | Wire `kill_session()` into `kill_project_impl` | Orchestration | S | Killing a project leaves the tmux/cgroup alive (registry-only `killed`). Correctness gap. |
+| 1 | ~~Wire `kill_session()` into `kill_project_impl`~~ **DONE** (`238f78f`) | Orchestration | S | Killing a project leaves the tmux/cgroup alive (registry-only `killed`). Correctness gap. |
 | 2 | Bot-side `register_routine()` calls | Observability | M | Routines table exists but nothing populates it; `created_by` never canonical. |
 | 3 | Fix Phase-1 bootstrap iptables ordering into `vps_bootstrap.sh`/wizard | Packaging | S | Known footgun: ACCEPT must precede Oracle's REJECT (pos 5, not 6). |
 | 4 | Killed-lead resume (`--session-id`/`--resume`) | Orchestration | M/L | A dead lead loses all context today. See KNOWN_BUGS #2. |
 | 5 | Demo video on landing page (replace placeholder) | Dashboard/Social | M | **IN PROGRESS** via `social-publish`. Last visible V1.5 ship-blocker. |
-| 6 | Logrotate for `/var/log/claude-soma/*.log` | Observability | S | Per-lead + channel logs grow unbounded. |
-| 7 | `NEEDS_REAUTH-<platform>` surfacing to the user | Social | S | Playwright auth silently rots; user only finds out when a post fails. |
+| 6 | ~~Logrotate for `/var/log/claude-soma/*.log`~~ **DONE** | Observability | S | Per-lead + channel logs grow unbounded. |
+| 7 | ~~`NEEDS_REAUTH-<platform>` surfacing to the user~~ **DONE** | Social | S | Playwright auth silently rots; user only finds out when a post fails. |
 
 ---
 
@@ -81,7 +81,7 @@ So the future list below isn't confused with finished work. Summarized from `git
 
 | Item | What / Why | Effort | Depends on |
 |---|---|---|---|
-| **Wire `kill_session()` into `kill_project_impl`** | Spawner has `kill_session()` (stops the unit + tmux) but `server.py::kill_project_impl` still only sets registry `status='killed'`. ~10-line change. **High priority.** | S | — |
+| ~~Wire `kill_session()` into `kill_project_impl`~~ **DONE** (`238f78f`) | Spawner has `kill_session()` (stops the unit + tmux); `kill_project_impl` now calls it. | S | — |
 | **Killed-lead resume** | Respawn a dead-but-not-retired lead with `--session-id`/`--resume` so it keeps history. Team teammates are the hard part (ephemeral; recommend v1 = lead re-dispatches). See KNOWN_BUGS #2. | M/L | liveness reconciliation (done) |
 | Team-roster persistence | Persist teammate names+briefs at dispatch so a resumed lead can re-establish its team. | M | killed-lead resume |
 | Exact teammate handles in graph | `discover_team()` is coarse (pane-derived `teammate-N`, no `@ping` handle). Have leads self-report into a registry table. | M | — |
@@ -102,7 +102,7 @@ So the future list below isn't confused with finished work. Summarized from `git
 
 | Item | What / Why | Effort | Depends on |
 |---|---|---|---|
-| `NEEDS_REAUTH` surfacing | `pw-refresh.js` drops a `~/.claude-pw/NEEDS_REAUTH-<platform>` sentinel when a session dies; today only the journal shows it. Have the healthcheck or a bot routine DM the user. | S | — |
+| ~~`NEEDS_REAUTH` surfacing~~ **DONE** (healthcheck.sh extended to DM via broadcast.jsonl, dedupe per-platform per-day) | `pw-refresh.js` drops a `~/.claude-pw/NEEDS_REAUTH-<platform>` sentinel when a session dies; today only the journal shows it. | S | — |
 | Routines-cache prewarm for posts | (shared with dashboard) keep playwright sessions warm so a scheduled post never hits a cold login wall. | S | — |
 | More platforms | Writer/poster agents exist for X (thread + Article), LinkedIn, Medium. Candidates: Bluesky, Mastodon, Threads. | M each | shared-auth pattern |
 
@@ -110,7 +110,7 @@ So the future list below isn't confused with finished work. Summarized from `git
 
 | Item | What / Why | Effort | Depends on |
 |---|---|---|---|
-| **Bootstrap iptables order fix** | Bake the position-5 insertion (before Oracle's REJECT) into `vps_bootstrap.sh` (done in script — verify) and the wizard. Document in NEXT.md B2. | S | — |
+| ~~Bootstrap iptables order fix~~ **DONE** (in `vps_bootstrap.sh` step 2/9; OCI-only gate added — pass `--cloud=oci`) | Bake the position-5 insertion (before Oracle's REJECT) into `vps_bootstrap.sh` and the wizard. Document in NEXT.md B2. | S | — |
 | Multi-platform install | The big one: make Soma installable beyond a single OCI Ubuntu ARM box. Full plan in [`MULTI_PLATFORM_INSTALL.md`](MULTI_PLATFORM_INSTALL.md). | L | dedicated doc |
 | `marketplace.json` publish test | Confirm `/plugin marketplace add techfreakworm/claude-soma` works end-to-end (V1.5 checklist item). | S | — |
 | `.claude-plugin` author-object fix carry-forward | `author` had to be an object (Zod). Ensure forks don't regress. | S | — |
@@ -122,7 +122,7 @@ So the future list below isn't confused with finished work. Summarized from `git
 |---|---|---|---|
 | **Routines registry population** | Wire `register_routine()` at three call sites: `schedule-routine` skill (cloud), bot-created local timers (`bot`), and the wizard's default timers (`system`). Until then `/api/routines` synthesizes `created_by` and never shows canonical `bot`/`user`. | M | — |
 | Store systemd unit name in routine metadata | `metadata.unit` so the merger stops relying on heuristic `<name>`↔`claude-soma-<name>.timer` aliasing. Comes naturally with the population work. | S | routines population |
-| **Logrotate** | Add a logrotate stanza for `/var/log/claude-soma/*.log` (per-lead + channel + api logs grow unbounded). | S | — |
+| ~~Logrotate~~ **DONE** (`scripts/logrotate-claude-soma` + bootstrap step) | Add a logrotate stanza for `/var/log/claude-soma/*.log` (per-lead + channel + api logs grow unbounded). | S | — |
 | Cleaner lead transcript | Per-lead logs are raw PTY bytes (TUI escape sequences). A clean transcript needs claude-side support; interim = ship an ANSI-stripper helper. | M | — |
 | Usage-snapshot validation | T11 in the checklist (first daily snapshot row) is still unverified. | S | — |
 
@@ -130,7 +130,7 @@ So the future list below isn't confused with finished work. Summarized from `git
 
 | Item | What / Why | Effort | Depends on |
 |---|---|---|---|
-| **Backup `secrets.env`** | Single point of failure: OAuth token + Telegram token + `AUTH_SECRET`. Encrypt + store off-box (checklist Item F). | S | — |
+| ~~Backup `secrets.env`~~ **DONE** (`scripts/backup-secrets.sh` + GPG symmetric encryption + daily timer) | Single point of failure: OAuth token + Telegram token + `AUTH_SECRET`. Encrypt + store off-box (checklist Item F). | S | — |
 | Rotate leaked Telegram token | A bot token was pasted in a transcript (checklist Item G). `/revoke` via BotFather + update secrets. | S | — |
 | `--dangerously-skip-permissions` blast radius | The bot runs with full tool access (no human to approve). Mitigated by the Telegram allowlist; revisit a scoped-permission mode if multi-user. | M | — |
 | Playwright cookie store hardening | `~/.claude-pw/*` holds live session cookies (chmod 600/700 today). Consider encryption at rest. | M | — |
@@ -153,9 +153,9 @@ So the future list below isn't confused with finished work. Summarized from `git
 
 ## Recommended first steps
 
-The three smallest high-value wins, all **S**, no new dependencies:
-1. Wire `kill_session()` into `kill_project_impl` (Orchestration #1).
-2. Add the logrotate stanza (Observability).
-3. Back up + rotate `secrets.env` / Telegram token (Security).
+The three smallest high-value wins (all **DONE** as of the round-2 deploy):
+1. ~~Wire `kill_session()` into `kill_project_impl` (Orchestration #1).~~ **DONE** (`238f78f`)
+2. ~~Add the logrotate stanza (Observability).~~ **DONE** (`scripts/logrotate-claude-soma`)
+3. ~~Back up + rotate `secrets.env` / Telegram token (Security).~~ **DONE** (`scripts/backup-secrets.sh` + daily timer)
 
-Then the **M** routines-population work, which unblocks accurate dashboard observability.
+Next: the **M** routines-population work, which unblocks accurate dashboard observability.
