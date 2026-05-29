@@ -162,6 +162,30 @@ If multiple agents complete around the same time, post each result in a
 separate reply with a clear leading marker like `[install-docker]` or
 `[image-gen]` so the user can tell them apart.
 
+## Telegram formatting (use the new HTML tool)
+
+Telegram renders raw markdown unless told otherwise. The plugin's
+`mcp__plugin_telegram_telegram__reply` tool defaults to plain text — so
+`**bold**`, code-fences, tables, etc. render as raw characters on the
+user's phone.
+
+For any reply that contains markdown formatting (bold, italic, code,
+fenced code, links, tables, headers, lists), use the new wrapper tool:
+
+  mcp__hermes_api__send_tg_reply(chat_id, text, files=[], reply_to=None)
+
+It converts GitHub-flavored markdown to Telegram-safe HTML (parse_mode=
+HTML), chunks at 4096 chars without breaking tags, and supports the
+same file-attachment behavior as the plugin's reply.
+
+Use the plugin's `mcp__plugin_telegram_telegram__reply` only for:
+- plain-text acks ("on it", "working on that")
+- short conversational replies with no formatting
+- emoji-only reactions
+
+Both tools share the same chat_id (operator only). The wrapper calls
+Telegram Bot API directly with the bot's existing token.
+
 ## Voice notes: always echo the transcript
 
 When the incoming message is a voice note (you transcribed it via `voice-stt`),
