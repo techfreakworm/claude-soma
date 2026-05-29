@@ -112,6 +112,7 @@ Not yet prioritized above the existing top-7; tracked here for visibility. Both 
 | Landing live-stats polish | Hero + live `/api/public/stats` exist; polish copy/screenshot for the showcase. | S | — |
 | Per-lead log viewer in admin | Surface `/var/log/claude-soma/<name>.log` (ANSI-stripped) in the admin UI for crash forensics. | M | logrotate; ANSI strip |
 | Hard-coded domain/handle cleanup | `claude.mayankgupta.in` vs `soma.mayankgupta.in` drift across `api/main.py`, `wizard/init.py`, Caddyfile, units. Centralize (ties into the install config layer). | S/M | MULTI_PLATFORM_INSTALL config layer |
+| **Admin file dropper for large uploads (>20 MB)** | User tried to send a 235 MB pptx to `ppt-manager` via Telegram; the `getFile` endpoint rejected it ("file is too big", ~20 MB cap); file had to be `scp`'d manually and copied into the lead inbox by hand — recurring pattern. Design: drag-drop zone on the per-lead admin page; files land in `/home/ubuntu/projects/<lead-name>/decks/inbox/` (or a generic watched inbox); authenticated via the existing GitHub-handle gate; multipart streaming so 200+ MB doesn't OOM the API; manifest alongside each upload (`name`, `size`, `sha256`, `uploaded_at`); optional follow-up DM ping to the user when a file lands so they can immediately brief the lead. | M | KNOWN_BUGS #10 (same incident; the dropper sidesteps the cap entirely while the bug fix stops the channel stall) |
 
 ## Social
 

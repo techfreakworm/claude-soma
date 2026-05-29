@@ -452,6 +452,66 @@ process lingers.
 
 ---
 
+## 10. Channel-claude stalls inbound messages while bot processes a large attachment
+
+- Status: OPEN — multiple hypotheses, none confirmed yet
+- Severity: P1 (medium-high) — silent channel stalls erode trust; the bot appears unresponsive while the user expects acknowledgment
+- Documented: 2026-05-29
+
+### Symptom
+
+At 21:38–21:40 UTC on 2026-05-29, the user uploaded a 235 MB pptx file via Telegram intended
+for the `ppt-manager` lead. The bot attempted `download_attachment` and received HTTP 400
+"file is too big" (the Telegram Bot API `getFile` endpoint caps at ~20 MB). The user's
+follow-up text messages sent during that window ended up marked **"Request interrupted by
+user"** — the user had to forcefully stop them because the channel was effectively
+non-responsive during the failed download attempt.
+
+### Mechanism (hypotheses — investigate)
+
+- (a) The `download_attachment` MCP call kept the channel busy or blocked the inbound queue
+  during the failed download attempt
+- (b) The `getFile` request timed out slowly and held up the bot's tool-call loop
+- (c) A retry loop on the failed download (telegram plugin / `grammy` retries) kept the bot
+  occupied
+- (d) Bot was mid-dispatch of a long Agent and the inbound poller fell behind
+
+### Investigation pointers
+
+- `/var/log/claude-soma/channel.log` around 21:38–21:40 UTC 2026-05-29 — look for
+  `download_attachment` calls, retry patterns, `getUpdates` gaps
+- The plugin source at
+  `~/.claude/plugins/cache/claude-plugins-official/telegram/0.0.6/server.ts` — search for
+  `download_attachment`, `getFile`, retry / timeout / poller-blocking behavior
+- `~/.claude-soma/activity.jsonl` around the same window — look for the gap in tool calls
+  during the stall
+
+### Proposed fixes
+
+- Short-circuit `getFile` when document size exceeds the ~20 MB cap BEFORE the round-trip
+  (the message metadata includes `file_size`; reject early with a clear error to the user
+  instead of hitting the 400)
+- Decouple the download path from the inbound poller — run downloads in a background task so
+  a stuck or slow download can't block `getUpdates`
+- Surface the 20 MB cap in the plugin docstrings and the `download_attachment` tool
+  description so the bot and user know upfront
+
+### Related
+
+`FUTURE_IMPROVEMENTS.md` (Dashboard section) tracks an admin **file-dropper** for uploads
+>20 MB — drag-drop zone on the per-lead admin page, multipart streaming, manifest, optional
+DM ping. That's the workflow path that sidesteps this bug entirely. Fixing #10 stops the
+stall; the dropper avoids the failed download altogether.
+
+### Pointers
+
+- `/var/log/claude-soma/channel.log` (the live channel log)
+- `~/.claude/plugins/cache/claude-plugins-official/telegram/0.0.6/server.ts` (search for
+  `download_attachment`, `getFile`)
+- `~/.claude-soma/activity.jsonl` (per-tool-call timing — gaps during the stall)
+
+---
+
 ## Resolved recently
 
 So re-readers don't re-chase issues that are already fixed. These were live bugs; they are
