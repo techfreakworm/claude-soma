@@ -157,6 +157,42 @@ Not yet prioritized above the existing top-7; tracked here for visibility. Both 
 |---|---|---|---|
 | (Placeholder) Trading workstream | Referenced as a V2 theme in the brief. No code or spec exists in-repo today; this is a forward-looking bucket, not committed scope. Capture a spec before any build. | L | spec first |
 
+## Grok Build integration (NEEDS REVIEW — clashes with codex-image-gen)
+
+> **STATUS: PROPOSAL — needs user review + approval before any codification.**
+
+### Surface info (live test, 2026-05-29)
+
+- **Image generation**: `grok -p "/imagine <PROMPT>" --output-format json`
+- **Video generation**: `grok -p "/imagine-video <PROMPT>" --output-format json`
+- **Auth**: OIDC via `~/.grok/auth.json` (user is `techfreakworm@gmail.com`, tier 4 — no env API key needed)
+- **Output location**: `/home/ubuntu/.grok/sessions/<url-encoded-cwd>/<session-id>/{images,videos}/<n>.{jpg,mp4}` — the path comes back in the JSON envelope `text` field as a markdown image/video link, regex-parseable
+- **Timing**: image ~20s; video ~70s for a 5s 720p 16:9 clip at default params
+- **Steerability**: duration / aspect / resolution adjustable via natural language in the prompt
+- **Tier 4** covers both image AND video; no rate-limit messages observed during today's test
+
+### Clash with `codex-image-gen`
+
+Both target image generation via a CLI hand-off pattern. `codex-image-gen` routes to the user's ChatGPT (Codex CLI) subscription; the proposed `grok-build` routes to xAI (Grok). No code change is proposed here — this section documents the clash and the trade-offs so a decision can be made.
+
+### Three viable paths (no recommendation — user decision needed)
+
+| Path | Description | Pros | Cons | Effort |
+|---|---|---|---|---|
+| (a) Keep both, route by user preference | Both skills coexist; user picks per request | No regression; lets user A/B subjective output quality | Two skills to maintain; ambiguous default when user doesn't specify | S |
+| (b) Replace `codex-image-gen` entirely with `grok-build` | Single image-gen path, Grok-only | One skill to maintain; tier 4 covers both image+video so video gets "free" | Loses Codex routing entirely; can't easily compare; if Grok output regresses there's no fallback | S |
+| (c) Wrap both under a generic `image-gen` skill | Common interface, provider arg switches backends | Cleanest abstraction; future-proofs adding more providers; consistent skill API for the bot | Most work; adds an abstraction layer that may be over-engineering until a 3rd provider lands | M |
+
+### Video (decoupled from the image-clash question)
+
+Grok Build is the **only CLI video-gen option currently surveyed** — Codex has no video subcommand, no equivalent generic CLI surfaced. Video integration via Grok is therefore largely independent of the image-clash question above. Even if path (b) is rejected for image, a `grok-video` skill (or equivalent) can ship in isolation. Worth noting: video integration could ship first, ahead of any resolution of the image-clash.
+
+### What needs user decision before any codification
+
+- (a) vs (b) vs (c) for image integration
+- Whether to ship video integration ahead of resolving the image-clash question
+- Naming convention if path (c): `image-gen` with `--provider grok|codex` arg, or separate `image-gen-grok` / `image-gen-codex` siblings?
+
 ---
 
 ## Open questions
