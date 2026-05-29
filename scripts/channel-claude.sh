@@ -36,5 +36,5 @@ exec /home/ubuntu/.local/bin/claude \
     --plugin-dir /opt/claude-soma \
     --add-dir /home/ubuntu/hermes-work \
     --dangerously-skip-permissions \
-    --effort max \
+    --effort low \
     --append-system-prompt-file /opt/claude-soma/system_prompts/responsive_bot.md
