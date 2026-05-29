@@ -11,6 +11,7 @@ import time
 from pathlib import Path
 
 from claude_soma.mcp_servers.project_orchestrator.registry import Registry
+from claude_soma.mcp_servers.project_orchestrator.spawner import is_lead_alive
 
 
 DB = os.environ.get("HERMES_ORCH_DB", "/opt/claude-soma/registry.sqlite")
@@ -40,6 +41,7 @@ def run_once(
     reg = Registry(db_path)
     now = time.time()
     hibernated = 0
+    skipped_alive = 0
     deleted = 0
     try:
         for p in reg.list_all():
@@ -50,12 +52,21 @@ def run_once(
                 continue
             idle = now - float(p["last_activity"])
             if idle > idle_hibernate_seconds:
+                # Conservative: skip hibernation if the tmux session is still alive.
+                # last_activity is only bumped by send_to_project_impl (MCP path); the
+                # bot also talks to leads via raw `tmux send-keys`, which doesn't touch
+                # the registry, so a chatty lead can look stale here while still doing
+                # work. Hibernating a live lead diverges registry from reality and
+                # hides it from the admin panel — observed 2026-05-29 02:27 UTC.
+                if is_lead_alive(p["agent_id"]):
+                    skipped_alive += 1
+                    continue
                 _archive_to(archive_root, p["name"], p["cwd"])
                 reg.set_status(p["name"], "killed")
                 hibernated += 1
     finally:
         reg.close()
-    return {"hibernated": hibernated, "deleted": deleted}
+    return {"hibernated": hibernated, "skipped_alive": skipped_alive, "deleted": deleted}
 
 
 def _archive_to(archive_root: Path, name: str, cwd: str) -> None:
@@ -72,7 +83,7 @@ def _archive_to(archive_root: Path, name: str, cwd: str) -> None:
 
 def main() -> None:
     counts = run_once()
-    print(f"reaper: hibernated={counts['hibernated']} deleted={counts['deleted']}")
+    print(f"reaper: hibernated={counts['hibernated']} skipped_alive={counts['skipped_alive']} deleted={counts['deleted']}")
 
 
 if __name__ == "__main__":
