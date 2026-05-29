@@ -42,6 +42,9 @@ So the future list below isn't confused with finished work. Summarized from `git
 | Reliability | Registry sqlite connection made thread-safe | `44e2c66` |
 | Orchestration | Project-leads given the Hugging Face MCP (docs search + Hub) | `f65527f` |
 | Channels | Channel resumes its prior session on restart via `--continue` | `c33fe5e` |
+| Orchestration | `kill_project_impl` post-kill liveness verification + one retry; raises `RuntimeError` if lead survives both attempts (prevents zombie rows masking as `killed`) | `c99c743` |
+| Orchestration | Reaper tmux-liveness check: `is_lead_alive()` prevents hibernating a lead whose `last_activity` column is stale but whose process is still running | `53f7113` |
+| Orchestration | Orchestrator gate (`scripts/orchestrator_gate.sh`): deny-list for network shell-outs and production-path file edits in Bash/Write tool calls routed through the bot | `9b26c72` |
 
 ---
 
@@ -56,6 +59,13 @@ So the future list below isn't confused with finished work. Summarized from `git
 | 5 | Demo video on landing page (replace placeholder) | Dashboard/Social | M | **IN PROGRESS** via `social-publish`. Last visible V1.5 ship-blocker. |
 | 6 | ~~Logrotate for `/var/log/claude-soma/*.log`~~ **DONE** | Observability | S | Per-lead + channel logs grow unbounded. |
 | 7 | ~~`NEEDS_REAUTH-<platform>` surfacing to the user~~ **DONE** | Social | S | Playwright auth silently rots; user only finds out when a post fails. |
+
+### Surfaced 2026-05-29 (from live T1–T5 acceptance + gate false-positive)
+
+Not yet prioritized above the existing top-7; tracked here for visibility. Both are **S**.
+
+- **SCHEDULE-ROUTINE bash-fallback** — the working one-shot Telegram reminder path (`nohup setsid bash` + Bot-API `sendMessage`) is tribal knowledge; codifying it in the skill prevents reinvention. `RemoteTrigger` v2 is stale per memory (HTTP 400). Validated T4, 2026-05-29. See Orchestration section.
+- **Orchestrator gate false positives** — `9b26c72` gate flags heredoc bodies that *mention* network tools (not invoke them) and `/tmp` writes. A few hours of heuristic tightening eliminates daily false-positive friction. Validated by two live bot denials, 2026-05-29. See Orchestration section.
 
 ---
 
@@ -87,6 +97,11 @@ So the future list below isn't confused with finished work. Summarized from `git
 | Exact teammate handles in graph | `discover_team()` is coarse (pane-derived `teammate-N`, no `@ping` handle). Have leads self-report into a registry table. | M | — |
 | Reaper ↔ resume integration | `scripts/reaper.py` hibernates idle leads at 24 h / hard-deletes at 7 d; integrate with resume so hibernated leads can wake with state. | M | killed-lead resume |
 | Concurrency-cap tuning | `HERMES_MAX_CONCURRENT_PROJECTS=6` is a static guess; make it memory-aware. | S | — |
+| **Concurrency-cap accounting (defensive)** | Intersect the active-row count with actual tmux liveness (`is_lead_alive`) before checking against the cap, so a stale registry row above the cap doesn't permanently block new spawns. With `c99c743` + reaper fix `53f7113` drift should be rare; this is belt-and-suspenders. Low priority. | S | `c99c743`, `53f7113` |
+| **`last_activity` column not bumped by tmux send-keys** | `last_activity` is only updated at spawn time and by `send_to_project_impl` (the MCP path). Raw `tmux send-keys` (the bot's canonical chat path) never touches it, so leads appear idle even when the bot has been actively talking to them — misleading for the daily-status digest and admin "idle for X" labels. Add a tiny hook to update the column on each tmux send-keys message routed. Validated today, 2026-05-29 (T3): `t1-spawn-test` `last_activity` stayed at spawn timestamp despite a successfully delivered + answered message. | S | — |
+| **`kill_project` archive logs nothing for no-memory leads** | `archive=True` silently skips when the lead has no `.claude/` memory dir (e.g., throwaway test leads). Log "nothing to archive" so a caller can distinguish "archived" from "skipped silently." Trivial. | S | — |
+| **Codify the SCHEDULE-ROUTINE bash-fallback pattern** | The working one-shot Telegram reminder path — `nohup setsid bash` + `sleep` + sourcing the bot token from `~/.claude/channels/telegram/.env` + a Bot-API `sendMessage` — is tribal knowledge. Wrap it into the `schedule-routine` skill / `hermes-api` MCP so it is discoverable and not reinvented per session. `RemoteTrigger` v2 is stale per memory (HTTP 400 on the `{name, cron, prompt}` body shape). Validated today, 2026-05-29 (T4 acceptance: fired on schedule, exit 0). | S | — |
+| **Orchestrator gate false positives (heuristic tightening)** | Follow-up to `9b26c72`. Two false-positive patterns hit today: (a) a Bash heredoc whose body *describes* network tools was flagged as a network shell-out; (b) a `Write` call to `/tmp` was denied. Fixes: (a) match on the first non-pipeline token of the Bash command (the actual invocation), not `grep -qE` over the full command string including quoted bodies; (b) scope the Write deny to production paths (`/opt/claude-soma/` and similar), allowing `/tmp` scratch writes. Cross-reference `scripts/orchestrator_gate.sh`. | S | `9b26c72` |
 
 ## Dashboard
 
@@ -115,6 +130,7 @@ So the future list below isn't confused with finished work. Summarized from `git
 | `marketplace.json` publish test | Confirm `/plugin marketplace add techfreakworm/claude-soma` works end-to-end (V1.5 checklist item). | S | — |
 | `.claude-plugin` author-object fix carry-forward | `author` had to be an object (Zod). Ensure forks don't regress. | S | — |
 | Forking guide automation | README "Forking" section is a manual find-replace list; the install wizard could template these. | M | config layer |
+| **`.mcp.json` env vs `secrets.env` single source of truth** | `HERMES_MAX_CONCURRENT_PROJECTS` (and similar tunables) defined in `.mcp.json`'s `env` block silently override `secrets.env` because the MCP server's process env is set before `secrets.env` is sourced. This cost a debugging cycle today when a bot edit to `secrets.env` had no effect. Recommended fix: drop the tunable from the `.mcp.json` env block entirely and rely on the server's `int(os.environ.get(..., "6"))` default for fresh installs; operators set overrides only in `secrets.env`. Option (b) — template `.mcp.json` from `secrets.env` — is heavier and less necessary. | S | — |
 
 ## Observability
 
