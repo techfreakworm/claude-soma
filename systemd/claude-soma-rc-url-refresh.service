@@ -1,0 +1,12 @@
+# systemd/claude-soma-rc-url-refresh.service
+[Unit]
+Description=Claude Soma RC URL refresh (parse /remote-control menu, update registry)
+
+[Service]
+Type=oneshot
+User=ubuntu
+WorkingDirectory=/opt/claude-soma
+Environment=PATH=/opt/claude-soma/.venv/bin:/usr/local/bin:/usr/bin:/bin
+Environment=HERMES_ORCH_DB=/opt/claude-soma/registry.sqlite
+ExecStart=/opt/claude-soma/.venv/bin/python /opt/claude-soma/scripts/rc_url_refresh.py
+TimeoutStartSec=300

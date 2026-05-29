@@ -302,6 +302,13 @@ def _build_wizard_services(paths: Paths) -> list[tuple[str, str]]:
             env={}, work_dir=code_root, restart_policy="no", type_="oneshot",
             user=user, group=user, env_file=env_file,
         ),
+        Service(
+            name="claude-soma-rc-url-refresh",
+            description="Claude Soma RC URL refresh (parse /remote-control menu, update registry)",
+            exec_argv=[f"{venv_bin}/python", f"{code_root}/scripts/rc_url_refresh.py"],
+            env={}, work_dir=code_root, restart_policy="no", type_="oneshot",
+            user=user, group=user, env_file=env_file,
+        ),
     ]
 
     timers = [
@@ -309,6 +316,7 @@ def _build_wizard_services(paths: Paths) -> list[tuple[str, str]]:
         ("claude-soma-cache-refresh", "*:0/5"),
         ("claude-soma-usage-snapshot", "*-*-* 23:55:00"),
         ("claude-soma-idle-reaper",   "0/6:00:00"),
+        ("claude-soma-rc-url-refresh", "*-*-* 04:00:00 UTC"),
     ]
 
     units: list[tuple[str, str]] = []
@@ -425,6 +433,7 @@ def run() -> int:
         "claude-soma-cache-refresh.timer",
         "claude-soma-usage-snapshot.timer",
         "claude-soma-idle-reaper.timer",
+        "claude-soma-rc-url-refresh.timer",
     ])
 
     # Write rendered .mcp.json to ~/.mcp.json

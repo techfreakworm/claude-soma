@@ -346,6 +346,22 @@ if [ ! -f "$PASS_FILE" ]; then
     echo "  sudo bash -c 'echo \"your-passphrase\" > $PASS_FILE && chmod 0600 $PASS_FILE'"
 fi
 
+step "14d/15  rc-url-refresh timer"
+# Install the oneshot service + daily timer for RC URL refresh.
+for unit in claude-soma-rc-url-refresh.service claude-soma-rc-url-refresh.timer; do
+    if [ -f "${SYSTEMD_SRC_DIR}/${unit}" ]; then
+        sudo install -m 0644 -o root -g root "${SYSTEMD_SRC_DIR}/${unit}" "/etc/systemd/system/${unit}"
+        echo "installed /etc/systemd/system/${unit}"
+    else
+        echo "WARN: ${unit} not found in ${SYSTEMD_SRC_DIR}; skipping" >&2
+    fi
+done
+if [ -f /etc/systemd/system/claude-soma-rc-url-refresh.timer ]; then
+    sudo systemctl daemon-reload
+    sudo systemctl enable --now claude-soma-rc-url-refresh.timer
+    echo "claude-soma-rc-url-refresh.timer enabled"
+fi
+
 step "15/15  DONE  Next steps"
 cat <<'NEXT'
 1. claude auth login   # one-time browser OAuth for interactive --channels

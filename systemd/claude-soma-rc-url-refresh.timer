@@ -1,0 +1,11 @@
+# systemd/claude-soma-rc-url-refresh.timer
+[Unit]
+Description=Refresh RC URLs daily at 04:00 UTC (before the 04:30 daily-status digest)
+
+[Timer]
+OnCalendar=*-*-* 04:00:00 UTC
+Persistent=true
+Unit=claude-soma-rc-url-refresh.service
+
+[Install]
+WantedBy=timers.target
