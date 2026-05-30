@@ -60,12 +60,13 @@ So the future list below isn't confused with finished work. Summarized from `git
 | 6 | ~~Logrotate for `/var/log/claude-soma/*.log`~~ **DONE** | Observability | S | Per-lead + channel logs grow unbounded. |
 | 7 | ~~`NEEDS_REAUTH-<platform>` surfacing to the user~~ **DONE** | Social | S | Playwright auth silently rots; user only finds out when a post fails. |
 
-### Surfaced 2026-05-29 (from live T1–T5 acceptance + gate false-positive)
+### Surfaced 2026-05-29 / 2026-05-30
 
-Not yet prioritized above the existing top-7; tracked here for visibility. Both are **S**.
+Not yet prioritized above the existing top-7; tracked here for visibility. The first two are **S**; the lead notify channel is **High** priority, **M** effort.
 
 - **SCHEDULE-ROUTINE bash-fallback** — the working one-shot Telegram reminder path (`nohup setsid bash` + Bot-API `sendMessage`) is tribal knowledge; codifying it in the skill prevents reinvention. `RemoteTrigger` v2 is stale per memory (HTTP 400). Validated T4, 2026-05-29. See Orchestration section.
 - **Orchestrator gate false positives** — `9b26c72` gate flags heredoc bodies that *mention* network tools (not invoke them) and `/tmp` writes. A few hours of heuristic tightening eliminates daily false-positive friction. Validated by two live bot denials, 2026-05-29. See Orchestration section.
+- **Lead → orchestrator notify channel** (**High**) — single biggest UX friction in the current system; every other lead interaction is gated on user-side polling. Leads have no way to push a completion event back to the bot — the bot must `capture-pane` each lead on every `Status?` ping. Full mechanism survey + recommendation (localhost HTTP API + SQLite spool) in the Orchestration section below. Surfaced 2026-05-30.
 
 ---
 
@@ -102,6 +103,59 @@ Not yet prioritized above the existing top-7; tracked here for visibility. Both 
 | **`kill_project` archive logs nothing for no-memory leads** | `archive=True` silently skips when the lead has no `.claude/` memory dir (e.g., throwaway test leads). Log "nothing to archive" so a caller can distinguish "archived" from "skipped silently." Trivial. | S | — |
 | **Codify the SCHEDULE-ROUTINE bash-fallback pattern** | The working one-shot Telegram reminder path — `nohup setsid bash` + `sleep` + sourcing the bot token from `~/.claude/channels/telegram/.env` + a Bot-API `sendMessage` — is tribal knowledge. Wrap it into the `schedule-routine` skill / `hermes-api` MCP so it is discoverable and not reinvented per session. `RemoteTrigger` v2 is stale per memory (HTTP 400 on the `{name, cron, prompt}` body shape). Validated today, 2026-05-29 (T4 acceptance: fired on schedule, exit 0). | S | — |
 | **Orchestrator gate false positives (heuristic tightening)** | Follow-up to `9b26c72`. Two false-positive patterns hit today: (a) a Bash heredoc whose body *describes* network tools was flagged as a network shell-out; (b) a `Write` call to `/tmp` was denied. Fixes: (a) match on the first non-pipeline token of the Bash command (the actual invocation), not `grep -qE` over the full command string including quoted bodies; (b) scope the Write deny to production paths (`/opt/claude-soma/` and similar), allowing `/tmp` scratch writes. Cross-reference `scripts/orchestrator_gate.sh`. | S | `9b26c72` |
+
+### Lead → orchestrator notify channel
+
+**Priority: High. Effort: M.**
+
+#### Problem
+
+Leads currently have no way to push a completion notification back to the orchestrator (the bot). The only signaling direction today is bot→lead via `tmux send-keys`. The reverse does not exist because leads cannot be given Telegram MCP access — only one process can poll `getUpdates` per bot token; a lead claiming the poller crashes the channel.
+
+Result: the user must keep pinging the bot with `Status?` on every lead. The bot must `capture-pane` every time to learn what each lead has done. Friction is real — observed roughly eight times on 2026-05-30 alone.
+
+Design goal: a one-way lead→orchestrator notification channel that does NOT require Telegram MCP on the lead.
+
+#### Mechanism survey
+
+Four candidate mechanisms scored against six criteria:
+
+| Criterion | (1) inotify / systemd .path | (2) SQLite event table | (3) Localhost HTTP API | (4) Named pipe (FIFO) |
+|---|---|---|---|---|
+| **Durability across restarts** | Good — events persist on disk; the .path unit must be a sibling cgroup, not inside the channel's cgroup, or it dies on channel restart too | Excellent — unread rows survive indefinitely; bot drains on startup | Poor — a POST while the server is down is silently lost unless the caller adds retry | Very poor — a write blocks until the reader is present; events are gone if the reader is not up |
+| **Latency** | Good — inotify is instant but systemd .service activation adds ~1–2 s | Fair — bounded by the poll interval (configurable; 5 s is reasonable) | Excellent — POST round-trip is <1 s; `_tg_post_json` adds another ~300 ms | Excellent — in-kernel pipe read is microseconds, BUT only while the reader is alive |
+| **Ordering guarantees** | Fair — per-lead ordering is preserved; rapid cross-lead events may be coalesced by systemd | Excellent — autoincrement rowid gives strict insertion order across all leads | Good — concurrent POSTs from multiple leads can interleave at the socket layer; ordering within a single lead is preserved | Fair — atomic up to `PIPE_BUF` (4 096 B on Linux); larger payloads from concurrent leads interleave |
+| **Fault isolation** | Excellent — each lead writes its own file; one lead's file does not block another's | Excellent — a crashed INSERT rolls back cleanly (WAL mode); one lead spamming events does not stall others | Good — stateless POST handler; slow leads queue at the socket but do not block each other (asyncio server) | Fair — a stalled reader stalls all writers after the pipe buffer fills; reader is a single point of failure |
+| **Discoverability** | Good — convention-based path `/tmp/lead-events/<name>/event.txt`; orchestrator injects it at spawn or leads construct from their own name | Excellent — registry.sqlite is already a well-known path; leads could reuse the same DB file with a new table | Good — port must be known; trivially solved with `HERMES_NOTIFY_PORT` env var injected at spawn time | Excellent — fixed path `/tmp/lead-bus.fifo`; nothing to discover |
+| **Schema-friendliness** | Excellent — file content is arbitrary JSON | Excellent — structured columns + JSON blob; queryable by type and lead name | Excellent — POST body is arbitrary JSON; handler validates and routes by `type` field | Excellent — newline-delimited JSON lines; requires payloads under `PIPE_BUF` to avoid interleaving |
+
+**Named pipes** are eliminated: durability is fatally absent and the reader being a single point of failure violates fault-isolation.
+
+**inotify alone** is viable but operationally fragile: a second independent systemd unit (the .path unit) is required to survive channel restarts; systemd event coalescing may swallow rapid back-to-back events from the same lead; the 1–2 s activation latency is the worst of the durable options.
+
+**SQLite alone** has excellent durability and ordering but poll-bound latency. For a user waiting on a "completed" DM in real time, N-second polling lag is observable friction.
+
+**Localhost HTTP API + SQLite spool** captures the best of both: sub-second delivery when the bot is up, zero event loss when it is not.
+
+#### Recommendation
+
+**Primary: localhost HTTP API (`POST http://127.0.0.1:${HERMES_NOTIFY_PORT}/notify`). Durability fallback: SQLite event spool (new `lead_events` table in `/opt/claude-soma/registry.sqlite`).**
+
+Every lead call writes the event to `lead_events` first (guaranteed persistence regardless of server state), then POSTs to the HTTP endpoint for immediate delivery; on bot restart, hermes_api drains any undelivered rows. This is the only combination that is both sub-second in the normal case and lossless across restarts — the two properties that directly address the user's friction. Named pipes and inotify both fail on durability or require an additional fragile systemd unit; SQLite alone accepts up to N seconds of delivery lag.
+
+**On the MCP tool wrapper hint:** Yes, this fits the recommended mechanism exactly. A small `hermes-notify` MCP server — a single `notify_orchestrator(type, name, payload)` tool — can be added to `lead-mcp.json`. Its only capability is writing to `lead_events` and POSTing to the notify endpoint; it has no spawn, kill, or registry read access. Because the control-plane servers (`hermes-api`, `project-orchestrator`) remain excluded from lead scope per the existing `LEAD_MCP_CONFIG_DEFAULT`, adding a read-only notify shim does not expand leads' blast radius. Leads call the tool by name; the implementation detail (HTTP vs SQLite) is fully encapsulated server-side.
+
+#### Event schema
+
+The bot routes events differently in the user's DM depending on the `type` field. All events are stored in the `lead_events` table with a server-side `id` (autoincrement) and `delivered_at` timestamp added on insert; leads do not need to supply these.
+
+| Type | Required fields | Optional fields | Bot's DM treatment |
+|---|---|---|---|
+| `STARTED` | `name` (lead name), `description` (what it is doing) | `eta` (human-readable estimate) | One-line DM: "`<name>` started: `<description>`" |
+| `MILESTONE` | `name`, `progress` (human-readable description of progress) | `percent` (0–100 integer), `eta_remaining` (human-readable) | Progress nudge DM; throttled to at most one per lead per 5 minutes to prevent spam |
+| `COMPLETED` | `name`, `summary` (what was done and what was produced) | `paths[]` (absolute local file paths to deliverables), `urls[]` (links — GitHub, deployed pages, etc.) | Celebratory DM; if `paths[]` is non-empty, files are attached via the existing `send_tg_reply` multipart path |
+| `NEEDS_INPUT` | `name`, `question` (the question the lead is blocked on) | `options[]` (candidate answers for a multiple-choice prompt), `timeout` (seconds before the lead proceeds with a default or aborts) | DM the question to the user; the user's next reply is routed back to the lead via `tmux send-keys`; the bot must maintain a `pending_input_for_lead` map to correlate the reply correctly |
+| `ERROR` | `name`, `error` (error message), `context` (what the lead was attempting when the error occurred) | `traceback` (full stack trace), `recoverable` (bool — `true` if the lead is retrying, `false` if it has stopped) | DM with severity-tagged HTML formatting (bold lead name + `ERROR` label); `recoverable: false` triggers an additional "lead has stopped — manual intervention may be needed" suffix |
 
 ## Dashboard
 
