@@ -67,6 +67,7 @@ Not yet prioritized above the existing top-7; tracked here for visibility. The f
 - **SCHEDULE-ROUTINE bash-fallback** — the working one-shot Telegram reminder path (`nohup setsid bash` + Bot-API `sendMessage`) is tribal knowledge; codifying it in the skill prevents reinvention. `RemoteTrigger` v2 is stale per memory (HTTP 400). Validated T4, 2026-05-29. See Orchestration section.
 - **Orchestrator gate false positives** — `9b26c72` gate flags heredoc bodies that *mention* network tools (not invoke them) and `/tmp` writes. A few hours of heuristic tightening eliminates daily false-positive friction. Validated by two live bot denials, 2026-05-29. See Orchestration section.
 - **Lead → orchestrator notify channel** (**High**) — single biggest UX friction in the current system; every other lead interaction is gated on user-side polling. Leads have no way to push a completion event back to the bot — the bot must `capture-pane` each lead on every `Status?` ping. Full mechanism survey + recommendation (localhost HTTP API + SQLite spool) in the Orchestration section below. Surfaced 2026-05-30.
+- **Caddy-via-own-domain file relay** (**Medium-High**) — ngrok bandwidth pain hit during 235 MB pptx demo relay, 2026-05-30; replaces markserv+ngrok with a Caddy-routed `/files/` path on the user's own domain. Full design + recommendation in the Social section below.
 
 ---
 
@@ -175,6 +176,207 @@ The bot routes events differently in the user's DM depending on the `type` field
 | ~~`NEEDS_REAUTH` surfacing~~ **DONE** (healthcheck.sh extended to DM via broadcast.jsonl, dedupe per-platform per-day) | `pw-refresh.js` drops a `~/.claude-pw/NEEDS_REAUTH-<platform>` sentinel when a session dies; today only the journal shows it. | S | — |
 | Routines-cache prewarm for posts | (shared with dashboard) keep playwright sessions warm so a scheduled post never hits a cold login wall. | S | — |
 | More platforms | Writer/poster agents exist for X (thread + Article), LinkedIn, Medium. Candidates: Bluesky, Mastodon, Threads. | M each | shared-auth pattern |
+
+### Caddy-via-own-domain file relay (replace markserv+ngrok)
+
+**Priority: Medium-High. Effort: M.**
+
+#### Problem
+
+The system currently uses `ngrok` for ad-hoc file relay: the `social-publish` pipeline and
+similar workflows serve large files (images, pptx decks, video clips) via `markserv + ngrok`
+(`https://51b26900ecba.ngrok.app/` and similar). This works but has real operational costs:
+ngrok's free tier has bandwidth ceilings, adds a hop through Cloudflare's infrastructure, and
+presents a "Visit Site" interstitial to unauthenticated browsers that breaks automated ingestion
+flows (Medium's import, image embeds, external viewers).
+
+**Today's incident (2026-05-30)**: hit ngrok bandwidth pain while relaying a 235 MB pptx for the
+demo. This is the same 235 MB pptx incident referenced in `KNOWN_BUGS #10` and the Dashboard
+`file-dropper` row, but it surfaces a different problem direction: those cover uploads TO leads;
+this surfaces a problem with serving artifacts FROM the system to external viewers, Medium, and
+similar consumers.
+
+Since Claude Soma already runs Caddy with the user's own domain (`claude.mayankgupta.in`), the
+system should leverage that for file relay instead: faster, no third-party bandwidth limits, no
+ngrok interstitial, and the user is already paying for the domain and VPS bandwidth.
+
+#### Design goal
+
+A dedicated path (`claude.mayankgupta.in/files/`) that Caddy routes to a shared persistent
+relay directory (`/var/lib/claude-soma/relay/`). Files placed there by a `soma-relay` helper are
+instantly accessible at a stable HTTPS URL on the user's own domain.
+
+#### Considerations
+
+**1. Authentication**
+
+The admin panel is auth-gated via the GitHub OAuth handle `techfreakworm`. Two viable mechanisms
+for file relay:
+
+*Option A — Caddy `forward_auth` to the existing Next.js API.* Each inbound file request is
+forwarded to a Next.js `/api/auth/check` endpoint. If that endpoint returns 2xx (valid session
+cookie), Caddy proxies the file. If it returns 4xx, Caddy returns 403. This reuses the existing
+GitHub OAuth session cookie with no new credentials to manage. The session cookie is scoped to
+`claude.mayankgupta.in`; because the relay path is on the same origin (see endpoint shape below),
+the cookie is present on every request without any NextAuth.js cookie-domain changes.
+
+*Option B — Caddy `basicauth`.* A separate htpasswd credential in the Caddyfile. Simpler
+Caddyfile config, no dependency on the Next.js app being up. But introduces a second identity
+concept (username/password) alongside the existing GitHub OAuth gate, adds a credential to
+rotate and manage, and breaks single sign-on behavior (the user must re-authenticate for files
+even though they are already logged into the dashboard).
+
+**Recommendation: `forward_auth` to Next.js (Option A).** It reuses the existing identity
+system. The only requirement is a thin `/api/auth/check` route in the Next.js app that reads the
+session cookie and returns 200 or 401 — a few-line addition. Option B's separate credential
+makes the system harder to reason about and introduces a second auth surface to leak or forget.
+
+**The Medium-public-asset wrinkle.** If a published Medium article links to
+`claude.mayankgupta.in/files/hero.png`, Medium's embed flow makes an unauthenticated GET.
+An auth-gated response returns 401, Medium does not render the image. Resolution: a two-tier
+namespace.
+
+- `/files/<lead-name>/...` — private, auth-gated via `forward_auth`. For internal artifacts,
+  admin review, and files delivered to leads.
+- `/files/pub/<uuid>/...` — unauthenticated, no auth directive. The random UUID slug is the
+  access credential (equivalent to a Dropbox share link). The `soma-relay` helper generates
+  the UUID token at publish time and symlinks or copies the file into the pub sub-directory.
+  The social-publish pipeline uses this path when it produces images or assets that need to
+  be embedded in public posts. The public namespace is opt-in; the default for all files is
+  private.
+
+**2. HTTPS**
+
+No action needed beyond what is already in place. Caddy's ACME (Let's Encrypt) integration is
+live for `claude.mayankgupta.in`. The path-suffix approach (see below) means the relay path is
+served under the existing cert; no new cert request or SAN expansion is required.
+
+**3. TLS cert SAN expansion (subdomain trade-off)**
+
+The endpoint shape choice determines the cert story.
+
+*Subdomain route (`files.claude.mayankgupta.in`)*: a new DNS A record and a new Caddy site
+block are required. Caddy auto-issues the cert on first HTTPS request once DNS propagates — a
+one-time operational step. The subdomain has its own cookie scope, which is a problem here:
+the session cookie set by the Next.js app is scoped to `claude.mayankgupta.in`, not to
+`files.claude.mayankgupta.in`. The browser will not send it on requests to the subdomain, so
+`forward_auth` sees no cookie and the check fails. Mitigation — set the cookie on the parent
+domain `.mayankgupta.in` — requires a NextAuth.js config change that has broader scope and
+audit implications.
+
+*Path-suffix route (`claude.mayankgupta.in/files/`)*: one additional `handle /files/*` block
+inside the existing Caddy site. No DNS change. No new cert. The existing session cookie is
+present on every `/files/` request (same origin). `forward_auth` works without any NextAuth.js
+changes.
+
+**Recommendation: path-suffix.** The cookie-scope issue with the subdomain route makes
+`forward_auth` structurally awkward without a cross-cutting NextAuth.js change. Path-suffix is
+strictly simpler, requires no DNS changes or cert expansion, and produces clean URLs that are
+consistent with the rest of the admin surface (`claude.mayankgupta.in/admin`,
+`claude.mayankgupta.in/api`, `claude.mayankgupta.in/files`).
+
+**4. Graceful fallback**
+
+If `SOMA_RELAY_DOMAIN` is not set, the domain is misconfigured, DNS is not pointing to the VPS,
+or the cert has lapsed, file relay must not fail silently. The fallback logic lives entirely in
+the `soma-relay` helper, not in the application code. The application calls `soma-relay <file>`
+and receives a URL; it does not know which backing mechanism was used.
+
+Fallback decision tree in `soma-relay`:
+1. If `SOMA_RELAY_DOMAIN` is set: optionally verify reachability (`SOMA_RELAY_HEALTH_CHECK=1`
+   issues a HEAD request to `https://${SOMA_RELAY_DOMAIN}/files/health`; default off to avoid
+   latency on every relay call). If reachable (or health check is off): use the Caddy path.
+2. If `SOMA_RELAY_DOMAIN` is unset, or the health check fails: fall back to the existing
+   `markserv + ngrok` pattern transparently. The caller receives an ngrok URL exactly as today.
+
+This means the ngrok fallback is always available as a safety net. The Caddy path activates only
+when explicitly configured.
+
+**5. Migration**
+
+The current `markserv + ngrok` pattern stays as the fallback path and requires no changes.
+Migration is gated entirely on adding the env knob and the Caddyfile snippet.
+
+Env knobs (added to `/etc/claude-soma/secrets.env`):
+
+| Knob | Default | Meaning |
+|---|---|---|
+| `SOMA_RELAY_DOMAIN` | _(absent)_ | When set (e.g. `claude.mayankgupta.in`), enables the Caddy relay path. Absent = ngrok fallback. |
+| `SOMA_RELAY_DIR` | `/var/lib/claude-soma/relay/` | Directory Caddy serves files from. Persistent (survives reboots). Created by the install wizard. |
+| `SOMA_RELAY_HEALTH_CHECK` | `0` | Set to `1` to issue a HEAD check before selecting the Caddy path. Useful during initial setup; leave off in production. |
+| `SOMA_RELAY_PUB_SUBPATH` | `pub` | Sub-path for unauthenticated public files (default: `/files/pub/<uuid>/...`). |
+
+Migration steps:
+1. Implement `scripts/soma-relay` (wraps both paths; default behavior without `SOMA_RELAY_DOMAIN`
+   is identical to the current ngrok flow — zero regression on fresh installs or misconfigured
+   setups).
+2. Update `social-publish` and any other pipeline that calls ngrok directly to call
+   `soma-relay` instead.
+3. Operator adds `SOMA_RELAY_DOMAIN=claude.mayankgupta.in` to `secrets.env` and adds the
+   `handle /files/*` + `handle /files/pub/*` blocks to the Caddyfile.
+4. Install wizard (MULTI_PLATFORM_INSTALL Phase 1 or Phase 2): plant the Caddyfile snippet and
+   create `SOMA_RELAY_DIR` automatically when the domain is configured.
+
+**6. Per-lead isolation**
+
+Files from different leads risk filename collisions (`output.pdf`, `diagram.png` are both common
+default names). Cleanup after retiring a lead is also easier with a per-lead directory.
+
+**Recommendation: yes.** Default directory structure: `/var/lib/claude-soma/relay/<lead-name>/`.
+The lead name is already in the environment for every spawned lead (`HERMES_PROJECT_NAME` or the
+tmux session name injected at spawn). `soma-relay` reads the lead name from env and places files
+in the corresponding sub-directory. Public artifacts: `/var/lib/claude-soma/relay/pub/<uuid>/`
+(the UUID token is the namespace; lead name is optional in the file metadata, not the path).
+
+#### Recommended design
+
+- **Auth**: Caddy `forward_auth` to `https://claude.mayankgupta.in/api/auth/check` (Next.js
+  session cookie, GitHub OAuth gate). Private by default. Public opt-in via tokenized
+  `/files/pub/<uuid>/...` sub-path (no auth directive; UUID slug is the credential).
+- **Endpoint**: path-suffix `claude.mayankgupta.in/files/` (not a subdomain). Same origin as
+  the dashboard; existing cert and session cookie cover it; no DNS change required.
+- **HTTPS**: existing Caddy ACME cert covers the path. No action.
+- **Fallback**: `soma-relay` helper selects the Caddy path when `SOMA_RELAY_DOMAIN` is set and
+  reachable; falls back transparently to `markserv + ngrok` otherwise. Application code is
+  decoupled from the backing mechanism.
+- **Migration**: gated on `SOMA_RELAY_DOMAIN` env knob in `secrets.env` + one Caddyfile block.
+  ngrok stays as fallback permanently; no forced cutover.
+- **Per-lead isolation**: yes. Files land under `/var/lib/claude-soma/relay/<lead-name>/`;
+  public files under `/var/lib/claude-soma/relay/pub/<uuid>/`.
+
+#### Cross-references
+
+- **`KNOWN_BUGS #10`** — same 235 MB pptx incident, opposite direction. Bug #10 covers the
+  channel stall when the Telegram bot tried (and failed) to download the file (upload TO the
+  system via Telegram). This section covers serving artifacts FROM the system to external
+  consumers (Medium, demo viewers). Two different problems triggered by the same physical file.
+- **Dashboard `Admin file dropper` row** — the upload-direction counterpart. The file-dropper
+  handles getting large files INTO leads' inboxes (drag-drop on the admin page, multipart
+  streaming, authenticated via the existing GitHub gate). The relay handles getting files OUT.
+  Together they form a complete large-file workflow.
+- **Dashboard `Hard-coded domain/handle cleanup` row** — `SOMA_RELAY_DOMAIN` must be the SAME
+  config knob as the dashboard's domain setting. Both `wizard/init.py`
+  (`render_caddyfile(domain, ...)`) and `api/main.py` (hard-coded `claude.mayankgupta.in` in the
+  CORS origin list at line 13) need to converge on a single `SOMA_DOMAIN` or `SOMA_RELAY_DOMAIN`
+  value from `secrets.env`. The relay naming can follow that cleanup rather than inventing a
+  separate knob.
+- **`MULTI_PLATFORM_INSTALL.md` Phase 1 / Phase 2** — the install wizard's
+  `render_caddyfile()` step (`wizard/init.py:70`) is the natural place to plant the
+  `/files/*` and `/files/pub/*` Caddyfile blocks when a public domain is configured. Phase 2
+  (service-manager adapter + path abstraction) is also the right place to create
+  `SOMA_RELAY_DIR` with correct ownership.
+
+#### Out of scope
+
+- **`markserv` removal** — stays as the fallback path; removing it is a separate decision once
+  the Caddy relay is validated in production.
+- **Caddyfile edits in this doc commit** — this section is a forward-looking design spec. Actual
+  Caddyfile changes happen in the implementation commit (no Caddyfile edits here).
+- **Public-namespace mechanism for Medium-linked assets** — flagged above (tokenized `pub`
+  sub-path) as the recommended approach, but the exact implementation (UUID generation, symlink
+  vs copy, TTL for public tokens) is a separate decision at implementation time.
+- **`soma-relay` script creation** — no script shipped in this commit; the spec is here for the
+  implementer.
 
 ## Packaging / Install
 
