@@ -420,6 +420,42 @@ def test_resume_project_uses_resume_flag(monkeypatch) -> None:
     assert orch._reg().get_session_uuid("resume-proj") == original_uuid
 
 
+def test_resume_project_on_reaper_killed_lead(monkeypatch) -> None:
+    """resume_project_impl must work on a lead that the reaper hibernated
+    (status='killed', session_uuid preserved). resume_project_impl has no status
+    gate — it only requires the row to exist and session_uuid to be non-null."""
+    _no_url_poll(monkeypatch)
+    with patch("subprocess.run", side_effect=_tmux_side_effect("")):
+        spawn_r = orch.spawn_project_impl(name="reaped-proj", type_="custom",
+                                          brief="x", permission_mode="default")
+    original_uuid = spawn_r["session_uuid"]
+    assert original_uuid is not None
+
+    # Simulate reaper hibernation: flip status to 'killed', session_uuid unchanged.
+    orch._reg().set_status("reaped-proj", "killed", bump_activity=False)
+    assert orch._reg().get_session_uuid("reaped-proj") == original_uuid
+
+    captured: dict = {}
+
+    def _fake_resume(**kwargs):
+        captured.update(kwargs)
+        return {
+            "agent_id": "soma-proj-reaped-proj",
+            "rc_url": "",
+            "cwd": "/x",
+            "session_uuid": kwargs["session_uuid"],
+        }
+
+    with patch.object(orch, "is_lead_alive", return_value=False):
+        with patch.object(orch, "resume_background_lead", side_effect=_fake_resume):
+            r = orch.resume_project_impl(name="reaped-proj")
+
+    assert captured["session_uuid"] == original_uuid
+    assert r["session_uuid"] == original_uuid
+    # Registry must retain the same session_uuid after resume.
+    assert orch._reg().get_session_uuid("reaped-proj") == original_uuid
+
+
 def test_kill_project_archive_logs_when_no_memory(monkeypatch, caplog) -> None:
     """When archive=True and the lead's cwd has no .claude/ memory dir, a
     warning must be logged so callers can distinguish 'archived' from 'skipped'

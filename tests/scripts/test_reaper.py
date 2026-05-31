@@ -89,3 +89,30 @@ def test_reaper_hibernates_when_lead_dead(tmp_path: Path, monkeypatch) -> None:
     assert counts["skipped_alive"] == 0
     p = r.get("deadp")
     assert p is not None and p["status"] == "killed"
+
+
+def test_reaper_hibernates_preserves_session_uuid(tmp_path: Path, monkeypatch) -> None:
+    """set_status('killed') must not touch session_uuid — a reaper-hibernated lead
+    must remain resumable via resume_project (which reads session_uuid from the row)."""
+    db = tmp_path / "reg.sqlite"
+    archive_root = tmp_path / "archive"
+    monkeypatch.setenv("HERMES_ORCH_DB", str(db))
+    monkeypatch.setenv("HERMES_ARCHIVE_ROOT", str(archive_root))
+    monkeypatch.setattr(reaper, "is_lead_alive", lambda name: False)
+    r = Registry(db)
+    r.register("reaped", agent_id="a-5", type_="custom",
+               cwd=str(tmp_path / "reaped-cwd"), rc_url="https://r/a-5")
+    r.set_session_uuid("reaped", "test-uuid-abc123")
+    (tmp_path / "reaped-cwd").mkdir()
+    r._conn.execute(
+        "UPDATE projects SET last_activity = ? WHERE name = ?",
+        (time.time() - (25 * 3600), "reaped"),
+    )
+
+    counts = reaper.run_once(idle_hibernate_seconds=24 * 3600,
+                             idle_delete_seconds=7 * 24 * 3600)
+    assert counts["hibernated"] == 1
+    p = r.get("reaped")
+    assert p is not None and p["status"] == "killed"
+    # session_uuid must survive the set_status call so resume_project can use it.
+    assert r.get_session_uuid("reaped") == "test-uuid-abc123"

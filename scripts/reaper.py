@@ -5,6 +5,7 @@ Invoked every 6h by systemd timer.
 """
 from __future__ import annotations
 
+import logging
 import os
 import shutil
 import time
@@ -12,6 +13,8 @@ from pathlib import Path
 
 from claude_soma.mcp_servers.project_orchestrator.registry import Registry
 from claude_soma.mcp_servers.project_orchestrator.spawner import is_lead_alive
+
+logger = logging.getLogger(__name__)
 
 
 DB = os.environ.get("HERMES_ORCH_DB", "/opt/claude-soma/registry.sqlite")
@@ -62,7 +65,12 @@ def run_once(
                     skipped_alive += 1
                     continue
                 _archive_to(archive_root, p["name"], p["cwd"])
+                uuid = reg.get_session_uuid(p["name"])
                 reg.set_status(p["name"], "killed")
+                logger.info(
+                    "hibernated lead %r after %.1fh idle; session_uuid=%r (resumable)",
+                    p["name"], idle / 3600, uuid,
+                )
                 hibernated += 1
     finally:
         reg.close()
