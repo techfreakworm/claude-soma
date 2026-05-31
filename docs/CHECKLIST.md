@@ -126,9 +126,9 @@ post-tag on `main`.
   - Expect: auto-memory captures
   - Verify: `cat ~/.claude/projects/<encoded-slug>/memory/MEMORY.md` shows the new entry
 
-- [ ] **T11 — Usage-snapshot timer first fire (after 23:55 UTC)**
-  - `sqlite3 /opt/claude-soma/usage.sqlite 'SELECT * FROM daily_snapshots ORDER BY date DESC LIMIT 1'`
-  - Expect: one row with today's date and non-zero credit numbers
+- [x] **T11 — Usage-snapshot timer first fire (after 23:55 UTC)** — verified 2026-05-31.
+  Last fire: Sun 2026-05-31 05:25:10 IST (23:55:10 UTC 2026-05-30); next fire: Mon 2026-06-01 05:25:00 IST (23:55 UTC).
+  Service exited cleanly (8.938 s CPU). `daily_snapshots` has 1 row dated 2026-05-31 written at that run.
 
 ## V1.5 backlog
 
