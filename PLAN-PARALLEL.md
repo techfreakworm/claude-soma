@@ -623,6 +623,122 @@ NONE.
 - Commit subject: `chore(relay): soma-publish friendly alias for soma-relay publish`
 ```
 
+### Subagent — FI-CADDY-TEMPLATE (S6's follow-up — small, no restart)
+
+```
+## Standing model split
+sonnet + max + seq-thinking ≥3.
+
+## Task
+Template `caddy/files.caddyfile.in` to read the domain from an env knob alongside `${HERMES_FILES_PASSWORD}` (which the existing `scripts/caddy-files-render.sh` already sources). Replace the hard-coded `files.mayankgupta.in` with `${FILES_DOMAIN:-files.mayankgupta.in}` substitution. Update `scripts/caddy-files-render.sh` to read `FILES_DOMAIN` from `/etc/claude-soma/secrets.env` and substitute alongside the bcrypt hash.
+
+Why: S6 audit (FI-DOMAIN) flagged that `caddy/files.caddyfile.in` still has the domain hard-coded; templating it via `${FILES_DOMAIN}` is consistent with the SOMA_DOMAIN pattern just shipped.
+
+## cwd
+/home/ubuntu/projects/soma-improver/claude-soma
+
+## Files
+- caddy/files.caddyfile.in (replace `files.mayankgupta.in` with `__FILES_DOMAIN__` marker)
+- scripts/caddy-files-render.sh (read FILES_DOMAIN env, substitute alongside bcrypt hash)
+- tests/scripts/test_caddy_files_render.py (extend — FILES_DOMAIN default + override)
+- docs/CHECKLIST.md (one-line note that FILES_DOMAIN is now in secrets.env)
+
+## Restart
+NONE — the next `caddy reload` (whether operator-triggered or automatic next render) picks up the change. No service restart needed.
+
+## Use `git add <specific-files>` not `git add -A` (Wave 1 lesson: -A captured other subagents' WIP). Stage only the 4 files above.
+
+## Convention
+- Commit subject: `feat(caddy): FILES_DOMAIN env knob for files.caddyfile.in template`
+- Direct-merge to origin/main authorized.
+
+## Merge-on-conflict protocol
+If push rejected → `git fetch origin && git rebase origin/main`; conflicts → STOP, write `/tmp/SX-CADDY-TEMPLATE-MERGE-STOP.md`, return.
+
+## DO NOT
+- Touch the live `/etc/caddy/conf.d/files.caddyfile` (operator runs the render script)
+- Restart caddy
+- Force-push
+- Use opus for sub-dispatches
+- Add emoji
+```
+
+### Subagent S-TZ-IST — VPS timezone + en_IN locale migration (Wave 2 add)
+
+```
+## Standing model split
+sonnet + max + seq-thinking ≥5 (high-impact ops change; timer audit needs careful per-timer reasoning).
+
+## Task — S-TZ-IST (Wave 2)
+
+Two coupled changes:
+
+(1) **Timezone**: change VPS from UTC to `Asia/Kolkata` via `sudo timedatectl set-timezone Asia/Kolkata`.
+(2) **Locale**: prefer `LC_TIME=en_IN.UTF-8` with `LANG=en_US.UTF-8` (UK-style dates + US-English everywhere else). Run `sudo locale-gen en_IN.UTF-8` if not present; `sudo update-locale LC_TIME=en_IN.UTF-8`.
+
+**Audit deliverable** — every systemd timer + `OnCalendar` expression in `/etc/systemd/system/` AND `/opt/claude-soma/systemd/` AND `systemd/` (repo). For each timer, decide: (a) re-pin with `OnCalendar=... UTC` suffix to keep current UTC behavior, OR (b) rewrite to IST values matching intent. Document the decision per-timer in the migration script's preamble OR a doc.
+
+Specifically known:
+- `claude-soma-daily-status.timer` currently `04:30 UTC` (= 10:00 IST). Intent is "fire at 10:00 IST" → rewrite to `OnCalendar=*-*-* 10:00:00` (which will be IST after the change).
+- `claude-soma-pw-refresh.timer`, `claude-soma-rc-url-refresh.timer`, `claude-soma-relay-cleanup.timer`, `claude-soma-secrets-backup.timer`, `claude-soma-idle-reaper.timer`, `claude-soma-cache-refresh.timer`, `claude-soma-usage-snapshot.timer`, `claude-soma-healthcheck.timer`, `claude-soma-portfolio-oneliner.timer` — audit per-file.
+
+**Code audit**:
+- Grep for naive `datetime.now()` across `src/` (no `tz=` arg). Should be zero; if any found, flag in the report.
+- Grep for `time.localtime()` and `time.mktime()` — flag any that may shift.
+- `registry.sqlite` routines table — verify cron-style schedules' tz assumption. May need a migration note.
+- FI-NOTIFY events emit `ts` as Unix epoch (tz-neutral); the DM format function formats via local time. Verify the format function uses `datetime.fromtimestamp(ts).strftime(...)` (becomes IST post-change) — that's likely the intent.
+
+## Deliverables
+
+NEW `scripts/migrate-to-ist.sh`:
+- Idempotent (safe to re-run)
+- Performs: `timedatectl set-timezone Asia/Kolkata` + `locale-gen` + `update-locale` + rewrites timer files in `/etc/systemd/system/` to the new OnCalendar values per the audit decisions + `systemctl daemon-reload`
+- Validates each step + exits non-zero on first failure with a clear message
+- Dry-run mode (`--dry-run`) prints every change without applying
+
+NEW `systemd/` updates: commit the new timer files reflecting the audit decisions. The repo's `systemd/*.timer` files should match the post-migration intent.
+
+NEW `tests/scripts/test_migrate_to_ist.py`:
+- Mock `subprocess.run` for `timedatectl` + `locale-gen` calls
+- Verify dry-run prints actions without executing
+- Verify idempotency (second run is a no-op)
+
+NEW `docs/notes/2026-05-31-ist-migration.md`:
+- Per-timer decision table (file → old OnCalendar → new OnCalendar → rationale)
+- Code-audit summary (grep results: zero naive datetime.now() expected)
+- Operator runbook for applying the migration
+
+## EXECUTION POLICY (CRITICAL)
+
+The migration SCRIPT is written as part of Wave 2 impl. **The OPERATOR runs the script when convenient — DO NOT run it from any subagent session.** System-wide tz changes are too high-impact for the auto-restart window. Flag this explicitly at the top of the script + in the doc note.
+
+## cwd
+/home/ubuntu/projects/soma-improver/claude-soma
+
+## Use `git add <specific-files>` (Wave 1 lesson). Stage only:
+- `scripts/migrate-to-ist.sh`
+- `systemd/*.timer` files you edited per the audit
+- `tests/scripts/test_migrate_to_ist.py`
+- `docs/notes/2026-05-31-ist-migration.md`
+
+## Convention
+- Commit subject: `feat(ops): migrate VPS to Asia/Kolkata + en_IN locale + audit timers for tz-correctness`
+- Direct-merge authorized.
+
+## Merge-on-conflict protocol
+If push rejected → `git fetch origin && git rebase origin/main`; conflicts → STOP, write `/tmp/S-TZ-IST-MERGE-STOP.md`, return.
+
+## DO NOT
+- Run `timedatectl set-timezone` yourself
+- Run `locale-gen` / `update-locale` yourself
+- Restart any service
+- Touch `OnCalendar` lines in `/etc/systemd/system/` directly (the repo `systemd/*.timer` files are the source-of-truth; install copies them)
+- Add Python deps (script is bash)
+- Force-push
+- Use opus for sub-dispatches
+- Add emoji
+```
+
 ---
 
 ## Wave 3 — Round N+2 (4 parallel subagents)
@@ -722,6 +838,72 @@ Pick ONE of: Bluesky, Mastodon, Threads. Build the per-platform writer/poster pa
 
 ## Restart
 NONE (per platform); after all platforms ship, the bot can dispatch them via the social-publish skill.
+```
+
+### Subagent S-GROK — Grok image + video integration (Wave 3)
+
+```
+## Standing model split
+sonnet + max + seq-thinking ≥5 (cross-cutting: new MCP server scaffold + responsive_bot routing + integration test).
+
+## Task — S-GROK (Wave 3)
+
+User direction (verbatim 2026-05-31): "For grok integration I was thinking. Whenever I ask for a photo, lets generate 2 photos. 1 from grok and 1 from codex. Send them both to TG. But if I ask for video, user needs to specify grok or make-video skill. If user doesnt specify, You/Soma must ask."
+
+Two paths:
+
+### Photo path — parallel-dispatch BOTH providers
+- The orchestrator's image-request handler dispatches **BOTH `grok-image` AND `codex-image-gen` in parallel** as background Agents.
+- Replies to Telegram with BOTH PNGs in a single `mcp__hermes_api__send_tg_reply` call (`files=[grok.png, codex.png]`), labeling each in the message body ("grok:" and "codex:"). No tie-break — user picks.
+- The TWO providers fire concurrently; if one errors, the other's output still ships with a clear "(other provider errored: <msg>)" note.
+
+### Video path — explicit-provider-required, ASK if missing
+- Two providers: `grok-video` (CLI `grok -p "/imagine-video ..."`) and the existing `make-video` skill.
+- If the user's video request names a provider → honor it.
+- If the user's video request does NOT name a provider → the bot replies via Telegram with a quick question: "grok or make-video?" with options as inline keyboard (if supported by the channel plugin) OR plain text. NEVER default.
+
+### Deliverables
+
+1. **NEW MCP server scaffold** at `src/claude_soma/mcp_servers/grok_image/` (if `grok-image` is not already present — verify):
+   - `__init__.py`
+   - `server.py` exposing `@mcp.tool() generate_image(prompt: str, output_dir: str = "/tmp") -> dict` returning `{"path": str, "session_id": str}`. Backend: subprocess to `/usr/local/bin/grok -p "/imagine <prompt>" --output-format json`, parse the JSON envelope's `text` field for the markdown image link, copy the file to `output_dir`.
+   - Add stanza to `.mcp.json` AND `config/claude/lead-mcp.json` (lead-scope — leads may generate images too).
+
+2. **Routing logic** in `system_prompts/responsive_bot.md`:
+   - New section "Image and video generation" with the photo-parallel + video-ask-if-missing rules.
+   - Cite the exact tool names: `mcp__grok_image__generate_image`, the existing codex-image-gen path (via `Skill(claude-soma:codex-image-gen)` or its MCP equivalent), and the make-video skill.
+
+3. **Integration test** at `tests/test_dual_image_dispatch.py`:
+   - Mock both `mcp__grok_image__generate_image` and the codex path.
+   - Verify the orchestrator's image handler dispatches BOTH concurrently (not sequentially).
+   - Verify both PNGs reach the send_tg_reply call with correct labels.
+   - One error from one provider → the other still ships + error noted.
+
+4. **Skill registration** if grok-image is exposed as a skill rather than a raw MCP tool: NEW `skills/grok-image/SKILL.md`.
+
+## cwd
+/home/ubuntu/projects/soma-improver/claude-soma
+
+## Use `git add <specific-files>` (Wave 1 lesson). Stage only the files you edited.
+
+## Convention
+- Commit subject: `feat(grok): parallel grok+codex image dispatch + ask-on-missing video provider`
+- Direct-merge authorized.
+
+## Merge-on-conflict protocol
+If push rejected → `git fetch origin && git rebase origin/main`; conflicts → STOP, write `/tmp/S-GROK-MERGE-STOP.md`, return.
+
+## STOP-AND-SURFACE
+- If `grok-image` MCP server is ALREADY present in the repo (e.g. shipped in a prior unrelated commit), STOP and surface — the brief above assumes it's new. Adapt or abort per user direction.
+- If the channel plugin does NOT support inline keyboards for the video-provider prompt, fall back to plain text ("Reply 'grok' or 'make-video' to pick a provider") — note in the report.
+
+## DO NOT
+- Touch the existing `codex-image-gen` skill (the parallel dispatch CALLS it, doesn't modify it)
+- Add new top-level Python deps
+- Restart any service (the new MCP tool registers on next channel restart; the routing prompt edit lands on responsive_bot reload)
+- Force-push
+- Use opus for sub-dispatches
+- Add emoji
 ```
 
 ---
