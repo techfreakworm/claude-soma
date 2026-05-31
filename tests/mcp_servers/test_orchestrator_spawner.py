@@ -391,6 +391,27 @@ def test_brief_is_guarded_by_dashdash_without_mcp_config(tmp_path: Path, monkeyp
     assert args[args.index(brief) - 1] == "--"
 
 
+def test_spawn_includes_continue_flag_before_remote_control(tmp_path: Path) -> None:
+    """Regression: spawn_background_lead must pass --continue right after the
+    claude binary so a unit restart resumes the prior transcript (mirrors the
+    channel-claude.sh pattern). On first spawn with no prior transcript claude
+    falls back to a fresh session — the flag is always safe to include."""
+    cwd = tmp_path / "cont"
+    cwd.mkdir()
+    with patch("subprocess.run", side_effect=[_ok(), _ok("")]) as run:
+        spawn_background_lead(
+            name="cont", brief="x", cwd=cwd, permission_mode="acceptEdits",
+        )
+    args = run.call_args_list[0][0][0]
+    assert "--continue" in args
+    # --continue must appear immediately before --remote-control in the argv.
+    cont_idx = args.index("--continue")
+    rc_idx = args.index("--remote-control")
+    assert rc_idx == cont_idx + 1, (
+        f"--continue at {cont_idx}, --remote-control at {rc_idx}; expected adjacent"
+    )
+
+
 def test_spawn_injects_hermes_lead_name_and_notify_endpoint(tmp_path: Path) -> None:
     """_wrap_in_transient_unit must inject HERMES_LEAD_NAME and HERMES_NOTIFY_ENDPOINT
     so the lead's hermes-notify MCP tool can identify itself and reach the listener."""

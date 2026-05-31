@@ -279,6 +279,12 @@ def spawn_background_lead(
     socket = _lead_socket(name)
     claude_argv: list[str] = [
         _claude(),
+        # --continue resumes the lead's most recent transcript from
+        # ~/.claude/projects/<cwd-slug>/, so a unit restart preserves
+        # conversation state + in-memory MCP context. On first spawn (no
+        # prior transcript yet), claude falls back to a fresh session.
+        # Mirrors the channel-claude wrapper's pattern (scripts/channel-claude.sh).
+        "--continue",
         # --remote-control <name>: project leads stay alive after their first
         # task completes (otherwise claude exits) AND get an rc.claude.com URL
         # the operator can attach to from the Claude mobile app / web. The name
