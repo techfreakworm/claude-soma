@@ -44,9 +44,15 @@ REASON_TAIL=" — dispatch via Agent (model=opus, run_in_background=true) instea
 
 # ===== Tool-name-level denies =====
 case "$TOOL" in
-    Edit|Write|NotebookEdit)
+    Edit|NotebookEdit)
         deny "File edits are substantive work${REASON_TAIL}"
         ;;
+    Write)
+        FPATH="$(jq -r '.tool_input.file_path // ""' <<<"$EVENT" 2>/dev/null)"
+        if [[ -z "$FPATH" ]] || [[ "$FPATH" == /opt/claude-soma/* || "$FPATH" == /etc/* || "$FPATH" == /var/lib/* ]]; then
+            deny "File edits are substantive work${REASON_TAIL}"
+        fi
+        ;;  # non-production Write (e.g. /tmp/*) falls through to allow
     WebFetch|WebSearch)
         deny "Network + multi-step thinking${REASON_TAIL}"
         ;;
@@ -66,25 +72,29 @@ if [[ "$TOOL" == "Bash" ]]; then
     CMD="$(jq -r '.tool_input.command // ""' <<<"$EVENT" 2>/dev/null)"
     [[ -z "$CMD" ]] && exit 0
 
+    # Strip heredoc body: only inspect the command tokens before the first <<
+    # so that heredoc bodies describing network tools are not mistaken for shell-outs.
+    CMD_HEAD="${CMD%%<<*}"
+
     # Package installs
-    if echo "$CMD" | grep -qE '\b(apt|apt-get)\s+(install|update|upgrade)\b|\bpip[3]?\s+install\b|\bpipx\s+install\b|\bnpm\s+(install|i)\b|\bpnpm\s+(install|add)\b|\byarn\s+(add|install)\b|\bcargo\s+(build|install|test)\b|\bbun\s+install\b'; then
+    if echo "$CMD_HEAD" | grep -qE '\b(apt|apt-get)\s+(install|update|upgrade)\b|\bpip[3]?\s+install\b|\bpipx\s+install\b|\bnpm\s+(install|i)\b|\bpnpm\s+(install|add)\b|\byarn\s+(add|install)\b|\bcargo\s+(build|install|test)\b|\bbun\s+install\b'; then
         deny "Package install in Bash${REASON_TAIL}"
     fi
     # Network git
-    if echo "$CMD" | grep -qE '\bgit\s+(clone|pull|push)\b|\bgit\s+fetch.*--depth'; then
+    if echo "$CMD_HEAD" | grep -qE '\bgit\s+(clone|pull|push)\b|\bgit\s+fetch.*--depth'; then
         deny "Network git op in Bash${REASON_TAIL}"
     fi
     # Builds / tests
-    if echo "$CMD" | grep -qE '\bdocker\s+(build|run)\b|\bmake\s|\bcmake\s|\bpytest\b|\bnpm\s+test\b|\bpnpm\s+test\b'; then
+    if echo "$CMD_HEAD" | grep -qE '\bdocker\s+(build|run)\b|\bmake\s|\bcmake\s|\bpytest\b|\bnpm\s+test\b|\bpnpm\s+test\b'; then
         deny "Build/test command in Bash${REASON_TAIL}"
     fi
     # Codex / heavy compute
-    if echo "$CMD" | grep -qE '\bcodex\b|\bffmpeg\b.*\s-i\s|\bwhisper-cli\b.*\s-f\s'; then
+    if echo "$CMD_HEAD" | grep -qE '\bcodex\b|\bffmpeg\b.*\s-i\s|\bwhisper-cli\b.*\s-f\s'; then
         deny "Heavy compute in Bash${REASON_TAIL}"
     fi
     # Network curl/wget (allow localhost / 127.0.0.1 / 0.0.0.0)
-    if echo "$CMD" | grep -qE '\b(curl|wget)\b'; then
-        if ! echo "$CMD" | grep -qE '\b(curl|wget)\b[^|;&]*\b(localhost|127\.0\.0\.1|0\.0\.0\.0)'; then
+    if echo "$CMD_HEAD" | grep -qE '\b(curl|wget)\b'; then
+        if ! echo "$CMD_HEAD" | grep -qE '\b(curl|wget)\b[^|;&]*\b(localhost|127\.0\.0\.1|0\.0\.0\.0)'; then
             deny "Network curl/wget in Bash${REASON_TAIL}"
         fi
     fi

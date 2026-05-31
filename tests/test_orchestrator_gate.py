@@ -51,7 +51,7 @@ def _assert_allow(result: subprocess.CompletedProcess) -> None:
 
 @pytest.mark.parametrize("tool_name,tool_input", [
     ("Edit", {"file_path": "/x"}),
-    ("Write", {"file_path": "/x"}),
+    ("Write", {"file_path": "/opt/claude-soma/config.json"}),
     ("NotebookEdit", {"file_path": "/x"}),
     ("Skill", {"skill": "x"}),
     ("WebFetch", {"url": "https://example.com"}),
@@ -300,3 +300,67 @@ def test_deny_reason_mentions_responsive_bot() -> None:
 def test_deny_bash_reason_mentions_agent() -> None:
     r = _run({"tool_name": "Bash", "tool_input": {"command": "pytest -v tests/"}})
     _assert_deny(r, contains="Agent")
+
+
+# =========================================================================
+# Heredoc body false-positive regression (fix a)
+# =========================================================================
+
+def test_heredoc_body_apt_install_is_allowed() -> None:
+    # heredoc body mentions apt install but the actual command is cat
+    command = "cat <<'EOF'\napt install curl\nEOF"
+    r = _run({"tool_name": "Bash", "tool_input": {"command": command}})
+    _assert_allow(r)
+
+
+def test_heredoc_body_pip_install_is_allowed() -> None:
+    # heredoc body mentions pip install inside a script being written to a file
+    command = "cat > /tmp/setup.sh <<'EOF'\npip install requests\nEOF"
+    r = _run({"tool_name": "Bash", "tool_input": {"command": command}})
+    _assert_allow(r)
+
+
+def test_heredoc_body_git_push_is_allowed() -> None:
+    # heredoc body describes a git push command but is just documentation
+    command = "tee /tmp/notes.txt <<'EOF'\ngit push origin main\nEOF"
+    r = _run({"tool_name": "Bash", "tool_input": {"command": command}})
+    _assert_allow(r)
+
+
+def test_bare_apt_install_is_still_denied() -> None:
+    # direct apt install (no heredoc) must remain blocked
+    r = _run({"tool_name": "Bash", "tool_input": {"command": "apt install curl"}})
+    _assert_deny(r)
+
+
+# =========================================================================
+# Write path-scoping (fix b)
+# =========================================================================
+
+@pytest.mark.parametrize("file_path", [
+    "/opt/claude-soma/registry.sqlite",
+    "/opt/claude-soma/subdir/config.json",
+    "/etc/claude-soma/secrets.env",
+    "/etc/hosts",
+    "/var/lib/claude-soma/state.db",
+    "/var/lib/anything/foo",
+])
+def test_write_production_path_denied(file_path: str) -> None:
+    r = _run({"tool_name": "Write", "tool_input": {"file_path": file_path}})
+    _assert_deny(r)
+
+
+@pytest.mark.parametrize("file_path", [
+    "/tmp/foo.txt",
+    "/tmp/scratch/output.json",
+    "/tmp/S1-FI-GATE-MERGE-STOP.md",
+])
+def test_write_tmp_path_allowed(file_path: str) -> None:
+    r = _run({"tool_name": "Write", "tool_input": {"file_path": file_path}})
+    _assert_allow(r)
+
+
+def test_write_missing_file_path_denied() -> None:
+    # Write with no file_path should still deny (fail-safe)
+    r = _run({"tool_name": "Write", "tool_input": {}})
+    _assert_deny(r)
