@@ -17,6 +17,10 @@ from .templates import load_template, list_template_names, TemplateNotFound
 
 logger = logging.getLogger(__name__)
 
+_NOTIFY_CONVENTION_PATH = (
+    Path(__file__).parents[4] / "system_prompts" / "lead_notify_convention.md"
+)
+_NOTIFY_CONVENTION: str = _NOTIFY_CONVENTION_PATH.read_text()
 
 DB_PATH = os.environ.get("HERMES_ORCH_DB", "/opt/claude-soma/registry.sqlite")
 PROJECTS_ROOT = os.environ.get("HERMES_PROJECTS_ROOT", "/home/ubuntu/projects")
@@ -79,7 +83,11 @@ def spawn_project_impl(
     tmpl = _resolve_template(type_)
     projects_root = os.environ.get("HERMES_PROJECTS_ROOT", PROJECTS_ROOT)
     cwd = Path(projects_root) / name
-    composed_brief = tmpl.get("default_brief", "") + "\n\n" + brief
+    composed_brief = (
+        _NOTIFY_CONVENTION + "\n\n"
+        + tmpl.get("default_brief", "") + "\n\n"
+        + brief
+    )
 
     spawn = spawn_background_lead(
         name=name, brief=composed_brief, cwd=cwd,

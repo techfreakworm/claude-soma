@@ -317,6 +317,38 @@ def test_cap_intersect_skips_dead_leads(monkeypatch) -> None:
         assert orch._reg().get(n)["status"] == "dead"
 
 
+def test_spawn_project_prepends_notify_convention(monkeypatch) -> None:
+    """spawn_project_impl must prepend the Standing Notify Convention block to
+    the brief that is passed to spawn_background_lead so every lead receives
+    the emission instructions on first spawn (and on --continue restarts via
+    transcript replay)."""
+    _no_url_poll(monkeypatch)
+    captured: dict = {}
+
+    original_spawn = orch.spawn_background_lead
+
+    def _capture_spawn(**kwargs):
+        captured["brief"] = kwargs.get("brief", "")
+        return original_spawn(**kwargs)
+
+    with patch.object(orch, "spawn_background_lead", side_effect=_capture_spawn):
+        with patch("subprocess.run", side_effect=_tmux_side_effect("")):
+            orch.spawn_project_impl(
+                name="notify-test", type_="custom",
+                brief="Do the thing.", permission_mode="default",
+            )
+
+    assert "brief" in captured
+    assert "Standing Notify Convention" in captured["brief"]
+    assert "STARTED" in captured["brief"]
+    assert "MILESTONE" in captured["brief"]
+    assert "COMPLETED" in captured["brief"]
+    assert "NEEDS_INPUT" in captured["brief"]
+    assert "ERROR" in captured["brief"]
+    assert "mcp__hermes-notify__notify_orchestrator" in captured["brief"]
+    assert captured["brief"].index("Standing Notify Convention") < captured["brief"].index("Do the thing.")
+
+
 def test_kill_project_archive_logs_when_no_memory(monkeypatch, caplog) -> None:
     """When archive=True and the lead's cwd has no .claude/ memory dir, a
     warning must be logged so callers can distinguish 'archived' from 'skipped'
