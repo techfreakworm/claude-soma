@@ -67,7 +67,7 @@ Weights: P0=10, P1=5, P2=2, P3=1. Effort: S=1, M=3, L=8. Leverage 1–5.
 | BUG-4 | Routines registry never populated | P2 | 2 | M | medium | **1.33** | open |
 | FI-TEAM | Team-roster persistence | P2 | 2 | M | medium | **1.33** | blocked: depends on BUG-2 |
 | FI-REAPER | Reaper ↔ resume integration | P2 | 2 | M | medium | **1.33** | blocked: depends on BUG-2 |
-| FI-PW | Playwright cookie store hardening | P2 | 2 | M | medium | **1.33** | open |
+| ~~FI-PW~~ | Playwright cookie store hardening — parked in `FAR-FETCHED.md` (user opted out 2026-05-31) | — | — | — | — | **parked** | parked |
 | BUG-2 | Killed-lead resume (`--session-id`/`--resume`) | P1 | 2 | L | high | **1.25** | open |
 | FI-MKT | `marketplace.json` publish test | P3 | 1 | S | low | **1** | open |
 | SEC-1 | Rotate leaked Telegram token | P3 | 1 | S | medium | **1** | open (backlog LOW) |
@@ -298,33 +298,7 @@ The bot already needs a channel restart to activate three commits that have land
   - **Out-of-band considerations**: the team-roster persistence and reaper-resume integrations
     (FI-TEAM, FI-REAPER) block on this landing; they cannot start until BUG-2 is shipped and stable.
 
-- **FI-PW: Playwright cookie store hardening** (P2, leverage 2, effort M → M-L) — **DEFERRED 2026-05-31**
-  - **STOP-AND-SURFACE finding from Wave 3 S15 attempt (2026-05-31)**: `.mcp.json` passes
-    `--storage-state /home/ubuntu/.claude-pw/state-<name>.json` directly to `/usr/bin/playwright-mcp`
-    for 4 platforms (`linkedin`, `x`, `x-article`, `medium`). Encrypting those paths in-place would
-    break all 4 MCP servers (they expect plaintext JSON `{cookies, origins}`). The `pw-refresh.js` /
-    `pw-login.js` scripts themselves never read state files back — they use `launchPersistentContext`
-    and only WRITE state via `context.storageState()` — so the original brief's "decrypt at use time,
-    re-encrypt on write" has no target inside those two scripts.
-  - **Widened scope required** (re-scope to M-L when un-deferred): add `scripts/pw-decrypt-to-shm.sh`
-    + `scripts/pw-encrypt-from-shm.sh` wrappers, update `.mcp.json` `--storage-state` values to
-    `/dev/shm/pw-state-<name>.json`, wire decrypt/re-encrypt around each playwright MCP server launch
-    (either systemd `ExecStartPre`/`ExecStopPost` hooks or a wrapper script around
-    `/usr/bin/playwright-mcp`). ~2x LOC, ~3x risk surface (systemd hook ordering + tmpfs lifecycle).
-  - **Alternate path** (not selected): fs-level `ecryptfs` on `~/.claude-pw/` — OS-transparent but
-    requires a kernel module + careful unmount handling on a remote-managed VPS.
-  - **Forward-compat note (historical — Bluesky opted out 2026-05-31)**: S17 FI-PLAT Bluesky code
-    shipped 2026-05-31 (`d721e33`) introduced the `encrypted` key sentinel pattern at
-    `~/.claude-pw/bluesky.json`. The Bluesky agents themselves are now inert (user opt-out), but
-    the sentinel-pattern design is still useful: any future encrypt-existing script can use the
-    same `encrypted: true` JSON-level marker to detect unencrypted credentials and migrate them.
-  - **Mitigation today**: filesystem-level access control — `chmod 600` on each `state-*.json` and
-    `chmod 700` on `~/.claude-pw/`. Single-tenant VPS; threat model is "operator compromise" not
-    "co-tenant exfil".
-  - **Depends on**: none (independent — un-defer requires user pick of "widen scope" vs "fs-level"
-    vs "stay-deferred").
-  - **Out-of-band considerations**: STOP findings file at `/tmp/S15-FI-PW-INTEGRATION-STOP.md`
-    (subagent transcript) captures the full technical analysis if needed for the un-defer round.
+- **FI-PW** — parked in `FAR-FETCHED.md` (user opted out 2026-05-31). Do not include in autonomous prioritization.
 
 - **FI-LOG: Per-lead log viewer in admin** (P3, leverage 2, effort M)
   - **Why now**: Logrotate landed in `5a001b3`. The next step is surfacing the ANSI-stripped logs in
