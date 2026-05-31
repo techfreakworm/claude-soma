@@ -62,7 +62,7 @@ def _setup_env(tmp_path: Path, with_password: bool = True) -> tuple[Path, dict]:
         secrets_file.write_text("SOME_OTHER_VAR=value\n")
     secrets_file.chmod(0o600)
 
-    env = {k: v for k, v in os.environ.items() if k != "HERMES_FILES_PASSWORD"}
+    env = {k: v for k, v in os.environ.items() if k not in ("HERMES_FILES_PASSWORD", "FILES_DOMAIN")}
     env.update({
         "PATH": f"{bin_dir}:{os.environ.get('PATH', '/usr/bin:/bin')}",
         "HERMES_SECRETS_FILE": str(secrets_file),
@@ -128,6 +128,27 @@ def test_render_fails_when_password_missing(tmp_path: Path) -> None:
 def test_template_has_placeholder() -> None:
     content = TEMPLATE.read_text()
     assert "__BCRYPT_HASH__" in content, "Template must contain __BCRYPT_HASH__ placeholder"
-    assert "files.mayankgupta.in" in content
+    assert "__FILES_DOMAIN__" in content, "Template must contain __FILES_DOMAIN__ placeholder"
     assert "basicauth" in content
     assert "soma" in content
+
+
+def test_files_domain_default(tmp_path: Path) -> None:
+    result = _run_render(tmp_path)
+    assert result.returncode == 0, result.stderr
+
+    dest = tmp_path / "conf.d" / "files.caddyfile"
+    content = dest.read_text()
+    assert "files.mayankgupta.in" in content, "default domain should appear in rendered config"
+    assert "__FILES_DOMAIN__" not in content, "__FILES_DOMAIN__ placeholder should be substituted"
+
+
+def test_files_domain_override(tmp_path: Path) -> None:
+    result = _run_render(tmp_path, extra_env={"FILES_DOMAIN": "custom.example.com"})
+    assert result.returncode == 0, result.stderr
+
+    dest = tmp_path / "conf.d" / "files.caddyfile"
+    content = dest.read_text()
+    assert "custom.example.com" in content, "overridden domain should appear in rendered config"
+    assert "files.mayankgupta.in" not in content, "default domain should not appear when overridden"
+    assert "__FILES_DOMAIN__" not in content, "__FILES_DOMAIN__ placeholder should be substituted"

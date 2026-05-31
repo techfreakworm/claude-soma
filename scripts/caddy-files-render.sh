@@ -9,7 +9,7 @@
 # Run:  bash scripts/caddy-files-render.sh
 # Re-run after rotating HERMES_FILES_PASSWORD in /etc/claude-soma/secrets.env.
 #
-# Do NOT run until the DNS A record for files.mayankgupta.in resolves to the VPS IP.
+# Do NOT run until the DNS A record for FILES_DOMAIN resolves to the VPS IP.
 # The cert will be provisioned by Caddy on the first HTTPS request after DNS propagates.
 
 set -euo pipefail
@@ -44,6 +44,8 @@ if [ -z "${HERMES_FILES_PASSWORD:-}" ]; then
     exit 1
 fi
 
+FILES_DOMAIN="${FILES_DOMAIN:-files.mayankgupta.in}"
+
 # Generate bcrypt hash via caddy
 if ! hash=$(caddy hash-password --plaintext "${HERMES_FILES_PASSWORD}"); then
     echo "ERROR: caddy hash-password failed" >&2
@@ -58,9 +60,9 @@ fi
 # Create conf.d directory
 sudo mkdir -p "$CONF_D"
 
-# Render template: substitute __BCRYPT_HASH__ with the generated hash.
+# Render template: substitute __FILES_DOMAIN__ and __BCRYPT_HASH__.
 # Using | as sed delimiter because / appears in bcrypt hashes ($2a$14$...).
-sed "s|__BCRYPT_HASH__|${hash}|g" "$TEMPLATE" | sudo tee "$DEST" > /dev/null
+sed "s|__FILES_DOMAIN__|${FILES_DOMAIN}|g; s|__BCRYPT_HASH__|${hash}|g" "$TEMPLATE" | sudo tee "$DEST" > /dev/null
 sudo chmod 644 "$DEST"
 sudo chown root:root "$DEST"
 echo "Written: $DEST"
@@ -76,4 +78,4 @@ fi
 
 # Graceful reload — no dropped connections
 sudo systemctl reload caddy
-echo "caddy-files-render: done — files.mayankgupta.in block is now active"
+echo "caddy-files-render: done — ${FILES_DOMAIN} block is now active"
