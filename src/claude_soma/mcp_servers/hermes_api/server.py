@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import datetime
 import html
 import http.server
 import json
 import mimetypes
 import os
+import re
+import subprocess
 import threading
 import time
 import urllib.error
@@ -79,6 +82,122 @@ def resolve_pending_input(event_id: int, answer: str) -> dict:
     """
     resolved = _store.mark_pending_resolved(event_id, answer)
     return {"resolved": resolved}
+
+
+# ---- One-shot Telegram reminder ------------------------------------------
+
+def _parse_when(when: str) -> float:
+    """Return the delay in seconds until the reminder should fire.
+
+    Accepts:
+    - Relative: "5m", "2h", "1d" (minutes / hours / days)
+    - Unix epoch: a numeric string like "1750000000" (seconds since epoch)
+    - ISO 8601: "2026-06-01T09:00:00", "2026-06-01T09:00:00Z", etc.
+    """
+    s = when.strip()
+
+    # Relative (5m / 2h / 1d — case-insensitive)
+    m = re.fullmatch(r"(\d+)(m|h|d)", s, re.IGNORECASE)
+    if m:
+        val = int(m.group(1))
+        unit = m.group(2).lower()
+        return val * {"m": 60, "h": 3600, "d": 86400}[unit]
+
+    # Unix epoch (all-digit, 9+ chars so "60" isn't mistaken for epoch)
+    if re.fullmatch(r"\d{9,}", s):
+        epoch = float(s)
+        delay = epoch - time.time()
+        if delay <= 0:
+            raise ValueError(f"Unix epoch {s!r} is in the past")
+        return delay
+
+    # ISO 8601 via datetime.fromisoformat (Python 3.7+)
+    try:
+        dt = datetime.datetime.fromisoformat(s)
+    except ValueError:
+        raise ValueError(f"Cannot parse 'when' value: {when!r}") from None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=datetime.timezone.utc)
+    delay = dt.timestamp() - time.time()
+    if delay <= 0:
+        raise ValueError(f"ISO timestamp {s!r} is in the past")
+    return delay
+
+
+@mcp.tool()
+def schedule_reminder(when: str, message: str) -> dict:
+    """Schedule a one-shot Telegram reminder.
+
+    Spawns a detached bash subprocess that sleeps until the target time, then
+    sends a Telegram message via the Bot API. The process survives parent exit
+    (start_new_session=True). CHAT_ID is read from HERMES_NOTIFY_CHAT_ID.
+
+    Args:
+        when: When to fire. Accepts relative ("5m", "2h", "1d"),
+              ISO 8601 ("2026-06-01T09:00:00Z"), or Unix epoch ("1750000000").
+        message: Text to send (plain text, no HTML).
+
+    Returns:
+        {"pid": int, "fires_at_iso": str, "message_preview": str}
+    """
+    delay = _parse_when(when)
+    delay_secs = max(1, int(delay))
+
+    fires_at = datetime.datetime.fromtimestamp(
+        time.time() + delay_secs, tz=datetime.timezone.utc
+    )
+    fires_at_iso = fires_at.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    reminder_id = uuid.uuid4().hex[:8]
+    log_path = f"/tmp/reminder-{reminder_id}.log"
+
+    chat_id = _notify_chat_id()
+
+    bash_script = (
+        f"sleep {delay_secs}\n"
+        f"source ~/.claude/channels/telegram/.env\n"
+        f"curl -sX POST \"https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendMessage\""
+        f" --data-urlencode \"chat_id={chat_id}\""
+        f" --data-urlencode \"text=$REMINDER_TEXT\"\n"
+    )
+
+    env = os.environ.copy()
+    env["REMINDER_TEXT"] = message
+
+    log_file = open(log_path, "w")
+    try:
+        proc = subprocess.Popen(
+            ["bash", "-c", bash_script],
+            start_new_session=True,
+            stdin=subprocess.DEVNULL,
+            stdout=log_file,
+            stderr=subprocess.STDOUT,
+            env=env,
+        )
+    finally:
+        log_file.close()
+
+    return {
+        "pid": proc.pid,
+        "fires_at_iso": fires_at_iso,
+        "message_preview": message[:100],
+    }
+
+
+# ---- Routines cache prewarm -----------------------------------------------
+
+def _prewarm_routines_cache() -> None:
+    """Populate the cloud-routines cache so the first dashboard load is fast.
+
+    Imports the live cache function from the API routes layer and calls it.
+    No-ops silently if the import fails (e.g. the API package is not installed
+    in this environment).
+    """
+    try:
+        from claude_soma.api.routes.routines import _query_cloud_routines_cached
+        _query_cloud_routines_cached()
+    except Exception:
+        pass
 
 
 # ---- Telegram Bot API helpers ---------------------------------------------
@@ -760,6 +879,10 @@ def main() -> None:
     # Monitor for NEEDS_INPUT rows whose timeout has expired.
     t_timeout = threading.Thread(target=_timeout_monitor_loop, daemon=True)
     t_timeout.start()
+
+    # Prewarm the routines cloud cache so the first dashboard hit is fast.
+    t_prewarm = threading.Thread(target=_prewarm_routines_cache, daemon=True)
+    t_prewarm.start()
 
     mcp.run()
 

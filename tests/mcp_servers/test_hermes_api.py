@@ -1,13 +1,22 @@
 from __future__ import annotations
 
 import asyncio
+import datetime
 import os
+import subprocess
 import tempfile
+import time
 import uuid
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 from claude_soma.mcp_servers.hermes_api.claude_state import (
     list_sessions, read_activity_log, read_memory
+)
+from claude_soma.mcp_servers.hermes_api.server import (
+    _parse_when,
+    schedule_reminder,
+    _prewarm_routines_cache,
 )
 from claude_soma.mcp_servers.hermes_api.socket import _serve, call
 
@@ -122,3 +131,119 @@ async def test_socket_round_trip_returns_error_on_unknown_method(tmp_path: Path)
         except asyncio.CancelledError:
             pass
         Path(sock_path).unlink(missing_ok=True)
+
+
+# ---- schedule_reminder tests -----------------------------------------------
+
+def _make_fake_proc(pid: int = 12345) -> MagicMock:
+    proc = MagicMock()
+    proc.pid = pid
+    return proc
+
+
+def test_schedule_reminder_relative_5m(monkeypatch) -> None:
+    """Relative '5m' → bash script contains 'sleep 300'."""
+    fake_proc = _make_fake_proc(42)
+    monkeypatch.setenv("HERMES_NOTIFY_CHAT_ID", "999")
+
+    captured: dict = {}
+
+    def fake_popen(cmd, **kwargs):
+        captured["cmd"] = cmd
+        captured["kwargs"] = kwargs
+        captured["env"] = kwargs.get("env", {})
+        return fake_proc
+
+    with patch("claude_soma.mcp_servers.hermes_api.server.subprocess.Popen", fake_popen):
+        result = schedule_reminder("5m", "test message")
+
+    assert result["pid"] == 42
+    assert "fires_at_iso" in result
+    assert "message_preview" in result
+    # The bash script passed to bash -c must contain sleep 300
+    bash_script = captured["cmd"][2]
+    assert "sleep 300" in bash_script
+
+
+def test_schedule_reminder_iso_timestamp(monkeypatch) -> None:
+    """ISO 8601 timestamp in the future → delay is computed correctly."""
+    monkeypatch.setenv("HERMES_NOTIFY_CHAT_ID", "999")
+    fake_proc = _make_fake_proc(99)
+
+    # 1 hour from now
+    future = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=1)
+    iso_str = future.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    captured: dict = {}
+
+    def fake_popen(cmd, **kwargs):
+        captured["cmd"] = cmd
+        return fake_proc
+
+    with patch("claude_soma.mcp_servers.hermes_api.server.subprocess.Popen", fake_popen):
+        result = schedule_reminder(iso_str, "iso reminder")
+
+    bash_script = captured["cmd"][2]
+    # Delay should be approximately 3600 seconds; extract the sleep value
+    import re as _re
+    m = _re.search(r"sleep (\d+)", bash_script)
+    assert m is not None, "bash script should contain a sleep command"
+    sleep_secs = int(m.group(1))
+    assert 3500 <= sleep_secs <= 3660, f"Expected ~3600s delay, got {sleep_secs}"
+    assert result["fires_at_iso"].endswith("Z")
+
+
+def test_schedule_reminder_returns_pid(monkeypatch) -> None:
+    """Return dict has pid, fires_at_iso, and message_preview."""
+    monkeypatch.setenv("HERMES_NOTIFY_CHAT_ID", "135")
+    fake_proc = _make_fake_proc(7777)
+
+    with patch(
+        "claude_soma.mcp_servers.hermes_api.server.subprocess.Popen",
+        return_value=fake_proc,
+    ):
+        result = schedule_reminder("10m", "a" * 200)
+
+    assert result["pid"] == 7777
+    assert isinstance(result["fires_at_iso"], str)
+    assert "T" in result["fires_at_iso"]
+    # message_preview is capped at 100 chars
+    assert len(result["message_preview"]) == 100
+
+
+# ---- routines cache prewarm tests ------------------------------------------
+
+def test_routines_cache_prewarm_on_startup() -> None:
+    """_prewarm_routines_cache() calls _query_cloud_routines_cached exactly once."""
+    call_count: list[int] = [0]
+
+    def fake_query():
+        call_count[0] += 1
+        return []
+
+    with patch(
+        "claude_soma.api.routes.routines._query_cloud_routines_cached",
+        side_effect=fake_query,
+    ):
+        _prewarm_routines_cache()
+
+    assert call_count[0] == 1, "prewarm should call _query_cloud_routines_cached once"
+
+
+def test_routines_cache_prewarm_on_timer_fire() -> None:
+    """Direct _prewarm_routines_cache() call populates the cloud cache."""
+    from claude_soma.api.routes.routines import _CLOUD_CACHE, _clear_routines_cache
+
+    _clear_routines_cache()
+    assert not _CLOUD_CACHE["valid"], "cache should start invalid"
+
+    fake_rows = [{"name": "fake-routine", "kind": "cloud", "schedule": "*/5 * * * *"}]
+
+    with patch(
+        "claude_soma.api.routes.routines._query_cloud_routines",
+        return_value=fake_rows,
+    ):
+        _prewarm_routines_cache()
+
+    assert _CLOUD_CACHE["valid"], "cache should be valid after prewarm"
+    assert _CLOUD_CACHE["rows"] == fake_rows
