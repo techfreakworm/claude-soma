@@ -211,6 +211,38 @@ def test_schedule_reminder_returns_pid(monkeypatch) -> None:
     assert len(result["message_preview"]) == 100
 
 
+def test_schedule_reminder_registers_routine(tmp_path, monkeypatch) -> None:
+    """schedule_reminder must write a registry row so /api/routines shows it."""
+    from pathlib import Path as _Path
+    db = tmp_path / "reg.sqlite"
+    monkeypatch.setenv("HERMES_NOTIFY_CHAT_ID", "135")
+    monkeypatch.setenv("HERMES_ORCH_DB", str(db))
+    fake_proc = _make_fake_proc(9001)
+
+    with patch(
+        "claude_soma.mcp_servers.hermes_api.server.subprocess.Popen",
+        return_value=fake_proc,
+    ):
+        result = schedule_reminder("15m", "buy milk")
+
+    from claude_soma.mcp_servers.project_orchestrator.registry import Registry
+    reg = Registry(db)
+    try:
+        routines = reg.list_routines()
+    finally:
+        reg.close()
+
+    assert len(routines) == 1
+    row = routines[0]
+    assert row["name"].startswith("reminder-")
+    assert row["kind"] == "local"
+    assert row["created_by"] == "user"
+    assert row["metadata"] is not None
+    assert row["metadata"]["unit"].startswith("reminder-")
+    assert row["metadata"]["pid"] == 9001
+    assert "buy milk" in (row["description"] or "")
+
+
 # ---- routines cache prewarm tests ------------------------------------------
 
 def test_routines_cache_prewarm_on_startup() -> None:

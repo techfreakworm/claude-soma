@@ -365,25 +365,31 @@ def _backfill_default_routines(paths: Paths | None = None) -> None:
         defaults = [
             ("healthcheck", "system",
              "every 10 min", "healthcheck",
-             "Restart api/frontend/channel if any is down"),
+             "Restart api/frontend/channel if any is down",
+             "claude-soma-healthcheck.timer"),
             ("cache-refresh", "system",
              "every 5 min", "cache-refresh",
-             "Prime hot dashboard API paths"),
+             "Prime hot dashboard API paths",
+             "claude-soma-cache-refresh.timer"),
             ("usage-snapshot", "system",
              "daily 23:55 UTC", "usage-snapshot",
-             "Daily Max-credit usage snapshot"),
+             "Daily Max-credit usage snapshot",
+             "claude-soma-usage-snapshot.timer"),
             ("idle-reaper", "system",
              "every 6h", "idle-reaper",
-             "Hibernate idle project-leads >24h"),
+             "Hibernate idle project-leads >24h",
+             "claude-soma-idle-reaper.timer"),
             ("portfolio-oneliner", "bot",
              "Mon..Fri *-*-* 03:30:00", "portfolio-oneliner",
-             "Weekday 09:00 IST portfolio brief"),
+             "Weekday 09:00 IST portfolio brief",
+             "claude-soma-portfolio-oneliner.timer"),
         ]
-        for name, created_by, schedule, target_skill, description in defaults:
+        for name, created_by, schedule, target_skill, description, unit in defaults:
             reg.register_routine(
                 name, kind="local", schedule=schedule,
                 target_skill=target_skill, description=description,
                 created_by=created_by,
+                metadata={"unit": unit},
             )
     finally:
         reg.close()

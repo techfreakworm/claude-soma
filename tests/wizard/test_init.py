@@ -57,9 +57,13 @@ def test_backfill_default_routines_registers_all_five(
     for name in ("healthcheck", "cache-refresh", "usage-snapshot", "idle-reaper"):
         assert routines[name]["created_by"] == "system"
         assert routines[name]["kind"] == "local"
+        assert routines[name]["metadata"] == {"unit": f"claude-soma-{name}.timer"}
     assert routines["portfolio-oneliner"]["created_by"] == "bot"
     assert routines["portfolio-oneliner"]["kind"] == "local"
     assert routines["portfolio-oneliner"]["target_skill"] == "portfolio-oneliner"
+    assert routines["portfolio-oneliner"]["metadata"] == {
+        "unit": "claude-soma-portfolio-oneliner.timer"
+    }
 
 
 def test_backfill_default_routines_is_idempotent(

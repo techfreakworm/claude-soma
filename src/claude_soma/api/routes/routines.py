@@ -356,7 +356,10 @@ def _merge_routines(
     for canonical_name, entry in merged.items():
         if entry["kind"] != "local":
             continue
-        for alias in _candidate_unit_names(canonical_name):
+        meta = entry.get("metadata") or {}
+        unit_hint = meta.get("unit") if isinstance(meta, dict) else None
+        candidates = {unit_hint} if unit_hint else _candidate_unit_names(canonical_name)
+        for alias in candidates:
             if alias in local_by_name:
                 live = local_by_name[alias]
                 if live.get("last_run") is not None:

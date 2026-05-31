@@ -323,6 +323,46 @@ def test_list_routines_includes_non_claude_soma_timers(
     assert "claude-soma-healthcheck.timer" in names
 
 
+def test_merge_routines_uses_metadata_unit_over_heuristic(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """When a registry row has metadata.unit set, the merger must use that exact
+    unit name to match systemd rows instead of the heuristic _candidate_unit_names."""
+    from claude_soma.api.routes.routines import _merge_routines
+
+    registry_rows = [
+        {
+            "name": "healthcheck",
+            "kind": "local",
+            "schedule": "every 10 min",
+            "target_skill": "healthcheck",
+            "description": "health",
+            "last_run": None,
+            "next_run": None,
+            "created_by": "system",
+            "metadata": {"unit": "claude-soma-healthcheck.timer"},
+        }
+    ]
+    local_rows = [
+        {
+            "name": "claude-soma-healthcheck.timer",
+            "kind": "local",
+            "schedule": "*:0/10",
+            "last_run": 1748000000.0,
+            "next_run": 1748000600.0,
+        }
+    ]
+    merged = _merge_routines(registry_rows, local_rows, [], [])
+    by_name = {x["name"]: x for x in merged}
+
+    assert "healthcheck" in by_name
+    hc = by_name["healthcheck"]
+    assert hc["last_run"] == pytest.approx(1748000000.0)
+    assert hc["next_run"] == pytest.approx(1748000600.0)
+    # The raw systemd entry must NOT appear as a separate row since it was consumed
+    assert "claude-soma-healthcheck.timer" not in by_name
+
+
 def test_cloud_query_is_cached_across_requests(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

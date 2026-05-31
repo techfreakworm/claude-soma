@@ -67,6 +67,21 @@ def test_set_status_no_bump_preserves_last_activity(tmp_path: Path) -> None:
     assert r.get("x")["last_activity"] == before
 
 
+def test_register_routine_stores_metadata_unit(tmp_path: Path) -> None:
+    """register_routine with metadata={'unit': ...} must round-trip the unit name."""
+    r = Registry(tmp_path / "reg.sqlite")
+    r.register_routine(
+        "healthcheck",
+        kind="local",
+        schedule="every 10 min",
+        created_by="system",
+        metadata={"unit": "claude-soma-healthcheck.timer"},
+    )
+    row = r.get_routine("healthcheck")
+    assert row is not None
+    assert row["metadata"] == {"unit": "claude-soma-healthcheck.timer"}
+
+
 def test_registry_usable_from_other_threads(tmp_path: Path) -> None:
     """Regression: the connection is opened on THIS thread but FastAPI runs sync
     route handlers in a threadpool, so .get()/.list_*()/.set_status() get called

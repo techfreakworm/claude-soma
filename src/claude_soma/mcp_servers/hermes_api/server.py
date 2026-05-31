@@ -84,6 +84,40 @@ def resolve_pending_input(event_id: int, answer: str) -> dict:
     return {"resolved": resolved}
 
 
+# ---- Registry helper (best-effort — never crashes the caller) -------------
+
+def _register_reminder_routine(
+    reminder_id: str,
+    fires_at_iso: str,
+    message: str,
+    pid: int,
+) -> None:
+    """Register a one-shot reminder in the routines registry.
+
+    Best-effort: if the registry is unavailable, log and continue so
+    schedule_reminder never fails due to a registry write error.
+    """
+    try:
+        from claude_soma.mcp_servers.project_orchestrator.registry import (  # noqa: PLC0415
+            Registry,
+        )
+        db = os.environ.get("HERMES_ORCH_DB", "/opt/claude-soma/registry.sqlite")
+        reg = Registry(db)
+        try:
+            reg.register_routine(
+                f"reminder-{reminder_id}",
+                kind="local",
+                schedule=fires_at_iso,
+                description=message[:200],
+                created_by="user",
+                metadata={"unit": f"reminder-{reminder_id}", "pid": pid},
+            )
+        finally:
+            reg.close()
+    except Exception as exc:
+        _log_notify_error(f"register_reminder_routine({reminder_id}): {exc}")
+
+
 # ---- One-shot Telegram reminder ------------------------------------------
 
 def _parse_when(when: str) -> float:
@@ -176,6 +210,8 @@ def schedule_reminder(when: str, message: str) -> dict:
         )
     finally:
         log_file.close()
+
+    _register_reminder_routine(reminder_id, fires_at_iso, message, proc.pid)
 
     return {
         "pid": proc.pid,
