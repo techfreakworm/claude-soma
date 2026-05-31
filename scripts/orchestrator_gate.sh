@@ -76,28 +76,64 @@ if [[ "$TOOL" == "Bash" ]]; then
     # so that heredoc bodies describing network tools are not mistaken for shell-outs.
     CMD_HEAD="${CMD%%<<*}"
 
-    # Package installs
-    if echo "$CMD_HEAD" | grep -qE '\b(apt|apt-get)\s+(install|update|upgrade)\b|\bpip[3]?\s+install\b|\bpipx\s+install\b|\bnpm\s+(install|i)\b|\bpnpm\s+(install|add)\b|\byarn\s+(add|install)\b|\bcargo\s+(build|install|test)\b|\bbun\s+install\b'; then
-        deny "Package install in Bash${REASON_TAIL}"
-    fi
-    # Network git
-    if echo "$CMD_HEAD" | grep -qE '\bgit\s+(clone|pull|push)\b|\bgit\s+fetch.*--depth'; then
-        deny "Network git op in Bash${REASON_TAIL}"
-    fi
-    # Builds / tests
-    if echo "$CMD_HEAD" | grep -qE '\bdocker\s+(build|run)\b|\bmake\s|\bcmake\s|\bpytest\b|\bnpm\s+test\b|\bpnpm\s+test\b'; then
-        deny "Build/test command in Bash${REASON_TAIL}"
-    fi
-    # Codex / heavy compute
-    if echo "$CMD_HEAD" | grep -qE '\bcodex\b|\bffmpeg\b.*\s-i\s|\bwhisper-cli\b.*\s-f\s'; then
-        deny "Heavy compute in Bash${REASON_TAIL}"
-    fi
-    # Network curl/wget (allow localhost / 127.0.0.1 / 0.0.0.0)
-    if echo "$CMD_HEAD" | grep -qE '\b(curl|wget)\b'; then
-        if ! echo "$CMD_HEAD" | grep -qE '\b(curl|wget)\b[^|;&]*\b(localhost|127\.0\.0\.1|0\.0\.0\.0)'; then
-            deny "Network curl/wget in Bash${REASON_TAIL}"
-        fi
-    fi
+    # Extract the first command token to avoid matching substrings in argv or paths.
+    # Steps: take first pipeline/chain segment → strip leading whitespace →
+    # strip optional "sudo " prefix → strip leading VAR=val assignments →
+    # take first whitespace-delimited word → basename (strip directory prefix).
+    _seg="${CMD_HEAD%%[|;&(]*}"
+    _seg="${_seg#"${_seg%%[![:space:]]*}"}"
+    [[ "$_seg" == sudo\ * || "$_seg" == sudo$'\t'* ]] && _seg="${_seg#sudo }"
+    while [[ -n "${_seg%% *}" && "${_seg%% *}" == *=* ]]; do _seg="${_seg#* }"; done
+    FIRST_CMD="${_seg%% *}"
+    FIRST_CMD="${FIRST_CMD##*/}"
+
+    # Deny rules keyed on FIRST_CMD so that a path or grep argument containing
+    # a blocked word (e.g. /home/user/codex-output/) never triggers a false deny.
+    case "$FIRST_CMD" in
+        apt|apt-get)
+            echo "$CMD_HEAD" | grep -qE '\b(install|update|upgrade)\b' \
+                && deny "Package install in Bash${REASON_TAIL}" ;;
+        pip|pip3|pipx)
+            echo "$CMD_HEAD" | grep -qE '\binstall\b' \
+                && deny "Package install in Bash${REASON_TAIL}" ;;
+        npm)
+            echo "$CMD_HEAD" | grep -qE '\b(install|i|test)\b' \
+                && deny "Package install/test in Bash${REASON_TAIL}" ;;
+        pnpm)
+            echo "$CMD_HEAD" | grep -qE '\b(install|add|test)\b' \
+                && deny "Package install/test in Bash${REASON_TAIL}" ;;
+        yarn)
+            echo "$CMD_HEAD" | grep -qE '\b(add|install)\b' \
+                && deny "Package install in Bash${REASON_TAIL}" ;;
+        cargo)
+            echo "$CMD_HEAD" | grep -qE '\b(build|install|test)\b' \
+                && deny "Build/install/test in Bash${REASON_TAIL}" ;;
+        bun)
+            echo "$CMD_HEAD" | grep -qE '\binstall\b' \
+                && deny "Package install in Bash${REASON_TAIL}" ;;
+        git)
+            echo "$CMD_HEAD" | grep -qE '\b(clone|pull|push)\b|\bfetch\b.*--depth' \
+                && deny "Network git op in Bash${REASON_TAIL}" ;;
+        docker)
+            echo "$CMD_HEAD" | grep -qE '\b(build|run)\b' \
+                && deny "Build command in Bash${REASON_TAIL}" ;;
+        make|cmake)
+            deny "Build command in Bash${REASON_TAIL}" ;;
+        pytest)
+            deny "Test command in Bash${REASON_TAIL}" ;;
+        codex)
+            deny "Heavy compute in Bash${REASON_TAIL}" ;;
+        ffmpeg)
+            echo "$CMD_HEAD" | grep -qE '\s-i\s' \
+                && deny "Heavy compute in Bash${REASON_TAIL}" ;;
+        whisper-cli)
+            echo "$CMD_HEAD" | grep -qE '\s-f\s' \
+                && deny "Heavy compute in Bash${REASON_TAIL}" ;;
+        curl|wget)
+            # Allow calls to localhost / loopback; deny all other network targets.
+            echo "$CMD_HEAD" | grep -qE '\b(localhost|127\.0\.0\.1|0\.0\.0\.0)\b' \
+                || deny "Network curl/wget in Bash${REASON_TAIL}" ;;
+    esac
 fi
 
 # No decision -> allow

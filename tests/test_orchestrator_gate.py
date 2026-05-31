@@ -364,3 +364,58 @@ def test_write_missing_file_path_denied() -> None:
     # Write with no file_path should still deny (fail-safe)
     r = _run({"tool_name": "Write", "tool_input": {}})
     _assert_deny(r)
+
+
+# =========================================================================
+# Argv-substring false-positive regression (S-GATE-V2)
+# Commands whose argv / path happens to contain a blocked word must ALLOW.
+# The blocked word as the actual first command token must still DENY.
+# =========================================================================
+
+@pytest.mark.parametrize("command", [
+    # "codex" appears in a path or grep arg — ls / find / grep is the command
+    "ls /home/ubuntu/some-cdx-path/",
+    "ls /home/ubuntu/codex-results/",
+    'grep -r "codex" /tmp/',
+    "find /tmp/codex-output -name '*.py'",
+    "cat /tmp/codex-output.txt",
+    # "apt" / "apt-get" in a path — ls is the command
+    "ls /apt/something",
+    "ls /usr/lib/apt-packages/",
+    # "pip" in a path
+    "ls /usr/lib/pip-packages/",
+    # "npm install" as a search string — grep is the command
+    'grep "npm install" package.json',
+    "cat /tmp/npm-install.log",
+    # "docker build" in a grep arg
+    'grep "docker build" Makefile',
+    # "pytest" in a path
+    "ls /home/ubuntu/.pytest_cache/",
+    # "ffmpeg" in a path — ls is the command, no -i flag on ls
+    "ls /home/ubuntu/ffmpeg-assets/",
+    # "pip install" after a pipe — first segment is cat, so gate sees cat
+    "cat README.md | grep 'pip install'",
+])
+def test_bash_argv_substring_allowed(command: str) -> None:
+    r = _run({"tool_name": "Bash", "tool_input": {"command": command}})
+    _assert_allow(r)
+
+
+@pytest.mark.parametrize("command", [
+    # The blocked binary IS the first command token
+    "codex --image-gen 'a photo'",
+    "apt install foo",
+    "apt-get install foo",
+    "ls /tmp/ && apt install foo",  # apt install is a later pipeline segment — still deny?
+    "pip install requests",
+    "npm install express",
+    "docker build .",
+    "pytest tests/",
+    "make clean",
+])
+def test_bash_command_as_first_token_denied(command: str) -> None:
+    # Subset that are unambiguously first-token denies (excludes &&-chained for clarity)
+    if "&&" in command:
+        pytest.skip("chained command — gate only inspects first segment")
+    r = _run({"tool_name": "Bash", "tool_input": {"command": command}})
+    _assert_deny(r)
