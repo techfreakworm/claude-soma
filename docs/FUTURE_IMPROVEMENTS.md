@@ -60,7 +60,7 @@ So the future list below isn't confused with finished work. Summarized from `git
 | 6 | ~~Logrotate for `/var/log/claude-soma/*.log`~~ **DONE** | Observability | S | Per-lead + channel logs grow unbounded. |
 | 7 | ~~`NEEDS_REAUTH-<platform>` surfacing to the user~~ **DONE** | Social | S | Playwright auth silently rots; user only finds out when a post fails. |
 
-### Surfaced 2026-05-29 / 2026-05-30
+### Surfaced 2026-05-29 / 2026-05-30 / 2026-05-31
 
 Not yet prioritized above the existing top-7; tracked here for visibility. The first two are **S**; the lead notify channel is **High** priority, **M** effort.
 
@@ -68,6 +68,7 @@ Not yet prioritized above the existing top-7; tracked here for visibility. The f
 - **Orchestrator gate false positives** — `9b26c72` gate flags heredoc bodies that *mention* network tools (not invoke them) and `/tmp` writes. A few hours of heuristic tightening eliminates daily false-positive friction. Validated by two live bot denials, 2026-05-29. See Orchestration section.
 - **Lead → orchestrator notify channel** (**High**) — single biggest UX friction in the current system; every other lead interaction is gated on user-side polling. Leads have no way to push a completion event back to the bot — the bot must `capture-pane` each lead on every `Status?` ping. Full mechanism survey + recommendation (localhost HTTP API + SQLite spool) in the Orchestration section below. Surfaced 2026-05-30.
 - **Caddy-via-own-domain file relay** (**Medium-High**) — ngrok bandwidth pain hit during 235 MB pptx demo relay, 2026-05-30; replaces markserv+ngrok with a Caddy-routed `/files/` path on the user's own domain. Full design + recommendation in the Social section below.
+- **Default notify-event emission by leads** (**High**) — today's FI-DOMAIN implementation pass shipped cleanly but soma-improver fired zero STARTED / MILESTONE / NEEDS_INPUT events; user had to poll to know progress. FI-NOTIFY ships the channel (`c348675`); this follow-up bakes the convention into every lead brief at spawn time so leads are producers of progress signals by default. Score 25 (P1 × leverage 5 / effort S) — highest in the open queue. Details in the Orchestration section below. Surfaced 2026-05-31.
 
 ---
 
@@ -157,6 +158,81 @@ The bot routes events differently in the user's DM depending on the `type` field
 | `COMPLETED` | `name`, `summary` (what was done and what was produced) | `paths[]` (absolute local file paths to deliverables), `urls[]` (links — GitHub, deployed pages, etc.) | Celebratory DM; if `paths[]` is non-empty, files are attached via the existing `send_tg_reply` multipart path |
 | `NEEDS_INPUT` | `name`, `question` (the question the lead is blocked on) | `options[]` (candidate answers for a multiple-choice prompt), `timeout` (seconds before the lead proceeds with a default or aborts) | DM the question to the user; the user's next reply is routed back to the lead via `tmux send-keys`; the bot must maintain a `pending_input_for_lead` map to correlate the reply correctly |
 | `ERROR` | `name`, `error` (error message), `context` (what the lead was attempting when the error occurred) | `traceback` (full stack trace), `recoverable` (bool — `true` if the lead is retrying, `false` if it has stopped) | DM with severity-tagged HTML formatting (bold lead name + `ERROR` label); `recoverable: false` triggers an additional "lead has stopped — manual intervention may be needed" suffix |
+
+### Default notify-event emission by leads (follow-up to FI-NOTIFY)
+
+**Priority: High. Effort: S.**
+
+#### Problem
+
+> "leads should EMIT NOTIFY EVENTS AT MILESTONES BY DEFAULT, not just when explicitly told to. Today you did the work fine but did not emit STARTED/MILESTONE/COMPLETED/NEEDS_INPUT events because your task brief did not say to. Result: user had to poll to know if you were stuck. Fix: bake into the lead system prompt template a convention to fire notify events at major boundaries — STARTED when a major task begins, MILESTONE for major commits, COMPLETED with deliverable paths when a task wraps, NEEDS_INPUT when blocked on the user, ERROR on hard failures. This makes the lead the producer of progress signals by default + drastically reduces user-side polling."
+
+Today's concrete example: lead soma-improver had `mcp__hermes-notify__notify_orchestrator` available post-restart but emitted zero events during the FI-DOMAIN implementation pass. The user had to send a "are you working?" ping to learn whether the lead was stuck or still running. The channel exists (`c348675`); the muscle memory does not.
+
+#### Recommended fix path
+
+**Option (b): the bot's spawn flow prepends a "Standing notify convention" block to every brief** — programmatically, in `src/claude_soma/mcp_servers/project_orchestrator/server.py` (the `spawn_project_impl` function, before passing `brief` to `spawn_background_lead`).
+
+Reasoning:
+- Survives lead restarts: the prepended convention is the first text in the lead's transcript; `--continue` picks it up on every restart from the same transcript.
+- Operator can override per-spawn: the brief is the operator's (or bot's) to compose; a different first block takes precedence.
+- No coordinated system-prompt file deployment: option (c) below requires a new file at `/opt/claude-soma/` and a spawner `claude_argv` change; option (b) is a single-site change in `server.py`.
+- Decoupled from `responsive_bot.md`: option (a) relies on the bot's context window carrying a reminder instruction each time it composes a brief, which is weaker than a code-level guarantee.
+
+**Alternative (a): Add a standing block to `system_prompts/responsive_bot.md`** instructing the bot to always prepend the notify convention to each spawn brief. Trade-off: depends on the bot's inference at brief-composition time; may be skipped in low-effort mode or when the brief construction path is indirect; no code-level guarantee.
+
+**Alternative (c): New file `system_prompts/lead_notify_convention.md` appended via `--append-system-prompt-file`** at lead spawn (new flag in `spawner.py`'s `claude_argv`). Trade-off: clean abstraction but requires (i) a new file deployed to `/opt/claude-soma/`; (ii) a spawner code change to add the flag; (iii) verification that `--append-system-prompt-file` is honoured on the Claude Code version in use. Option (b) achieves the same guarantee with fewer moving parts.
+
+#### Convention spec
+
+The following block is the exact text to prepend to every lead brief. The implementation subagent should insert it verbatim into `spawn_project_impl` before the `brief` argument is passed to `spawn_background_lead`:
+
+```
+== Standing notify convention (mandatory) ==
+You have `mcp__hermes-notify__notify_orchestrator` available. Emit events at
+these boundaries — no explicit instruction needed:
+
+- STARTED: fire once when you pick up a substantive task (>2 tool calls of work
+  expected). Payload: {"description": "<one-line summary>", "eta": "<optional>"}.
+
+- MILESTONE: fire after each commit and after each major sub-task completes.
+  Payload: {"progress": "<one-line>", "percent": <optional 0-100>, "eta_remaining":
+  "<optional>"}. The listener throttles to one per lead per 5 min; be selective
+  regardless — one per commit, not one per Edit.
+
+- COMPLETED: fire when the work is shipped, tests pass, and the push lands.
+  Payload: {"summary": "<2-3 sentences>", "paths": ["<absolute deliverable paths>"],
+  "urls": ["<repo links>"]}. Terminal — only fire when genuinely done.
+
+- NEEDS_INPUT: fire when you are blocked on the user (DNS, password, decision).
+  Payload: {"question": "<the ask>", "options": ["<choice 1>", ...] (omit if
+  open-ended), "timeout": <seconds> (omit if indefinite)}. This is the ONLY
+  correct way to signal blocked-on-human; do not stall silently.
+
+- ERROR: fire on hard failure (test broke, push failed, STOP-AND-SURFACE fired).
+  Payload: {"error": "<short msg>", "context": "<what was being attempted>",
+  "traceback": "<optional>", "recoverable": <bool>}.
+== End notify convention ==
+```
+
+#### Anti-patterns to avoid
+
+The user is the receiver of these DMs. Do not spam.
+
+- **One STARTED per session** — do not fire it for every Bash call or tool invocation; once per substantive task is sufficient.
+- **MILESTONE is selective** — the listener throttles server-side at 5 min per lead, but the lead should still be choosy: one per commit or major sub-task, not one per Edit call.
+- **COMPLETED is terminal** — only fire when the work is genuinely done; a premature COMPLETED followed by more tool calls confuses the user about what was actually delivered.
+- **NEEDS_INPUT replaces stalling** — do not silently pause waiting on a human decision; fire NEEDS_INPUT, which routes the question to the user's DM and allows the bot to correlate the reply back to the lead via `tmux send-keys`.
+
+#### Cross-references
+
+- `### Lead → orchestrator notify channel` (above) — the shipped mechanism this convention builds on. Commits: `c348675` (FI-NOTIFY shipped), `05f97a7` (DM HTML fix), `1502e93` (attachment hardening). Awaiting restart activation as of 2026-05-31.
+- `BUGS_PLAN.md` inventory — FI-NOTIFY listed as "shipped; awaiting restart activation." This entry is the follow-up that converts the shipped channel into default usage. Score 25 (P1_weight 5 × leverage 5 / effort S 1 = 25) places it above every currently open item in the queue (previous high: FI-GATE at 20).
+- `KNOWN_BUGS.md` — no directly related entry; this is a usage-convention gap, not a code defect.
+
+#### What is NOT in this entry
+
+`responsive_bot.md` edits, changes to `spawner.py` or `spawn_background_lead`, and any lead-template file changes are out of scope here. The actual implementation — prepending the convention block in `server.py`'s `spawn_project_impl` — is a separate impl task for the round that ships this. This entry is doc-only.
 
 ## Dashboard
 
