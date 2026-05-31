@@ -93,6 +93,12 @@
         "--executable-path", "/usr/local/bin/playwright-chromium"
       ],
       "alwaysLoad": true
+    },
+    "grok-image": {
+      "type": "stdio",
+      "command": "/opt/claude-soma/.venv/bin/python",
+      "args": ["-m", "claude_soma.mcp_servers.grok_image.server"],
+      "alwaysLoad": true
     }
   }
 }
