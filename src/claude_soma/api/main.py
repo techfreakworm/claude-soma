@@ -8,9 +8,10 @@ from fastapi.middleware.cors import CORSMiddleware
 
 def create_app() -> FastAPI:
     app = FastAPI(title="claude-soma-api", version="0.1.0")
+    _soma_domain = os.environ.get("SOMA_DOMAIN", "soma.mayankgupta.in")
     origins = [o.strip() for o in os.environ.get(
         "HERMES_API_CORS_ORIGINS",
-        "https://claude.mayankgupta.in,http://localhost:3000",
+        f"https://{_soma_domain},http://localhost:3000",
     ).split(",") if o.strip()]
     app.add_middleware(
         CORSMiddleware, allow_origins=origins, allow_credentials=True,

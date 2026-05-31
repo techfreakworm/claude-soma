@@ -41,6 +41,7 @@ post-tag on `main`.
 - [x] **iptables fix:** Phase 1 inserted ACCEPT 80/443 at position 6, AFTER Oracle's default REJECT at position 5 — so the public couldn't reach Caddy. Re-inserted at position 5 (now: SSH → 80 → 443 → REJECT). Bake into next bootstrap script (see V1.5 followups).
 - [x] **`portfolio-oneliner` weekday brief** timer added by the bot itself (Mon–Fri 03:30 UTC). 5 systemd timers total.
 - [x] **Operator override convention**: tunable overrides (e.g. `HERMES_MAX_CONCURRENT_PROJECTS`) go in `/etc/claude-soma/secrets.env`, not `.mcp.json`; `.mcp.json` carries only load-bearing paths.
+- [x] **SOMA_DOMAIN centralized** — single env-knob in `/etc/claude-soma/secrets.env` controls the public dashboard domain. `api/main.py` reads `SOMA_DOMAIN` (default `soma.mayankgupta.in`) to build the CORS origins fallback; `wizard/init.py`'s `render_caddyfile()` reads the same knob. Override with: `SOMA_DOMAIN=yourhost.example.com` in `secrets.env` then restart the API (`sudo systemctl restart claude-soma-api.service`). `HERMES_API_CORS_ORIGINS` still works as a full comma-list override (used by `systemd/claude-soma-api.service` for the live value). `caddy/files.caddyfile.in` (`files.mayankgupta.in`) is intentionally NOT templated here — that is a separate future Caddy work item.
 
 ### Pending
 
@@ -149,6 +150,8 @@ post-tag on `main`.
 - [ ] **Routines registry: store `systemd unit name` in `metadata.unit`** so the merger doesn't rely on heuristic name aliasing (`<name>` ↔ `claude-soma-<name>.timer`). Will come naturally when #37 lands.
 
 - [ ] **Pre-existing `F401` in `project_orchestrator/server.py`** — `InvalidProjectName`, `BriefTooLong` imports unused. One-line cleanup. Flagged by both subagents, left alone per "don't reformat unrelated code".
+
+- [x] **Marketplace publish path verified** — `.claude-plugin/marketplace.json` passes required-fields check: `name`, `version`, `description`, `author` (object with `name` + `email`), `repository`, `license`. All fields present; author is correctly structured as an object (string form would fail Zod validation). Regression guarded by `tests/test_marketplace.py::test_marketplace_author_is_object_not_string` (7 tests total in that file).
 
 ## Operational quick reference
 

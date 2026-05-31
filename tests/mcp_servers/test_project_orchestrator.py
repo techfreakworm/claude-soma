@@ -1,6 +1,7 @@
 # tests/mcp_servers/test_project_orchestrator.py
 from __future__ import annotations
 
+import time
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 
@@ -257,3 +258,85 @@ def test_get_team_impl_returns_roster(monkeypatch) -> None:
 def test_get_team_impl_unknown_project_raises() -> None:
     with pytest.raises(RuntimeError):
         orch.get_team_impl("does-not-exist")
+
+
+def test_touch_project_bumps_last_activity(monkeypatch) -> None:
+    """touch_project must update last_activity in the registry and return
+    touched_at. The bot talks to leads via raw tmux send-keys (bypassing
+    send_to_project_impl's automatic touch), so this tool is the only way the
+    idle clock advances for those conversations."""
+    _no_url_poll(monkeypatch)
+    with patch("subprocess.run", side_effect=_tmux_side_effect("")):
+        orch.spawn_project_impl(name="touch-me", type_="custom",
+                                brief="x", permission_mode="default")
+    before = time.time()
+    result = orch.touch_project_impl(name="touch-me")
+    after = time.time()
+    assert result["name"] == "touch-me"
+    assert before <= result["touched_at"] <= after
+    row = orch._reg().get("touch-me")
+    assert row is not None
+    assert float(row["last_activity"]) >= before
+
+
+def test_touch_project_raises_for_unknown_name() -> None:
+    with pytest.raises(RuntimeError, match="no project named"):
+        orch.touch_project_impl(name="no-such-lead")
+
+
+def test_cap_intersect_skips_dead_leads(monkeypatch) -> None:
+    """_reconcile_active intersects active registry rows with is_lead_alive before
+    counting toward HERMES_MAX_CONCURRENT_PROJECTS. Stale 'active' rows for dead
+    leads must not block new spawns.
+
+    Seed 6 active rows, mock is_lead_alive to return False for 2 of them; a 7th
+    spawn must succeed because the effective count is 4 (< cap=6)."""
+    _no_url_poll(monkeypatch)
+    monkeypatch.setattr(orch, "MAX_CONCURRENT", 6)
+
+    # Spawn 6 leads -- all active in the registry. Subprocess is fully mocked.
+    names = [f"cap-lead-{i}" for i in range(6)]
+    with patch("subprocess.run", side_effect=_tmux_side_effect("")):
+        for n in names:
+            orch.spawn_project_impl(name=n, type_="custom",
+                                    brief="x", permission_mode="default")
+
+    # Effective count = 4: leads 0 and 1 are dead, 2-5 are alive.
+    dead = {"cap-lead-0", "cap-lead-1"}
+    def _liveness(name: str) -> bool:
+        return name not in dead
+
+    with patch("subprocess.run", side_effect=_tmux_side_effect("")):
+        with patch.object(orch, "is_lead_alive", side_effect=_liveness):
+            r = orch.spawn_project_impl(name="cap-lead-6", type_="custom",
+                                        brief="x", permission_mode="default")
+
+    assert r["agent_id"] == "soma-proj-cap-lead-6"
+    # Dead leads must have been flipped to 'dead' in the registry.
+    for n in dead:
+        assert orch._reg().get(n)["status"] == "dead"
+
+
+def test_kill_project_archive_logs_when_no_memory(monkeypatch, caplog) -> None:
+    """When archive=True and the lead's cwd has no .claude/ memory dir, a
+    warning must be logged so callers can distinguish 'archived' from 'skipped'
+    rather than silently getting a None return value."""
+    import logging
+    _no_url_poll(monkeypatch)
+    with patch("subprocess.run", side_effect=_tmux_side_effect("")):
+        orch.spawn_project_impl(name="no-mem", type_="custom",
+                                brief="x", permission_mode="default")
+
+    p = orch._reg().get("no-mem")
+    assert p is not None
+    memory_dir = Path(p["cwd"]) / ".claude"
+    assert not memory_dir.exists(), "test requires no .claude/ dir in cwd"
+
+    with caplog.at_level(logging.WARNING, logger="claude_soma.mcp_servers.project_orchestrator.server"):
+        with patch.object(orch, "kill_session"):
+            with patch.object(orch, "is_lead_alive", return_value=False):
+                result = orch.kill_project_impl(name="no-mem", archive=True)
+
+    assert result["name"] == "no-mem"
+    assert any("nothing to archive" in record.message and "no-mem" in record.message
+               for record in caplog.records)

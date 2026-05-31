@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import time
 from pathlib import Path
@@ -13,6 +14,8 @@ from .spawner import (
     spawn_background_lead, kill_session, is_lead_alive, discover_team,
 )
 from .templates import load_template, list_template_names, TemplateNotFound
+
+logger = logging.getLogger(__name__)
 
 
 DB_PATH = os.environ.get("HERMES_ORCH_DB", "/opt/claude-soma/registry.sqlite")
@@ -117,6 +120,23 @@ def send_to_project_impl(*, name: str, message: str) -> dict:
     return {"name": name, "agent_id": p["agent_id"], "sent_at": time.time()}
 
 
+def touch_project_impl(*, name: str) -> dict:
+    """Bump last_activity for a lead that the bot messaged via raw tmux send-keys.
+
+    send_to_project_impl touches the registry automatically, but the bot's
+    canonical chat-to-lead path is raw `tmux send-keys` (which bypasses
+    send_to_project_impl entirely). Validated 2026-05-29: t1-spawn-test's
+    last_activity stayed at spawn timestamp despite a delivered+answered message.
+    Call this right after every tmux send-keys to a lead so the idle clock
+    reflects real conversation activity.
+    """
+    p = _reg().get(name)
+    if not p:
+        raise RuntimeError(f"no project named {name!r}")
+    _reg().touch(name)
+    return {"name": name, "touched_at": time.time()}
+
+
 def kill_project_impl(*, name: str, archive: bool = True) -> dict:
     p = _reg().get(name)
     if not p:
@@ -138,6 +158,10 @@ def kill_project_impl(*, name: str, archive: bool = True) -> dict:
                 f"check tmux socket soma-lead-{bare} and unit claude-soma-lead-{bare}.service"
             )
     _reg().set_status(name, "killed")
+    if archive:
+        memory_dir = Path(p["cwd"]) / ".claude"
+        if not memory_dir.exists():
+            logger.warning("nothing to archive for %s", name)
     return {"name": name, "killed_at": time.time()}
 
 
@@ -191,6 +215,17 @@ def list_projects() -> list[dict]:
 def send_to_project(name: str, message: str) -> dict:
     """Resolve a project name to its agent_id so the caller can SendMessage."""
     return send_to_project_impl(name=name, message=message)
+
+
+@mcp.tool()
+def touch_project(name: str) -> dict:
+    """Bump last_activity for a lead messaged via raw tmux send-keys.
+
+    The bot's canonical chat-to-lead path is raw `tmux send-keys`, which
+    bypasses send_to_project's automatic touch. Call this right after every
+    tmux send-keys to a lead to keep the idle clock accurate.
+    """
+    return touch_project_impl(name=name)
 
 
 @mcp.tool()

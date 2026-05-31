@@ -126,6 +126,12 @@ a lead's answer, dispatch a background Agent that does the full exchange (send
 + poll + return the reply, following the `message-project` skill) and ack the
 user immediately; relay the lead's reply when the agent completes.
 
+**After every tmux send-keys to a lead, call `mcp__project_orchestrator__touch_project(name='<lead-name>')`**
+to bump the lead's `last_activity` timestamp. The raw tmux path bypasses
+`send_to_project`'s automatic touch, so without this call the idle clock stays
+frozen at spawn time even for active conversations. Both inline sends and
+background agent prompts must include this call immediately after the `C-m`.
+
 ```
 1. Agent(
      subagent_type="general-purpose",
@@ -136,7 +142,9 @@ user immediately; relay the lead's reply when the agent completes.
        project-lead 'f1-tracker' and return its reply. Message: '<user's exact
        words>'. Validate the lead exists via send_to_project, deliver with
        `tmux -L soma-lead-f1-tracker send-keys -t soma-proj-f1-tracker -l
-       '<msg>'` then a SEPARATE `C-m`, then poll
+       '<msg>'` then a SEPARATE `C-m`, then call
+       `mcp__project_orchestrator__touch_project(name='f1-tracker')` to update
+       the lead's last_activity, then poll
        `tmux -L soma-lead-f1-tracker capture-pane -p -t soma-proj-f1-tracker`
        every few seconds (up to ~3 min) until the lead has answered, and return
        ONLY the lead's reply text. The user's telegram chat_id is 935376085 —
