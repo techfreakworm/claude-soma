@@ -76,7 +76,7 @@ Weights: P0=10, P1=5, P2=2, P3=1. Effort: S=1, M=3, L=8. Leverage 1–5.
 | FI-GRAPH | Exact teammate handles in graph | P3 | 2 | M | low | **0.67** | open |
 | FI-FORK | Forking guide automation | P3 | 1 | M | low | **0.33** | open |
 | GROK | Grok Build integration (image + video) | — | — | S/M | medium | — | blocked: user decision |
-| FI-GROK-BIN | `grok_image` MCP hardcodes `/usr/local/bin/grok` — resolve via `shutil.which("grok")` + `GROK_BIN` env override | P2 | 3 | S | low | **6** | open — surfaced 2026-05-31 during live dual-photo verify; bot used direct `grok` workaround |
+| ~~FI-GROK-BIN~~ | `grok_image` binary-path resolution — **shipped** (see Recently-shipped table below) | — | — | S | low | — | shipped |
 
 *Dependency-demoted rows: FI-TEAM and FI-REAPER score 1.33 but cannot start until BUG-2 lands.
 FI-CADDY (score 8.33) cannot start until FI-DOMAIN ships the `SOMA_DOMAIN` env knob (score 6, Round N
@@ -473,6 +473,11 @@ is made. Until the user picks a path, nothing in the Grok section belongs in any
 
 These commits closed items that are intentionally absent from the queue above:
 
+- **(this commit, 2026-05-31)** — `grok+responsive`: send-as-ready dual-photo delivery (no
+  collect-both-then-send), 120s hard timeout per provider (codex wrapped in `timeout 120`, grok
+  via the new `timeout_seconds=120` MCP-tool parameter), and `grok_image` binary-path resolution
+  via `GROK_BIN` env > `shutil.which("grok")` > `/usr/local/bin/grok` fallback. Closes
+  FI-GROK-BIN (binary hardcode bug surfaced earlier today).
 - **`1502e93`** — attachment hardening: DM pipeline delivers files up to 50 MB, placeholder response
   for oversized files, per-attachment isolation. Awaiting restart activation.
 - **`05f97a7`** — FI-NOTIFY DM HTML fix: skip `gfm_to_html`, html-escape user fields in DM pipeline.

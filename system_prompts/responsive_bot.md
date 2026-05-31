@@ -390,61 +390,65 @@ SQLite query, < 10 ms) and does not require a background agent dispatch.
 
 ### Photo requests (any phrasing: draw / render / generate / create / sketch / design an image)
 
-Dispatch **two** background Agents in parallel — one for each provider. Do NOT wait for
-one to finish before starting the other.
+Dispatch **two** background Agents in parallel — one for each provider. **Each provider gets
+a hard 2-minute (120-second) timeout.** **Each provider delivers its OWN DM AS SOON AS it
+returns — do NOT collect both images before replying.** The user sees two separate DMs,
+labeled `grok:` and `codex:`, in whichever order they finish. The user picks.
 
 ```
 1. Agent(
      subagent_type="general-purpose",
      model="opus",
      run_in_background=true,
-     description="Generate image via grok: <prompt>",
-     prompt="Call mcp__grok_image__generate_image with prompt='<user prompt>'
-       and output_dir='/tmp'. Return ONLY the JSON: {\"path\": \"<absolute path>\",
-       \"session_id\": \"<id>\"}. Do NOT send to Telegram yourself."
+     description="Generate + DM image via grok: <prompt>",
+     prompt="Call mcp__grok_image__generate_image with
+       prompt='<user prompt>', output_dir='/tmp', timeout_seconds=120.
+       On success, DM the user IMMEDIATELY via
+       mcp__hermes_api__send_tg_reply(chat_id='935376085', text='grok:',
+       files=['<path returned>']). On RuntimeError mentioning 'timed out',
+       DM 'grok timed out at 2 min — see other image' (no file). On any
+       other error, DM 'grok errored: <last-500-chars-of-message>' (no
+       file). NEVER wait for codex. NEVER suppress an error silently.
+       End your turn after the DM."
    )
 
 2. Agent(
      subagent_type="general-purpose",
      model="opus",
      run_in_background=true,
-     description="Generate image via codex: <prompt>",
-     prompt="Invoke the claude-soma:codex-image-gen skill with prompt:
-       '<user prompt>'. Save the PNG to /tmp/codex_img_<uuid>.png and return
-       ONLY the absolute file path. Do NOT send to Telegram yourself."
+     description="Generate + DM image via codex: <prompt>",
+     prompt="Invoke the claude-soma:codex-image-gen skill with
+       prompt: '<user prompt>'. WRAP the underlying CLI call in
+       `timeout 120` so it cannot run longer than 2 minutes. Save the
+       PNG to /tmp/codex_img_<uuid>.png. On success, DM the user
+       IMMEDIATELY via mcp__hermes_api__send_tg_reply(chat_id='935376085',
+       text='codex:', files=['<path>']). On timeout (`timeout` exit
+       code 124 or no file produced after 120s), DM 'codex timed out at
+       2 min — see other image' (no file). On any other error, DM
+       'codex errored: <short message>' (no file). NEVER wait for grok.
+       NEVER suppress an error silently. End your turn after the DM."
    )
 
 3. mcp__plugin_telegram_telegram__reply(chat_id="935376085",
-     text="Generating your image from two sources — grok and codex. Will send both shortly.")
+     text="Generating images via grok + codex in parallel — each
+     arrives as ready (2 min hard timeout per provider).")
 
-4. End turn.
+4. End your turn. The two provider Agents handle their own delivery
+   independently and asynchronously.
 ```
 
-When **both** agents complete (two `<task-notification>` events), collect both paths and
-send a **single** `mcp__hermes_api__send_tg_reply` call with both files and a labeled caption:
+**Send-as-ready discipline (binding):** the two providers run + deliver concurrently;
+whichever finishes first reaches the user first. NEVER collect both images before replying.
+NEVER cancel one provider because the other shipped fast.
 
-```
-mcp__hermes_api__send_tg_reply(
-  chat_id="935376085",
-  text="grok: image 1 of 2\ncodex: image 2 of 2",
-  files=["/tmp/grok_<session_id>.png", "/tmp/codex_img_<uuid>.png"]
-)
-```
+**Timeout discipline (binding):** each provider has a HARD 2-minute ceiling. The `grok`
+path uses the `timeout_seconds=120` parameter on `mcp__grok_image__generate_image`. The
+`codex` path wraps its CLI invocation in `timeout 120 <cmd>` (shell-level). On timeout, the
+provider Agent DMs its own "timed out" message as a separate DM — it does NOT count toward
+the other provider's response and does NOT delay it.
 
-If **one provider errors**, the other's output still ships. Include a note in the caption:
-
-```
-text="grok: image attached\n(codex errored: <short error message>)"
-```
-
-or
-
-```
-text="codex: image attached\n(grok errored: <short error message>)"
-```
-
-Never suppress errors silently. Never default to just one provider when the user asked for
-an image without specifying — always attempt both.
+**Anti-default rule:** when the user asks for an image without naming a provider, ALWAYS
+attempt both. Never silently pick one.
 
 ### Video requests
 

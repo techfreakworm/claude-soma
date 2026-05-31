@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -10,30 +11,52 @@ from pathlib import Path
 from mcp.server.fastmcp import FastMCP
 
 
-GROK_BIN = "/usr/local/bin/grok"
+_GROK_BIN_FALLBACK = "/usr/local/bin/grok"
 
 _IMAGE_LINK_RE = re.compile(r"\(([^)]+\.(?:jpg|png))\)")
 
 
-def generate_image_impl(prompt: str, output_dir: str = "/tmp") -> dict:
+def _resolve_grok_bin() -> str:
+    """Resolve the grok binary path. Order: GROK_BIN env > shutil.which("grok") > fallback.
+
+    Resolved lazily per call so env changes (and PATH updates after MCP server start)
+    are honored without restart. The fallback preserves the original
+    `/usr/local/bin/grok` path for systems where that IS where grok lives.
+    """
+    env_override = os.environ.get("GROK_BIN")
+    if env_override:
+        return env_override
+    found = shutil.which("grok")
+    if found:
+        return found
+    return _GROK_BIN_FALLBACK
+
+
+def generate_image_impl(
+    prompt: str,
+    output_dir: str = "/tmp",
+    timeout_seconds: int = 120,
+) -> dict:
     if not prompt.strip():
         raise ValueError("prompt is empty")
 
     out_path = Path(output_dir)
     out_path.mkdir(parents=True, exist_ok=True)
 
+    grok_bin = _resolve_grok_bin()
+
     try:
         result = subprocess.run(
-            [GROK_BIN, "-p", f"/imagine {prompt}", "--output-format", "json"],
+            [grok_bin, "-p", f"/imagine {prompt}", "--output-format", "json"],
             capture_output=True,
             text=True,
-            timeout=60,
+            timeout=timeout_seconds,
         )
     except subprocess.CalledProcessError as e:
         stderr = (e.stderr or "")[-500:]
         raise RuntimeError(f"grok failed: {stderr}") from e
     except subprocess.TimeoutExpired as e:
-        raise RuntimeError("grok timed out after 60s") from e
+        raise RuntimeError(f"grok timed out after {timeout_seconds}s") from e
 
     if result.returncode != 0:
         stderr = (result.stderr or "")[-500:]
@@ -66,9 +89,24 @@ mcp = FastMCP("grok_image")
 
 
 @mcp.tool()
-def generate_image(prompt: str, output_dir: str = "/tmp") -> dict:
-    """Generate an image via the grok CLI (/imagine) and return its local path."""
-    return generate_image_impl(prompt, output_dir)
+def generate_image(
+    prompt: str,
+    output_dir: str = "/tmp",
+    timeout_seconds: int = 120,
+) -> dict:
+    """Generate an image via the grok CLI (/imagine) and return its local path.
+
+    Args:
+        prompt: The natural-language image prompt to send to grok's /imagine.
+        output_dir: Directory where the resulting file is copied. Default: /tmp.
+        timeout_seconds: Hard timeout for the grok CLI invocation in seconds.
+            Default: 120. Honor the dual-photo dispatch convention in
+            responsive_bot.md — each provider gets at most 120s.
+
+    Returns:
+        {"path": "<absolute path>", "session_id": "<id>"}
+    """
+    return generate_image_impl(prompt, output_dir, timeout_seconds)
 
 
 def main() -> None:
