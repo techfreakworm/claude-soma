@@ -260,11 +260,17 @@ def get_status_impl(name: str) -> dict:
 def get_team_impl(name: str) -> dict:
     """Return a lead's live agent-team roster (teammates discovered from its tmux
     panes) and persist the roster to the registry for resume re-establishment.
-    Raises if there's no such project."""
+    Raises if there's no such project.
+
+    Reads registry team_members FIRST so self-reported canonical handles (written
+    via hermes-notify set_teammate_handle) substitute the pane-derived teammate-N
+    placeholders in discover_team's output.
+    """
     p = _reg().get(name)
     if not p:
         raise RuntimeError(f"no project named {name!r}")
-    team = discover_team(p["agent_id"])
+    registry_members = _reg().get_team_members(name)
+    team = discover_team(p["agent_id"], registry_members=registry_members)
     for member in team:
         _reg().upsert_team_member(
             lead_name=name,

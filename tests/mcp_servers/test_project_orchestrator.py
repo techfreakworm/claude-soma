@@ -525,6 +525,117 @@ def test_resume_project_no_suffix_when_no_team(monkeypatch) -> None:
     assert captured.get("resume_prompt_suffix") is None
 
 
+def test_get_team_impl_uses_canonical_handles_from_registry(monkeypatch) -> None:
+    """get_team_impl must substitute self-reported canonical handles (from
+    team_members rows that don't look like teammate-N) for pane-derived handles."""
+    _no_url_poll(monkeypatch)
+    with patch("subprocess.run", side_effect=_tmux_side_effect("")):
+        orch.spawn_project_impl(name="canon-team", type_="custom",
+                                brief="x", permission_mode="default")
+    # Pre-seed a canonical (self-reported) handle.
+    orch._reg().upsert_team_member("canon-team", "@soma-writer", "writer", "self-reported")
+
+    pane_roster = [{"handle": "teammate-1", "role": "writer", "status": "active"}]
+    captured_args: dict = {}
+
+    original_discover = orch.discover_team
+
+    def _spy_discover(name, registry_members=None):
+        captured_args["registry_members"] = registry_members
+        return original_discover(name, registry_members=registry_members)
+
+    with patch.object(orch, "discover_team", side_effect=_spy_discover):
+        with patch("subprocess.run", return_value=_ok("0\t0\tlead\n1\t0\twriter\n")):
+            t = orch.get_team_impl("canon-team")
+
+    # discover_team must have received the registry members.
+    assert captured_args["registry_members"] is not None
+    canonical = [
+        m for m in captured_args["registry_members"]
+        if m["teammate_handle"] == "@soma-writer"
+    ]
+    assert canonical, "canonical member must be in registry_members passed to discover_team"
+    # The returned team must have the canonical handle.
+    assert any(m["handle"] == "@soma-writer" for m in t["team"]), t["team"]
+
+
+def test_get_team_impl_falls_back_to_pane_handle_without_canonical(monkeypatch) -> None:
+    """When registry has only pane-derived handles (teammate-N), the pane handle
+    is preserved unchanged in discover_team output."""
+    _no_url_poll(monkeypatch)
+    with patch("subprocess.run", side_effect=_tmux_side_effect("")):
+        orch.spawn_project_impl(name="pane-only", type_="custom",
+                                brief="x", permission_mode="default")
+    # Only pane-derived entry in registry.
+    orch._reg().upsert_team_member("pane-only", "teammate-1", "dev", "dev")
+
+    with patch("subprocess.run", return_value=_ok("0\t0\tlead\n1\t0\tdev work\n")):
+        t = orch.get_team_impl("pane-only")
+
+    # No canonical substitution; pane handle preserved.
+    assert t["team"][0]["handle"] == "teammate-1"
+
+
+def test_set_teammate_handle_writes_to_registry(monkeypatch, tmp_path) -> None:
+    """set_teammate_handle must upsert a row into team_members via the registry."""
+    import importlib
+    from claude_soma.mcp_servers import hermes_notify
+    from claude_soma.mcp_servers.hermes_notify import server as hn_server
+
+    monkeypatch.setenv("HERMES_LEAD_NAME", "my-lead")
+    monkeypatch.setenv("HERMES_ORCH_DB", str(tmp_path / "hn-reg.sqlite"))
+    hn_server._reset_registry_for_tests()
+
+    result = hn_server.set_teammate_handle(handle="@soma-writer", role="content-writer")
+
+    assert result == {"lead": "my-lead", "handle": "@soma-writer", "role": "content-writer"}
+    members = hn_server._get_registry().get_team_members("my-lead")
+    assert len(members) == 1
+    assert members[0]["teammate_handle"] == "@soma-writer"
+    assert members[0]["role"] == "content-writer"
+    assert members[0]["brief"] == "self-reported"
+
+
+def test_set_teammate_handle_raises_without_lead_name(monkeypatch, tmp_path) -> None:
+    """set_teammate_handle must raise ValueError when HERMES_LEAD_NAME is absent."""
+    from claude_soma.mcp_servers.hermes_notify import server as hn_server
+
+    monkeypatch.delenv("HERMES_LEAD_NAME", raising=False)
+    monkeypatch.setenv("HERMES_ORCH_DB", str(tmp_path / "hn-reg2.sqlite"))
+    hn_server._reset_registry_for_tests()
+
+    with pytest.raises(ValueError, match="HERMES_LEAD_NAME"):
+        hn_server.set_teammate_handle(handle="@soma-x", role="reviewer")
+
+
+def test_set_teammate_handle_raises_on_empty_handle(monkeypatch, tmp_path) -> None:
+    """set_teammate_handle must reject blank handles."""
+    from claude_soma.mcp_servers.hermes_notify import server as hn_server
+
+    monkeypatch.setenv("HERMES_LEAD_NAME", "lead-x")
+    monkeypatch.setenv("HERMES_ORCH_DB", str(tmp_path / "hn-reg3.sqlite"))
+    hn_server._reset_registry_for_tests()
+
+    with pytest.raises(ValueError, match="handle"):
+        hn_server.set_teammate_handle(handle="  ", role="writer")
+
+
+def test_set_teammate_handle_is_upsert(monkeypatch, tmp_path) -> None:
+    """Calling set_teammate_handle twice with the same handle updates role."""
+    from claude_soma.mcp_servers.hermes_notify import server as hn_server
+
+    monkeypatch.setenv("HERMES_LEAD_NAME", "up-lead")
+    monkeypatch.setenv("HERMES_ORCH_DB", str(tmp_path / "hn-reg4.sqlite"))
+    hn_server._reset_registry_for_tests()
+
+    hn_server.set_teammate_handle(handle="@soma-w", role="draft-writer")
+    hn_server.set_teammate_handle(handle="@soma-w", role="senior-writer")
+
+    members = hn_server._get_registry().get_team_members("up-lead")
+    assert len(members) == 1
+    assert members[0]["role"] == "senior-writer"
+
+
 def test_kill_project_archive_logs_when_no_memory(monkeypatch, caplog) -> None:
     """When archive=True and the lead's cwd has no .claude/ memory dir, a
     warning must be logged so callers can distinguish 'archived' from 'skipped'

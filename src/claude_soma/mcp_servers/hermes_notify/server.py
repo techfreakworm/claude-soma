@@ -12,10 +12,12 @@ from claude_soma.mcp_servers.hermes_api.notify_store import (
     EventStore,
     VALID_TYPES,
 )
+from claude_soma.mcp_servers.project_orchestrator.registry import Registry
 
 mcp = FastMCP("hermes_notify")
 
 _NOTIFY_PORT_DEFAULT = 9100
+_ORCH_DB_DEFAULT = "/opt/claude-soma/registry.sqlite"
 
 # Payload field limits (per PLAN-FI-NOTIFY.md)
 _MAX_DESCRIPTION = 500
@@ -28,6 +30,7 @@ _MAX_CONTEXT = 500
 _MAX_TRACEBACK = 5000
 
 _store: EventStore | None = None
+_registry: Registry | None = None
 
 
 def _get_store() -> EventStore:
@@ -35,6 +38,19 @@ def _get_store() -> EventStore:
     if _store is None:
         _store = EventStore()
     return _store
+
+
+def _get_registry() -> Registry:
+    global _registry
+    if _registry is None:
+        db_path = os.environ.get("HERMES_ORCH_DB", _ORCH_DB_DEFAULT)
+        _registry = Registry(db_path)
+    return _registry
+
+
+def _reset_registry_for_tests() -> None:
+    global _registry
+    _registry = None
 
 
 def _lead_name() -> str | None:
@@ -237,6 +253,39 @@ def notify_orchestrator(
 
     delivered = _post_to_listener(event_id, lead, type, payload_json)
     return {"stored_id": event_id, "delivered": delivered}
+
+
+@mcp.tool()
+def set_teammate_handle(handle: str, role: str) -> dict:
+    """Self-report this lead's canonical teammate handle into the registry.
+
+    Writes (HERMES_LEAD_NAME, handle, role) into team_members so the orchestrator
+    can surface the real @handle instead of the pane-derived teammate-N placeholder.
+    Call this once early in a task to register the lead's identity.
+
+    Returns:
+        {"lead": str, "handle": str, "role": str}
+    """
+    lead = _lead_name()
+    if not lead:
+        raise ValueError(
+            "HERMES_LEAD_NAME is not set in the environment. "
+            "This tool is only available in spawned project leads."
+        )
+    if not handle or not handle.strip():
+        raise ValueError("handle must be a non-empty string")
+    if not role or not role.strip():
+        raise ValueError("role must be a non-empty string")
+
+    handle = handle.strip()
+    role = role.strip()
+    _get_registry().upsert_team_member(
+        lead_name=lead,
+        teammate_handle=handle,
+        role=role,
+        brief="self-reported",
+    )
+    return {"lead": lead, "handle": handle, "role": role}
 
 
 def main() -> None:

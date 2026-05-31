@@ -510,9 +510,12 @@ def is_lead_alive(name: str) -> bool:
     return result.returncode == 0
 
 
-def discover_team(name: str) -> list[dict[str, str]]:
+def discover_team(
+    name: str,
+    registry_members: list[dict] | None = None,
+) -> list[dict[str, str]]:
     """Best-effort roster of a lead's agent-team teammates, read live from its
-    tmux panes.
+    tmux panes, with canonical-handle substitution from the registry.
 
     With CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 a lead spawns its teammates as
     split panes in its window (see docs/KNOWN_BUGS.md), so every pane beyond the
@@ -520,9 +523,12 @@ def discover_team(name: str) -> list[dict[str, str]]:
     because teammates are ephemeral -- they die with the session -- so a cached
     roster would go stale. Returns [] if the lead is gone or has no team.
 
-    Coarse by design: the pane view gives a teammate's live activity + status but
-    not its exact TeamCreate handle (@ping, ...). Exact handles would need leads
-    to self-report into a registry table -- a noted enhancement.
+    If `registry_members` is supplied, any self-reported canonical handles (those
+    not matching the pane-derived ``teammate-N`` pattern) are used to substitute
+    pane handle placeholders in order. A pane entry at position i gets the i-th
+    canonical handle when one is available; otherwise it falls back to
+    ``teammate-N``. Pane-derived entries in the registry (matching ``teammate-N``)
+    are not treated as canonical.
     """
     bare = _bare_name(name)
     session = _session_name(bare)
@@ -550,6 +556,18 @@ def discover_team(name: str) -> list[dict[str, str]]:
             "role": title.strip() or "teammate",
             "status": "dead" if dead == "1" else "active",
         })
+
+    # Canonical-read: replace pane-derived teammate-N handles with self-reported
+    # canonical handles from the registry (if any were provided by the caller).
+    if registry_members:
+        canonical = [
+            m for m in registry_members
+            if not re.match(r"^teammate-\d+$", m.get("teammate_handle", ""))
+        ]
+        for i, member in enumerate(team):
+            if i < len(canonical):
+                member["handle"] = canonical[i]["teammate_handle"]
+
     return team
 
 
