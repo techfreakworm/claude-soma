@@ -104,6 +104,18 @@
       "headers": {
         "Authorization": "Bearer ${HF_TOKEN}"
       }
+    },
+    "hermes-notify": {
+      "type": "stdio",
+      "command": "/opt/claude-soma/.venv/bin/python",
+      "args": [
+        "-m",
+        "claude_soma.mcp_servers.hermes_notify.server"
+      ],
+      "env": {
+        "HERMES_NOTIFY_PORT": "9100"
+      },
+      "alwaysLoad": true
     }
   }
 }

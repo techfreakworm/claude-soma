@@ -12,6 +12,14 @@
     ],
     "UserPromptSubmit": [
       {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/opt/claude-soma/scripts/notify_inject.sh"
+          }
+        ]
+      },
+      {
         "if": "event.meta.audio_path != null",
         "hooks": [
           {

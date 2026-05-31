@@ -165,6 +165,8 @@ def _wrap_in_transient_unit(name: str, inner_argv: list[str]) -> list[str]:
         f"--setenv=HOME={LEAD_HOME}",
         f"--setenv=PATH={LEAD_PATH}",
         "--setenv=CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1",
+        f"--setenv=HERMES_LEAD_NAME={name}",
+        "--setenv=HERMES_NOTIFY_ENDPOINT=http://127.0.0.1:9100",
         "--",
         *inner_argv,
     ]

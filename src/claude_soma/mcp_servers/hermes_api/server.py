@@ -1,17 +1,21 @@
 from __future__ import annotations
 
+import http.server
 import json
 import mimetypes
 import os
 import threading
+import time
 import urllib.error
 import urllib.request
 import uuid
 from pathlib import Path
+from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
 from . import claude_state
+from .notify_store import EventStore, VALID_TYPES, URGENT_TYPES
 from .socket import serve_blocking
 from .tg_html import chunk_html_for_telegram, gfm_to_html
 
@@ -49,6 +53,31 @@ def list_transcript_threads(limit: int = 50) -> list[dict]:
 def read_transcript(thread_id: str, project: str) -> list[dict]:
     """Read a transcript as list of message events."""
     return claude_state.read_transcript(thread_id, project)
+
+
+@mcp.tool()
+def get_recent_lead_events(lead: str | None = None, limit: int = 20) -> list[dict]:
+    """Query recent lead lifecycle events.
+
+    If lead is None, returns events across all leads ordered newest-first.
+    Use this to check what a lead has reported recently without needing to
+    capture-pane its tmux session.
+    """
+    return _store.get_recent(lead=lead, limit=limit)
+
+
+@mcp.tool()
+def resolve_pending_input(event_id: int, answer: str) -> dict:
+    """Mark a NEEDS_INPUT event as resolved with the given answer.
+
+    Call this after the user's reply has been routed to the relevant lead.
+    Updates pending_inputs.status = 'resolved' so the UserPromptSubmit hook
+    stops injecting the open question into future turns.
+
+    Returns: {"resolved": true} or {"resolved": false} if not found/already resolved.
+    """
+    resolved = _store.mark_pending_resolved(event_id, answer)
+    return {"resolved": resolved}
 
 
 # ---- Telegram Bot API helpers ---------------------------------------------
@@ -216,6 +245,390 @@ def send_tg_reply(
     }
 
 
+# ---- Notify HTTP listener internals --------------------------------------
+
+_NOTIFY_PORT_DEFAULT = 9100
+_NOTIFY_CHAT_ID_DEFAULT = "935376085"
+_MILESTONE_THROTTLE_SECS = int(
+    os.environ.get("HERMES_NOTIFY_MILESTONE_THROTTLE_SECS", "300")
+)
+_MAX_PAYLOAD_BYTES = 64 * 1024  # 64 KB hard cap
+
+# Module-level singletons (initialised in main() before threads start)
+_store: EventStore = None  # type: ignore[assignment]
+_milestone_last_dmed: dict[str, float] = {}  # {lead: ts}
+_milestone_lock = threading.Lock()
+
+
+def _notify_chat_id() -> str:
+    return os.environ.get(
+        "HERMES_NOTIFY_CHAT_ID",
+        os.environ.get("TELEGRAM_CHAT_ID", _NOTIFY_CHAT_ID_DEFAULT),
+    )
+
+
+def _send_proactive_dm(text: str, files: list[str] | None = None) -> int | None:
+    """DM the user. Returns Telegram message_id or None on failure."""
+    try:
+        token = _load_tg_token()
+        base = f"{_TG_API_BASE}/bot{token}"
+        chat_id = _notify_chat_id()
+        html_text = gfm_to_html(text)
+        chunks = chunk_html_for_telegram(html_text)
+        last_msg_id: int | None = None
+        for chunk in chunks:
+            result = _tg_post_json(f"{base}/sendMessage", {
+                "chat_id": chat_id,
+                "text": chunk,
+                "parse_mode": "HTML",
+                "link_preview_options": {"is_disabled": True},
+            })
+            last_msg_id = result["result"]["message_id"]
+        if files:
+            fields = {"chat_id": chat_id}
+            for fp in files:
+                path = Path(fp)
+                ext = path.suffix.lower()
+                if ext in _PHOTO_EXTS:
+                    r = _tg_post_multipart(f"{base}/sendPhoto", fields, fp)
+                else:
+                    r = _tg_post_multipart(f"{base}/sendDocument", fields, fp)
+                last_msg_id = r["result"]["message_id"]
+        return last_msg_id
+    except Exception as exc:
+        _log_notify_error(f"proactive DM failed: {exc}")
+        return None
+
+
+def _log_notify_error(msg: str) -> None:
+    try:
+        log_dir = Path("/var/log/claude-soma")
+        log_dir.mkdir(parents=True, exist_ok=True)
+        ts = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+        (log_dir / "hermes-notify.log").open("a").write(f"{ts} {msg}\n")
+    except OSError:
+        pass
+
+
+def _format_started_dm(lead: str, payload: dict[str, Any]) -> str:
+    desc = payload.get("description", "")
+    eta = payload.get("eta", "")
+    text = f"<b>Lead <code>{lead}</code> started:</b> {desc}"
+    if eta:
+        text += f"\nETA: {eta}"
+    return text
+
+
+def _format_milestone_dm(lead: str, milestones: list[dict[str, Any]]) -> str:
+    if len(milestones) == 1:
+        p = json.loads(milestones[0]["payload_json"])
+        prog = p.get("progress", "")
+        pct = p.get("percent")
+        eta_rem = p.get("eta_remaining", "")
+        text = f"<b>Lead <code>{lead}</code> milestone:</b> {prog}"
+        if pct is not None:
+            text += f" ({pct}%)"
+        if eta_rem:
+            text += f"\nETA remaining: {eta_rem}"
+    else:
+        lines = [f"<b>Lead <code>{lead}</code> milestones:</b>"]
+        for ms in milestones:
+            p = json.loads(ms["payload_json"])
+            prog = p.get("progress", "")
+            pct = p.get("percent")
+            line = f"• {prog}"
+            if pct is not None:
+                line += f" ({pct}%)"
+            lines.append(line)
+        text = "\n".join(lines)
+    return text
+
+
+def _format_completed_dm(lead: str, payload: dict[str, Any]) -> tuple[str, list[str]]:
+    summary = payload.get("summary", "")
+    urls = payload.get("urls", [])
+    paths = payload.get("paths", [])
+    text = f"<b>Lead <code>{lead}</code> completed:</b>\n{summary}"
+    if urls:
+        links = "\n".join(f'<a href="{u}">{u}</a>' for u in urls)
+        text += f"\n\n{links}"
+    return text, [p for p in paths if Path(p).exists()]
+
+
+def _format_needs_input_dm(lead: str, payload: dict[str, Any]) -> str:
+    question = payload.get("question", "")
+    options = payload.get("options", [])
+    text = (
+        f"<b>Lead <code>{lead}</code> needs your input:</b>\n"
+        f"{question}"
+    )
+    if options:
+        opts = "\n".join(f"  • {o}" for o in options)
+        text += f"\n\nOptions:\n{opts}"
+    return text
+
+
+def _format_error_dm(lead: str, payload: dict[str, Any]) -> str:
+    error = payload.get("error", "")
+    context = payload.get("context", "")
+    traceback = payload.get("traceback", "")
+    recoverable = payload.get("recoverable", True)
+    text = (
+        f"<b>[ERROR] Lead <code>{lead}</code>:</b> {error}\n"
+        f"Context: {context}"
+    )
+    if traceback:
+        tb_snippet = traceback[:500]
+        text += f"\n<pre>{tb_snippet}</pre>"
+    if not recoverable:
+        text += "\n\n<i>Lead has stopped — manual intervention may be needed.</i>"
+    return text
+
+
+def _deliver_event(event_id: int, lead: str, type_: str, payload_json: str) -> None:
+    """Trigger DM delivery for a single event. Updates delivered_at or delivery_error."""
+    try:
+        payload: dict[str, Any] = json.loads(payload_json)
+    except (json.JSONDecodeError, ValueError):
+        _store.mark_delivery_error(event_id, "invalid payload_json")
+        return
+
+    try:
+        if type_ == "STARTED":
+            text = _format_started_dm(lead, payload)
+            msg_id = _send_proactive_dm(text)
+
+        elif type_ == "MILESTONE":
+            with _milestone_lock:
+                last_ts = _milestone_last_dmed.get(lead, 0.0)
+                now = time.time()
+                if now - last_ts < _MILESTONE_THROTTLE_SECS:
+                    # Within throttle window — store but don't DM yet
+                    return
+                _milestone_last_dmed[lead] = now
+            text = _format_milestone_dm(lead, [_store.get_event(event_id) or {}])
+            msg_id = _send_proactive_dm(text)
+
+        elif type_ == "COMPLETED":
+            # Flush any accumulated undelivered milestones first
+            pending_ms = _store.get_undelivered_milestones(lead)
+            if pending_ms:
+                ms_text = _format_milestone_dm(lead, pending_ms)
+                _send_proactive_dm(ms_text)
+                for ms in pending_ms:
+                    _store.mark_delivered(ms["id"])
+                with _milestone_lock:
+                    _milestone_last_dmed.pop(lead, None)
+            text, files = _format_completed_dm(lead, payload)
+            msg_id = _send_proactive_dm(text, files if files else None)
+
+        elif type_ == "NEEDS_INPUT":
+            text = _format_needs_input_dm(lead, payload)
+            msg_id = _send_proactive_dm(text)
+            if msg_id is not None:
+                # Store tg_msg_id in pending_inputs for correlation fallback
+                with _store._lock:
+                    _store._conn.execute(
+                        "UPDATE pending_inputs SET tg_msg_id = ? WHERE event_id = ? AND status = 'open'",
+                        (msg_id, event_id),
+                    )
+
+        elif type_ == "ERROR":
+            text = _format_error_dm(lead, payload)
+            msg_id = _send_proactive_dm(text)
+
+        else:
+            return
+
+        if msg_id is not None or type_ not in URGENT_TYPES:
+            _store.mark_delivered(event_id)
+        else:
+            _store.mark_delivery_error(event_id, "DM delivery returned None")
+
+    except Exception as exc:
+        err_str = str(exc)[:500]
+        _store.mark_delivery_error(event_id, err_str)
+        _log_notify_error(f"deliver_event({event_id}) {type_}: {err_str}")
+
+
+def _drain_on_startup() -> None:
+    """Re-deliver any undelivered urgent events from before a restart."""
+    try:
+        rows = _store.get_undelivered_urgent()
+        if not rows:
+            return
+        for row in rows:
+            _deliver_event(
+                row["id"], row["lead"], row["type"], row["payload_json"]
+            )
+    except Exception as exc:
+        _log_notify_error(f"drain_on_startup failed: {exc}")
+
+
+def _timeout_monitor_loop() -> None:
+    """Background loop that closes NEEDS_INPUT rows whose timeout has expired.
+
+    Runs every 30 seconds. For each expired pending_input, marks the row as
+    timed_out and sends a DM to the user (per Phase-11 resolution option c).
+    """
+    _POLL_SECS = 30
+    while True:
+        time.sleep(_POLL_SECS)
+        try:
+            rows = _store.get_open_pending_inputs(limit=50)
+            now = time.time()
+            for row in rows:
+                timeout_secs = row.get("timeout_secs")
+                if not timeout_secs:
+                    continue
+                created_at = float(row.get("created_at") or 0)
+                if now - created_at < timeout_secs:
+                    continue
+                # Timeout expired — mark timed_out and DM
+                event_id = int(row["event_id"])
+                lead = row["lead"]
+                marked = _store.mark_pending_timed_out(event_id)
+                if not marked:
+                    continue  # already resolved by another path
+                text = (
+                    f"<b>Lead <code>{lead}</code> timed out</b> waiting for your input.\n"
+                    f"Question: {row['question']}\n"
+                    f"The lead has proceeded without an answer. "
+                    f"Reply or re-send your answer via the bot if needed."
+                )
+                _send_proactive_dm(text)
+        except Exception as exc:
+            _log_notify_error(f"timeout_monitor: {exc}")
+
+
+# ---- Notify HTTP request handler -----------------------------------------
+
+class _NotifyHandler(http.server.BaseHTTPRequestHandler):
+    """HTTP request handler for the notify listener."""
+
+    def log_message(self, fmt: str, *args: Any) -> None:
+        pass  # silence BaseHTTPRequestHandler's stderr logging
+
+    def _read_json_body(self) -> dict | None:
+        length = int(self.headers.get("Content-Length", 0))
+        if length > _MAX_PAYLOAD_BYTES:
+            self._respond(413, {"error": "payload too large"})
+            return None
+        raw = self.rfile.read(length)
+        try:
+            return json.loads(raw)
+        except (json.JSONDecodeError, ValueError):
+            self._respond(400, {"error": "invalid JSON"})
+            return None
+
+    def _respond(self, code: int, body: dict, extra_headers: dict | None = None) -> None:
+        data = json.dumps(body).encode()
+        self.send_response(code)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(data)))
+        if extra_headers:
+            for k, v in extra_headers.items():
+                self.send_header(k, v)
+        self.end_headers()
+        self.wfile.write(data)
+
+    def do_GET(self) -> None:
+        if self.path == "/health":
+            self._respond(200, {"status": "ok", "listener": "running"})
+        elif self.path.startswith("/events"):
+            self._handle_events()
+        else:
+            self._respond(404, {"error": "not found"})
+
+    def do_POST(self) -> None:
+        if self.path == "/notify":
+            self._handle_notify()
+        elif self.path == "/resolve_pending_input":
+            self._handle_resolve()
+        elif self.path == "/mark_read":
+            self._handle_mark_read()
+        else:
+            self._respond(404, {"error": "not found"})
+
+    def _handle_notify(self) -> None:
+        body = self._read_json_body()
+        if body is None:
+            return
+
+        event_id = body.get("event_id")
+        lead = body.get("lead", "")
+        type_ = body.get("type", "")
+        payload_json = body.get("payload_json", "")
+
+        if not event_id or not lead or not type_ or not payload_json:
+            self._respond(400, {"error": "missing required fields: event_id, lead, type, payload_json"})
+            return
+        if type_ not in VALID_TYPES:
+            self._respond(400, {"error": f"unknown type {type_!r}"})
+            return
+
+        # Deliver in a background thread so the POST returns quickly
+        t = threading.Thread(
+            target=_deliver_event,
+            args=(event_id, lead, type_, payload_json),
+            daemon=True,
+        )
+        t.start()
+        self._respond(202, {"event_id": event_id, "queued": True})
+
+    def _handle_resolve(self) -> None:
+        body = self._read_json_body()
+        if body is None:
+            return
+        event_id = body.get("event_id")
+        answer = body.get("answer", "")
+        if not event_id:
+            self._respond(400, {"error": "missing event_id"})
+            return
+        resolved = _store.mark_pending_resolved(int(event_id), answer)
+        self._respond(200, {"resolved": resolved})
+
+    def _handle_mark_read(self) -> None:
+        body = self._read_json_body()
+        if body is None:
+            return
+        event_ids = body.get("event_ids", [])
+        if not isinstance(event_ids, list):
+            self._respond(400, {"error": "event_ids must be a list"})
+            return
+        _store.mark_hook_injected([int(i) for i in event_ids if isinstance(i, int)])
+        self._respond(200, {"marked": len(event_ids)})
+
+    def _handle_events(self) -> None:
+        from urllib.parse import parse_qs, urlparse
+        parsed = urlparse(self.path)
+        qs = parse_qs(parsed.query)
+        lead = qs.get("lead", [None])[0]
+        limit_str = qs.get("limit", ["20"])[0]
+        unread_only = qs.get("unread_only", ["false"])[0].lower() == "true"
+        try:
+            limit = min(int(limit_str), 100)
+        except ValueError:
+            limit = 20
+
+        if unread_only:
+            rows = _store.get_uninjected(limit=limit)
+        else:
+            rows = _store.get_recent(lead=lead, limit=limit)
+
+        open_inputs = _store.get_open_pending_inputs(limit=5)
+        self._respond(200, {"events": rows, "open_pending_inputs": open_inputs})
+
+
+def _start_notify_listener() -> None:
+    port = int(os.environ.get("HERMES_NOTIFY_PORT", str(_NOTIFY_PORT_DEFAULT)))
+    try:
+        server = http.server.ThreadingHTTPServer(("127.0.0.1", port), _NotifyHandler)
+        server.serve_forever()
+    except Exception as exc:
+        _log_notify_error(f"notify listener failed to start: {exc}")
+
+
 # ---- Unix-socket bridge for the FastAPI dashboard backend -----------------
 
 async def _h_list_sessions(_p: dict) -> dict:
@@ -252,10 +665,32 @@ def _start_socket_server() -> None:
 
 
 def main() -> None:
+    global _store, _milestone_last_dmed
+
+    # Initialise the event store (creates tables if absent)
+    _store = EventStore()
+
+    # Seed the MILESTONE throttle dict from the DB so a fresh restart doesn't
+    # re-DM milestones that were already delivered before the restart.
+    _milestone_last_dmed = _store.get_milestone_last_delivered_times()
+
     # Run the unix socket server in a background thread so the FastAPI bridge
     # can call into our state without going through MCP.
-    t = threading.Thread(target=_start_socket_server, daemon=True)
-    t.start()
+    t_socket = threading.Thread(target=_start_socket_server, daemon=True)
+    t_socket.start()
+
+    # Run the notify HTTP listener in a background thread (same pattern).
+    t_listener = threading.Thread(target=_start_notify_listener, daemon=True)
+    t_listener.start()
+
+    # Drain any undelivered urgent events from before the last restart.
+    t_drain = threading.Thread(target=_drain_on_startup, daemon=True)
+    t_drain.start()
+
+    # Monitor for NEEDS_INPUT rows whose timeout has expired.
+    t_timeout = threading.Thread(target=_timeout_monitor_loop, daemon=True)
+    t_timeout.start()
+
     mcp.run()
 
 

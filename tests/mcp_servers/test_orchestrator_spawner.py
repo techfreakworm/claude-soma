@@ -391,6 +391,21 @@ def test_brief_is_guarded_by_dashdash_without_mcp_config(tmp_path: Path, monkeyp
     assert args[args.index(brief) - 1] == "--"
 
 
+def test_spawn_injects_hermes_lead_name_and_notify_endpoint(tmp_path: Path) -> None:
+    """_wrap_in_transient_unit must inject HERMES_LEAD_NAME and HERMES_NOTIFY_ENDPOINT
+    so the lead's hermes-notify MCP tool can identify itself and reach the listener."""
+    cwd = tmp_path / "fi-lead"
+    cwd.mkdir()
+    with patch("subprocess.run", side_effect=[_ok(), _ok("")]) as run:
+        spawn_background_lead(
+            name="fi-lead", brief="notify test", cwd=cwd,
+            permission_mode="acceptEdits",
+        )
+    args = run.call_args_list[0][0][0]
+    assert "--setenv=HERMES_LEAD_NAME=fi-lead" in args
+    assert "--setenv=HERMES_NOTIFY_ENDPOINT=http://127.0.0.1:9100" in args
+
+
 def test_lead_mcp_config_is_curated_tool_set() -> None:
     """Drift guard for the shipped config/claude/lead-mcp.json:
 
@@ -410,7 +425,9 @@ def test_lead_mcp_config_is_curated_tool_set() -> None:
     assert "hermes-api" not in lead and "project-orchestrator" not in lead
     assert "telegram" not in lead and not any("telegram" in k for k in lead)
     # Lead-only extras (present in lead-mcp.json, intentionally absent from .mcp.json).
-    lead_only = {"sequential-thinking", "huggingface"}
+    # hermes-notify is lead-only: leads push events via it; the bot resolves events
+    # through mcp__hermes_api__resolve_pending_input instead (blast radius control).
+    lead_only = {"sequential-thinking", "huggingface", "hermes-notify"}
     assert lead_only <= set(lead)
     mirrored = set(lead) - lead_only
     assert mirrored == set(full) - {"hermes-api", "project-orchestrator"}

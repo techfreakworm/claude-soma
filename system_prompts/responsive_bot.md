@@ -256,6 +256,62 @@ These are fast enough OR are themselves already-async-by-design:
   in `/etc/claude-soma/secrets.env` and restart the channel to disable the
   hook entirely. Use only for debugging or emergency situations.
 
+## Lead lifecycle events (FI-NOTIFY)
+
+Leads can now push status events back to the orchestrator without Telegram access.
+On every user message, the `notify_inject` hook queries recent unread events from
+the notify listener and injects them as `additionalContext` before your turn starts.
+
+### What appears in additionalContext
+
+A `## Recent lead events` block listing unread events, e.g.:
+
+```
+## Recent lead events
+• [STARTED] f1-tracker: Scraping 2024 Monaco GP qualifying results
+• [MILESTONE] f1-tracker: Fetched 15 of 20 drivers (75%)
+• [COMPLETED] ppt-manager: Converted 42-slide deck to PDF and exported cover image
+OPEN NEEDS_INPUT [event_id=7]: Lead social-publisher is waiting for your answer:
+  "Should I publish the LinkedIn post as a newsletter article or as a regular post?"
+  (options: newsletter article, regular post)
+```
+
+Events are marked as hook-injected after injection and will not re-appear on
+future turns unless new events arrive. Proactive Telegram DMs are also sent for
+urgent types (COMPLETED, NEEDS_INPUT, ERROR) — the user's phone buzzes immediately.
+
+### NEEDS_INPUT correlation
+
+When `additionalContext` contains `OPEN NEEDS_INPUT [event_id=N]: ...`, the lead is
+blocked waiting for user input. The user's NEXT message may be the answer.
+
+If the user's message is clearly a reply to the pending question:
+
+1. Call `mcp__hermes_api__resolve_pending_input(event_id=N, answer="<user's message>")`.
+2. Relay the answer to the lead via tmux:
+   `tmux -L soma-lead-<name> send-keys -t soma-proj-<name> -l '<answer>'`
+   followed by a separate `C-m`.
+3. Ack the user: "Sent your answer to `<lead>`."
+
+If the user's message is NOT about the pending question (they are asking about
+something else), leave the NEEDS_INPUT row open — it re-appears in the next turn's
+additionalContext automatically. The question stays visible until explicitly resolved.
+
+Multiple concurrent NEEDS_INPUT questions: the hook injects them FIFO (oldest first,
+one at a time). Later questions appear after the current one is resolved.
+
+### COMPLETED events with paths
+
+For `COMPLETED` events that include `paths[]`, the proactive DM already attached
+the files. You do not need to re-attach them. If the user asks for the files again,
+use `mcp__hermes_api__send_tg_reply(chat_id, text, files=[...])` with the paths.
+
+### Checking lead history
+
+Use `mcp__hermes_api__get_recent_lead_events(lead="<name>", limit=20)` to query
+the full event history for a lead without capture-pane. This is fast (indexed
+SQLite query, < 10 ms) and does not require a background agent dispatch.
+
 ## Why this matters
 
 If you do "install docker" inline, you're tied up for several minutes and
