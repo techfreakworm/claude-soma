@@ -26,8 +26,7 @@
       "args": ["-m", "claude_soma.mcp_servers.project_orchestrator.server"],
       "env": {
         "HERMES_ORCH_DB": "/opt/claude-soma/registry.sqlite",
-        "HERMES_PROJECTS_ROOT": "/home/ubuntu/projects",
-        "HERMES_MAX_CONCURRENT_PROJECTS": "6"
+        "HERMES_PROJECTS_ROOT": "/home/ubuntu/projects"
       },
       "alwaysLoad": true
     },

@@ -40,6 +40,7 @@ post-tag on `main`.
 - [x] **`next.config.mjs` rewrite removed** — was forwarding `/api/*` to FastAPI inside Next.js, shadowing Next-auth's own `/api/auth/*` routes.
 - [x] **iptables fix:** Phase 1 inserted ACCEPT 80/443 at position 6, AFTER Oracle's default REJECT at position 5 — so the public couldn't reach Caddy. Re-inserted at position 5 (now: SSH → 80 → 443 → REJECT). Bake into next bootstrap script (see V1.5 followups).
 - [x] **`portfolio-oneliner` weekday brief** timer added by the bot itself (Mon–Fri 03:30 UTC). 5 systemd timers total.
+- [x] **Operator override convention**: tunable overrides (e.g. `HERMES_MAX_CONCURRENT_PROJECTS`) go in `/etc/claude-soma/secrets.env`, not `.mcp.json`; `.mcp.json` carries only load-bearing paths.
 
 ### Pending
 
