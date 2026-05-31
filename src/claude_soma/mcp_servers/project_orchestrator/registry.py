@@ -46,6 +46,18 @@ CREATE TABLE IF NOT EXISTS routines (
 );
 
 CREATE INDEX IF NOT EXISTS idx_routines_kind ON routines(kind);
+
+CREATE TABLE IF NOT EXISTS team_members (
+    lead_name       TEXT NOT NULL,
+    teammate_handle TEXT NOT NULL,
+    role            TEXT NOT NULL,
+    brief           TEXT NOT NULL,
+    dispatched_at   REAL NOT NULL,
+    last_seen_at    REAL,
+    PRIMARY KEY (lead_name, teammate_handle)
+);
+
+CREATE INDEX IF NOT EXISTS idx_team_members_lead ON team_members(lead_name);
 """
 
 
@@ -276,6 +288,47 @@ class Registry:
         else:
             d["metadata"] = None
         return d
+
+    def upsert_team_member(
+        self,
+        lead_name: str,
+        teammate_handle: str,
+        role: str,
+        brief: str,
+    ) -> None:
+        """Insert or update a team member row.
+
+        dispatched_at is set on first insert and preserved on subsequent upserts
+        (only role, brief, and last_seen_at are refreshed).
+        """
+        now = time.time()
+        with self._lock:
+            self._conn.execute(
+                """
+                INSERT INTO team_members(lead_name, teammate_handle, role, brief,
+                                         dispatched_at, last_seen_at)
+                VALUES(?, ?, ?, ?, ?, ?)
+                ON CONFLICT(lead_name, teammate_handle) DO UPDATE SET
+                    role=excluded.role,
+                    brief=excluded.brief,
+                    last_seen_at=excluded.last_seen_at
+                """,
+                (lead_name, teammate_handle, role, brief, now, now),
+            )
+
+    def get_team_members(self, lead_name: str) -> list[dict[str, Any]]:
+        """Return all persisted team members for a lead, ordered by handle."""
+        with self._lock:
+            rows = self._conn.execute(
+                """
+                SELECT lead_name, teammate_handle, role, brief,
+                       dispatched_at, last_seen_at
+                FROM team_members WHERE lead_name = ?
+                ORDER BY teammate_handle ASC
+                """,
+                (lead_name,),
+            ).fetchall()
+        return [dict(r) for r in rows]
 
     def close(self) -> None:
         with self._lock:

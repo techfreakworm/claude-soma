@@ -667,6 +667,53 @@ def test_resume_spawn_uses_resume_flag_not_continue(tmp_path: Path) -> None:
     assert result["session_uuid"] == fixed_uuid
 
 
+def test_resume_spawn_appends_team_suffix_to_prompt(tmp_path: Path) -> None:
+    """When resume_prompt_suffix is supplied, the brief passed to claude must
+    start with the fixed base prompt and end with the team roster suffix."""
+    cwd = tmp_path / "res-team"
+    cwd.mkdir()
+    fixed_uuid = "aaaabbbb-cccc-4444-5555-111122223333"
+    suffix = (
+        "Before you were interrupted, your agent team included:\n"
+        "- teammate-1 (role: PM): PM\n"
+        "You may want to re-establish your team with the Agent tool."
+    )
+    # kill_session: 2 calls; spawn: 1 call; capture_rc: 1 call
+    with patch("subprocess.run", side_effect=[_ok(), _ok(), _ok(), _ok("")]) as run:
+        resume_background_lead(
+            name="res-team", cwd=cwd, permission_mode="acceptEdits",
+            session_uuid=fixed_uuid, resume_prompt_suffix=suffix,
+        )
+    spawn_call = run.call_args_list[2][0][0]
+    # The final token before `;` is the brief passed to claude.
+    sep_idx = spawn_call.index(";")
+    brief_arg = spawn_call[sep_idx - 1]
+    assert brief_arg.startswith("You have been resumed after an interruption.")
+    assert "Before you were interrupted" in brief_arg
+    assert "teammate-1" in brief_arg
+    assert "re-establish your team" in brief_arg
+
+
+def test_resume_spawn_no_suffix_uses_fixed_prompt_only(tmp_path: Path) -> None:
+    """When resume_prompt_suffix is None the brief is exactly the fixed prompt
+    with no trailing newlines or extra content."""
+    cwd = tmp_path / "res-nosuffix"
+    cwd.mkdir()
+    fixed_uuid = "bbbbcccc-dddd-4444-eeee-111100002222"
+    with patch("subprocess.run", side_effect=[_ok(), _ok(), _ok(), _ok("")]) as run:
+        resume_background_lead(
+            name="res-nosuffix", cwd=cwd, permission_mode="acceptEdits",
+            session_uuid=fixed_uuid,
+        )
+    spawn_call = run.call_args_list[2][0][0]
+    sep_idx = spawn_call.index(";")
+    brief_arg = spawn_call[sep_idx - 1]
+    assert brief_arg == (
+        "You have been resumed after an interruption. "
+        "Review your prior work in this session and continue from where you left off."
+    )
+
+
 def test_resume_spawn_calls_kill_session_first(tmp_path: Path) -> None:
     """resume_background_lead cleans up any lingering unit before spawning.
     kill_session issues systemctl stop + tmux kill-session; those must precede the

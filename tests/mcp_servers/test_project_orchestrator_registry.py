@@ -180,3 +180,53 @@ def test_register_upsert_preserves_session_uuid(tmp_path: Path) -> None:
     r.register("rep", agent_id="a-2", type_="custom", cwd="/x", rc_url=None)
     # session_uuid must survive the upsert.
     assert r.get_session_uuid("rep") == "stable-uuid-0000"
+
+
+# --- team_members tests ---
+
+def test_upsert_team_member_insert(tmp_path: Path) -> None:
+    """upsert_team_member inserts a new row; get_team_members returns it."""
+    r = Registry(tmp_path / "reg.sqlite")
+    r.upsert_team_member("fi-lead", "teammate-1", "PM", "PM")
+    members = r.get_team_members("fi-lead")
+    assert len(members) == 1
+    m = members[0]
+    assert m["lead_name"] == "fi-lead"
+    assert m["teammate_handle"] == "teammate-1"
+    assert m["role"] == "PM"
+    assert m["brief"] == "PM"
+    assert m["dispatched_at"] > 0
+    assert m["last_seen_at"] is not None
+
+
+def test_upsert_team_member_update_preserves_dispatched_at(tmp_path: Path) -> None:
+    """On conflict the upsert must refresh role/brief/last_seen_at but leave
+    dispatched_at unchanged (it tracks when the teammate was first observed)."""
+    r = Registry(tmp_path / "reg.sqlite")
+    r.upsert_team_member("fi-lead", "teammate-1", "writer", "writer")
+    first = r.get_team_members("fi-lead")[0]
+    time.sleep(0.05)
+    r.upsert_team_member("fi-lead", "teammate-1", "senior writer", "senior writer")
+    second = r.get_team_members("fi-lead")[0]
+    assert second["role"] == "senior writer"
+    assert second["last_seen_at"] >= first["last_seen_at"]
+    assert second["dispatched_at"] == first["dispatched_at"]
+
+
+def test_get_team_members_empty_for_unknown_lead(tmp_path: Path) -> None:
+    r = Registry(tmp_path / "reg.sqlite")
+    assert r.get_team_members("no-such-lead") == []
+
+
+def test_get_team_members_multiple(tmp_path: Path) -> None:
+    """All members for a lead are returned; members for another lead are not."""
+    r = Registry(tmp_path / "reg.sqlite")
+    r.upsert_team_member("lead-a", "teammate-1", "dev", "dev")
+    r.upsert_team_member("lead-a", "teammate-2", "qa", "qa")
+    r.upsert_team_member("lead-b", "teammate-1", "pm", "pm")
+    members_a = r.get_team_members("lead-a")
+    assert {m["teammate_handle"] for m in members_a} == {"teammate-1", "teammate-2"}
+    assert all(m["lead_name"] == "lead-a" for m in members_a)
+    members_b = r.get_team_members("lead-b")
+    assert len(members_b) == 1
+    assert members_b[0]["teammate_handle"] == "teammate-1"

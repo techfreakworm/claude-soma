@@ -200,11 +200,24 @@ def resume_project_impl(*, name: str) -> dict:
         )
 
     cwd = Path(p["cwd"])
+    team_members = _reg().get_team_members(name)
+    resume_prompt_suffix: str | None = None
+    if team_members:
+        lines = [
+            f"- {m['teammate_handle']} (role: {m['role']}): {m['brief']}"
+            for m in team_members
+        ]
+        resume_prompt_suffix = (
+            "Before you were interrupted, your agent team included:\n"
+            + "\n".join(lines)
+            + "\nYou may want to re-establish your team with the Agent tool."
+        )
     spawn = resume_background_lead(
         name=name,
         cwd=cwd,
         permission_mode=p["permission_mode"],
         session_uuid=session_uuid,
+        resume_prompt_suffix=resume_prompt_suffix,
     )
     # Refresh agent_id and rc_url in registry (new tmux session, same uuid).
     # register() upsert does not touch session_uuid, so it is preserved.
@@ -246,11 +259,20 @@ def get_status_impl(name: str) -> dict:
 
 def get_team_impl(name: str) -> dict:
     """Return a lead's live agent-team roster (teammates discovered from its tmux
-    panes). Raises if there's no such project."""
+    panes) and persist the roster to the registry for resume re-establishment.
+    Raises if there's no such project."""
     p = _reg().get(name)
     if not p:
         raise RuntimeError(f"no project named {name!r}")
-    return {"name": p["name"], "team": discover_team(p["agent_id"])}
+    team = discover_team(p["agent_id"])
+    for member in team:
+        _reg().upsert_team_member(
+            lead_name=name,
+            teammate_handle=member["handle"],
+            role=member["role"],
+            brief=member["role"],
+        )
+    return {"name": p["name"], "team": team}
 
 
 mcp = FastMCP("project_orchestrator")

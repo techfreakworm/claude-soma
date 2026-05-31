@@ -456,6 +456,75 @@ def test_resume_project_on_reaper_killed_lead(monkeypatch) -> None:
     assert orch._reg().get_session_uuid("reaped-proj") == original_uuid
 
 
+def test_get_team_impl_persists_members_to_registry(monkeypatch) -> None:
+    """get_team_impl must upsert discovered teammates into registry.team_members
+    so a later resume can re-establish the team."""
+    _no_url_poll(monkeypatch)
+    with patch("subprocess.run", side_effect=_tmux_side_effect("")):
+        orch.spawn_project_impl(name="persist-team", type_="custom",
+                                brief="x", permission_mode="default")
+    roster = [
+        {"handle": "teammate-1", "role": "PM", "status": "active"},
+        {"handle": "teammate-2", "role": "dev", "status": "active"},
+    ]
+    with patch.object(orch, "discover_team", return_value=roster):
+        orch.get_team_impl("persist-team")
+    members = orch._reg().get_team_members("persist-team")
+    assert {m["teammate_handle"] for m in members} == {"teammate-1", "teammate-2"}
+    pm = next(m for m in members if m["teammate_handle"] == "teammate-1")
+    assert pm["role"] == "PM"
+    assert pm["brief"] == "PM"
+
+
+def test_resume_project_injects_team_context_into_prompt(monkeypatch) -> None:
+    """When persisted team members exist, resume_project_impl passes a
+    resume_prompt_suffix to resume_background_lead containing the roster."""
+    _no_url_poll(monkeypatch)
+    with patch("subprocess.run", side_effect=_tmux_side_effect("")):
+        orch.spawn_project_impl(name="rteam", type_="custom",
+                                brief="x", permission_mode="default")
+    orch._reg().upsert_team_member("rteam", "teammate-1", "PM", "PM")
+
+    captured: dict = {}
+
+    def _fake_resume(**kwargs):
+        captured.update(kwargs)
+        return {"agent_id": "soma-proj-rteam", "rc_url": "", "cwd": "/x",
+                "session_uuid": kwargs["session_uuid"]}
+
+    with patch.object(orch, "is_lead_alive", return_value=False):
+        with patch.object(orch, "resume_background_lead", side_effect=_fake_resume):
+            orch.resume_project_impl(name="rteam")
+
+    suffix = captured.get("resume_prompt_suffix")
+    assert suffix is not None
+    assert "teammate-1" in suffix
+    assert "PM" in suffix
+    assert "re-establish your team" in suffix
+
+
+def test_resume_project_no_suffix_when_no_team(monkeypatch) -> None:
+    """When no team members are persisted, resume_prompt_suffix is None
+    so the fixed S14 prompt is not modified."""
+    _no_url_poll(monkeypatch)
+    with patch("subprocess.run", side_effect=_tmux_side_effect("")):
+        orch.spawn_project_impl(name="rno-team", type_="custom",
+                                brief="x", permission_mode="default")
+
+    captured: dict = {}
+
+    def _fake_resume(**kwargs):
+        captured.update(kwargs)
+        return {"agent_id": "soma-proj-rno-team", "rc_url": "", "cwd": "/x",
+                "session_uuid": kwargs["session_uuid"]}
+
+    with patch.object(orch, "is_lead_alive", return_value=False):
+        with patch.object(orch, "resume_background_lead", side_effect=_fake_resume):
+            orch.resume_project_impl(name="rno-team")
+
+    assert captured.get("resume_prompt_suffix") is None
+
+
 def test_kill_project_archive_logs_when_no_memory(monkeypatch, caplog) -> None:
     """When archive=True and the lead's cwd has no .claude/ memory dir, a
     warning must be logged so callers can distinguish 'archived' from 'skipped'

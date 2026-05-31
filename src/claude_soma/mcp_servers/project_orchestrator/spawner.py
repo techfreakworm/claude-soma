@@ -396,6 +396,7 @@ def resume_background_lead(
     permission_mode: str,
     session_uuid: str,
     extra_args: list[str] | None = None,
+    resume_prompt_suffix: str | None = None,
 ) -> dict:
     """Spawn a tmux+systemd lead using --resume <session_uuid> instead of --continue.
 
@@ -424,6 +425,8 @@ def resume_background_lead(
         "You have been resumed after an interruption. "
         "Review your prior work in this session and continue from where you left off."
     )
+    if resume_prompt_suffix:
+        resume_prompt = resume_prompt + "\n\n" + resume_prompt_suffix
     claude_argv: list[str] = [
         _claude(),
         # --resume <uuid>: pull session from cloud. REPLACES --continue (we want
