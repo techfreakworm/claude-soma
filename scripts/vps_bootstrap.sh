@@ -362,6 +362,46 @@ if [ -f /etc/systemd/system/claude-soma-rc-url-refresh.timer ]; then
     echo "claude-soma-rc-url-refresh.timer enabled"
 fi
 
+step "14e/15  relay-cleanup timer and relay directory"
+# Create /var/lib/claude-soma/relay/ for the Caddy file relay.
+sudo install -d -m 0755 -o ubuntu -g ubuntu /var/lib/claude-soma/relay
+echo "Created /var/lib/claude-soma/relay"
+
+# Write README explaining the relay bundle layout (idempotent).
+RELAY_README=/var/lib/claude-soma/relay/README.md
+if [ ! -f "$RELAY_README" ]; then
+    sudo tee "$RELAY_README" > /dev/null <<'RELAY_README_EOF'
+# Relay bundle — /var/lib/claude-soma/relay/
+
+Managed by scripts/soma-relay; cleaned by claude-soma-relay-cleanup.timer.
+
+Layout:
+  <lead-name>/      per-lead artifacts (soma-relay publish)
+  pub/<12-hex>/     share-link namespace (soma-relay publish --public)
+  README.md         this file
+
+Retention: HERMES_RELAY_RETENTION_DAYS (default 7 days).
+Pin a directory from cleanup: touch <dir>/.pin
+Served at: https://files.mayankgupta.in/ (Caddy basicauth, password in secrets.env)
+RELAY_README_EOF
+    echo "Created $RELAY_README"
+fi
+
+# Install relay-cleanup systemd units (same pattern as 14c/14d).
+for unit in claude-soma-relay-cleanup.service claude-soma-relay-cleanup.timer; do
+    if [ -f "${SYSTEMD_SRC_DIR}/${unit}" ]; then
+        sudo install -m 0644 -o root -g root "${SYSTEMD_SRC_DIR}/${unit}" "/etc/systemd/system/${unit}"
+        echo "installed /etc/systemd/system/${unit}"
+    else
+        echo "WARN: ${unit} not found in ${SYSTEMD_SRC_DIR}; skipping" >&2
+    fi
+done
+if [ -f /etc/systemd/system/claude-soma-relay-cleanup.timer ]; then
+    sudo systemctl daemon-reload
+    sudo systemctl enable --now claude-soma-relay-cleanup.timer
+    echo "claude-soma-relay-cleanup.timer enabled"
+fi
+
 step "15/15  DONE  Next steps"
 cat <<'NEXT'
 1. claude auth login   # one-time browser OAuth for interactive --channels

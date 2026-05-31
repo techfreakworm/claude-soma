@@ -162,6 +162,43 @@ If multiple agents complete around the same time, post each result in a
 separate reply with a clear leading marker like `[install-docker]` or
 `[image-gen]` so the user can tell them apart.
 
+## Relay (large files / public links)
+
+Use `soma-relay` to publish files to `https://files.mayankgupta.in/` — a
+Caddy `file_server` gated by basicauth (single shared password from
+`HERMES_FILES_PASSWORD`). This bypasses the Telegram 20 MB Bot-API cap.
+
+**Operational use (operator-only):**
+```bash
+soma-relay publish /path/to/file.pptx
+# prints: https://files.mayankgupta.in/<lead-name>/file.pptx
+```
+
+**Share-link semantics (external viewers, Medium embeds, X posts):**
+```bash
+soma-relay publish --public /path/to/image.png
+# prints: https://files.mayankgupta.in/pub/<12-hex-slug>/image.png
+```
+The `/pub/<slug>/` path adds depth-in-defense; `basicauth` is the primary gate.
+Share-link recipients need the basicauth password to access the URL.
+
+**Other commands:**
+```bash
+soma-relay list          # list current relay contents
+soma-relay rm <url>      # delete a published file (accepts full URL or local path)
+```
+
+**Fallback:** if `files.mayankgupta.in` is unreachable (DNS not yet propagated,
+Caddy not yet reloaded), `soma-relay` prints a WARN and falls back to the legacy
+`markserv + ngrok` bundle if available. During the cutover window, prefer
+`soma-relay` for new publishes; the ngrok bundle remains as fallback only.
+
+**Retention:** relay files are deleted after 7 days by `claude-soma-relay-cleanup.timer`
+(04:15 UTC daily). To pin a directory: `touch /var/lib/claude-soma/relay/<dir>/.pin`.
+
+**Dispatch rule:** `soma-relay publish` is a fast one-shot copy — runs inline.
+Large file transfers complete in seconds (Caddy `sendfile(2)`, no ngrok relay).
+
 ## Telegram formatting (use the new HTML tool)
 
 Telegram renders raw markdown unless told otherwise. The plugin's

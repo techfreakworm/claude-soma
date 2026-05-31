@@ -1,0 +1,162 @@
+#!/usr/bin/env bash
+# scripts/soma-relay
+#
+# Relay helper: publish files to the Caddy file relay and print URLs.
+#
+# Usage:
+#   soma-relay publish <file>            copy to <lead-name>/<file>; print URL
+#   soma-relay publish --public <file>   copy to pub/<12-hex>/<file>; print URL
+#   soma-relay rm <url-or-path>          delete the published file
+#   soma-relay list                      list current relay contents
+#
+# Environment:
+#   HERMES_LEAD_NAME    lead namespace (default: general)
+#   SOMA_RELAY_DOMAIN   relay domain (default: files.mayankgupta.in)
+#   SOMA_RELAY_ROOT     relay root directory (default: /var/lib/claude-soma/relay)
+
+set -euo pipefail
+
+LEAD="${HERMES_LEAD_NAME:-general}"
+DOMAIN="${SOMA_RELAY_DOMAIN:-files.mayankgupta.in}"
+ROOT="${SOMA_RELAY_ROOT:-/var/lib/claude-soma/relay}"
+
+_usage() {
+    echo "Usage: soma-relay publish [--public] <file>" >&2
+    echo "       soma-relay rm <url-or-path>" >&2
+    echo "       soma-relay list" >&2
+    exit 1
+}
+
+# Check if relay domain is reachable (DNS resolves + HTTP responds).
+# 401 (auth required) is treated as reachable — domain works, Caddy is running.
+# Returns 0 if reachable, 1 if not.
+_check_domain() {
+    if ! command -v curl &>/dev/null; then
+        return 1
+    fi
+    # -s: silent, -o /dev/null: discard body, -m 5: 5s timeout
+    # No -f: exit 0 for any HTTP response including 401 (auth gate is up = working)
+    curl -s -o /dev/null -m 5 --head "https://${DOMAIN}/" 2>/dev/null
+}
+
+_cmd_publish() {
+    local public=0
+    local file=""
+
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --public) public=1; shift ;;
+            -*)       echo "ERROR: unknown flag: $1" >&2; _usage ;;
+            *)        file="$1"; shift ;;
+        esac
+    done
+
+    [ -n "$file" ] || { echo "ERROR: no file specified" >&2; _usage; }
+    [ -f "$file" ] || { echo "ERROR: file not found: $file" >&2; exit 1; }
+
+    local filename
+    filename="$(basename "$file")"
+
+    local rel_path dest_dir url
+    if [ "$public" -eq 1 ]; then
+        local slug
+        slug="$(openssl rand -hex 6)"
+        rel_path="pub/${slug}"
+    else
+        rel_path="${LEAD}"
+    fi
+
+    dest_dir="${ROOT}/${rel_path}"
+    mkdir -p "$dest_dir"
+    cp -a "$file" "${dest_dir}/${filename}"
+
+    url="https://${DOMAIN}/${rel_path}/${filename}"
+
+    # Best-effort domain reachability check — does not block publish on failure
+    if ! _check_domain 2>/dev/null; then
+        echo "WARN: relay domain ${DOMAIN} unreachable, falling back" >&2
+        # Best-effort: delegate to legacy ngrok bundle if available
+        local ngrok_bundle
+        ngrok_bundle="$(dirname "${BASH_SOURCE[0]}")/start-ngrok.sh"
+        if [ -x "$ngrok_bundle" ]; then
+            bash "$ngrok_bundle" "$file" >&2 || true
+        fi
+        echo "Local path: ${dest_dir}/${filename}" >&2
+    fi
+
+    echo "$url"
+}
+
+_cmd_rm() {
+    local target="${1:-}"
+    [ -n "$target" ] || { echo "ERROR: no path or URL specified" >&2; _usage; }
+
+    local local_path
+    # Strip scheme + domain if a full URL is provided
+    if [[ "$target" =~ ^https?:// ]]; then
+        local path_part
+        path_part="${target#*://}"    # remove scheme://
+        path_part="${path_part#*/}"   # remove domain (up to first /)
+        local_path="${ROOT}/${path_part}"
+    else
+        local_path="$target"
+    fi
+
+    # Security: refuse to delete anything outside the relay root
+    local real_root real_path
+    real_root="$(realpath -m "$ROOT")"
+    real_path="$(realpath -m "$local_path")"
+
+    if [[ "$real_path" != "$real_root/"* ]] && [[ "$real_path" != "$real_root" ]]; then
+        echo "ERROR: refusing to delete outside relay root: $local_path" >&2
+        exit 1
+    fi
+
+    if [ ! -e "$local_path" ]; then
+        echo "ERROR: not found: $local_path" >&2
+        exit 1
+    fi
+
+    rm -f "$local_path"
+    echo "Deleted: $local_path"
+}
+
+_cmd_list() {
+    if [ ! -d "$ROOT" ]; then
+        echo "Relay root does not exist: $ROOT"
+        return 0
+    fi
+    echo "=== Relay contents: ${ROOT} ==="
+
+    # Per-lead namespaces (top-level dirs that are not pub/)
+    while IFS= read -r -d '' d; do
+        local name
+        name="$(basename "$d")"
+        [[ "$name" == "pub" ]] && continue
+        echo "  [lead] ${name}/"
+        find "$d" -maxdepth 1 -type f 2>/dev/null | sort | while read -r f; do
+            echo "    https://${DOMAIN}/${name}/$(basename "$f")"
+        done
+    done < <(find "$ROOT" -mindepth 1 -maxdepth 1 -type d -print0 2>/dev/null | sort -z)
+
+    # Pub namespace
+    local pub_dir="${ROOT}/pub"
+    if [ -d "$pub_dir" ]; then
+        echo "  [pub]/"
+        find "$pub_dir" -mindepth 2 -maxdepth 2 -type f 2>/dev/null | sort | while read -r f; do
+            local slug
+            slug="$(basename "$(dirname "$f")")"
+            echo "    https://${DOMAIN}/pub/${slug}/$(basename "$f")"
+        done
+    fi
+}
+
+CMD="${1:-}"
+shift || true
+
+case "$CMD" in
+    publish) _cmd_publish "$@" ;;
+    rm)      _cmd_rm "$@" ;;
+    list)    _cmd_list ;;
+    *)       _usage ;;
+esac

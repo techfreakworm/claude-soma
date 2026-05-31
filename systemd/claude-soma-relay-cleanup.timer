@@ -1,0 +1,11 @@
+# systemd/claude-soma-relay-cleanup.timer
+[Unit]
+Description=Clean up stale relay files daily at 04:15 UTC
+
+[Timer]
+OnCalendar=*-*-* 04:15:00 UTC
+Persistent=true
+Unit=claude-soma-relay-cleanup.service
+
+[Install]
+WantedBy=timers.target

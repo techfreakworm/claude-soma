@@ -587,6 +587,18 @@ def _build_services(paths: Paths) -> list[Service]:
             group=paths.user,
             env_file=env_path,
         ),
+        Service(
+            name="claude-soma-relay-cleanup",
+            description="Claude Soma relay file cleanup (run by timer)",
+            exec_argv=[str(paths.code_root / "scripts" / "relay_cleanup.sh")],
+            env={},
+            work_dir=code_root,
+            restart_policy="no",
+            type_="oneshot",
+            user=paths.user,
+            group=paths.user,
+            env_file=env_path,
+        ),
     ]
 
 
@@ -600,6 +612,7 @@ _TIMERS: list[tuple[str, str]] = [
     ("claude-soma-usage-snapshot", "*-*-* 23:55:00"),    # daily 23:55 UTC
     ("claude-soma-idle-reaper",   "0/6:00:00"),          # every 6h
     ("claude-soma-rc-url-refresh", "*-*-* 04:00:00 UTC"), # daily 04:00 UTC
+    ("claude-soma-relay-cleanup",  "*-*-* 04:15:00 UTC"), # daily 04:15 UTC
 ]
 
 
@@ -721,6 +734,7 @@ def build_plan(
         "claude-soma-usage-snapshot.timer",
         "claude-soma-idle-reaper.timer",
         "claude-soma-rc-url-refresh.timer",
+        "claude-soma-relay-cleanup.timer",
     ]
     for svc_name in service_names_to_enable:
         plan.append(backend.enable(svc_name))

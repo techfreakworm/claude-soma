@@ -1,0 +1,22 @@
+# Renders to /etc/caddy/conf.d/files.caddyfile via scripts/caddy-files-render.sh.
+# Regenerate after rotating HERMES_FILES_PASSWORD in /etc/claude-soma/secrets.env.
+
+files.mayankgupta.in {
+    basicauth /* {
+        soma __BCRYPT_HASH__
+    }
+    encode gzip zstd
+    file_server browse {
+        root /var/lib/claude-soma/relay
+        hide .* index.html
+    }
+    log {
+        output file /var/log/caddy/files-access.log
+        format json
+    }
+    header {
+        X-Robots-Tag "noindex, nofollow, noarchive, nosnippet"
+        Cache-Control "private, max-age=300"
+        -Server
+    }
+}

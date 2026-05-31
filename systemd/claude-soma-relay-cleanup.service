@@ -1,0 +1,11 @@
+# systemd/claude-soma-relay-cleanup.service
+[Unit]
+Description=Claude Soma relay file cleanup (run by timer)
+
+[Service]
+Type=oneshot
+User=ubuntu
+WorkingDirectory=/opt/claude-soma
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
+ExecStart=/opt/claude-soma/scripts/relay_cleanup.sh
+TimeoutStartSec=300
