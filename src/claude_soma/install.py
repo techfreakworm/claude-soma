@@ -599,6 +599,20 @@ def _build_services(paths: Paths) -> list[Service]:
             group=paths.user,
             env_file=env_path,
         ),
+        # Markserv long-running service: renders /var/lib/claude-soma/staging/
+        # as browseable Markdown HTML on localhost:18080 (ngrok tunnel forwards).
+        Service(
+            name="claude-soma-markserv",
+            description="Claude Soma markdown render bundle (markserv on staging dir)",
+            exec_argv=[str(paths.code_root / "scripts" / "markserv-launch.sh")],
+            env={},
+            work_dir="/var/lib/claude-soma/staging",
+            restart_policy="on-failure",
+            restart_sec=10,
+            type_="simple",
+            user=paths.user,
+            group=paths.user,
+        ),
     ]
 
 
@@ -670,6 +684,7 @@ def build_plan(
         (str(paths.state_dir), paths.user, "755"),
         (str(paths.home / ".claude-soma"), paths.user, "700"),
         (str(paths.pw_dir), paths.user, "700"),
+        ("/var/lib/claude-soma/staging", paths.user, "755"),
     ]
     for d, owner, mode in dirs_to_create:
         plan.append(_action_mkdir(d, owner, mode, is_system=is_system))
@@ -729,6 +744,7 @@ def build_plan(
         "claude-soma-channel.service",
         "claude-soma-api.service",
         "claude-soma-frontend.service",
+        "claude-soma-markserv.service",
         "claude-soma-healthcheck.timer",
         "claude-soma-cache-refresh.timer",
         "claude-soma-usage-snapshot.timer",

@@ -1,0 +1,30 @@
+# systemd/claude-soma-markserv.service
+#
+# Long-running markserv instance that renders /var/lib/claude-soma/staging/
+# as browseable Markdown HTML on localhost:18080.
+#
+# The existing ngrok tunnel forwards to that port — no tunnel change needed.
+# scripts/markserv-launch.sh is the single source of truth for the argv so
+# the port/address flags are not duplicated here.
+#
+# Operator actions after deploying this unit:
+#   sudo bash /opt/claude-soma/scripts/migrate-staging.sh
+#   sudo systemctl enable --now claude-soma-markserv.service
+
+[Unit]
+Description=Claude Soma markdown render bundle (markserv on staging dir)
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/var/lib/claude-soma/staging
+ExecStart=/opt/claude-soma/scripts/markserv-launch.sh
+Restart=on-failure
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

@@ -402,6 +402,26 @@ if [ -f /etc/systemd/system/claude-soma-relay-cleanup.timer ]; then
     echo "claude-soma-relay-cleanup.timer enabled"
 fi
 
+step "14f/15  markserv staging dir + claude-soma-markserv.service"
+# Create /var/lib/claude-soma/staging/ for markserv-served documents.
+sudo install -d -m 0755 -o ubuntu -g ubuntu /var/lib/claude-soma/staging
+echo "Created /var/lib/claude-soma/staging"
+
+# Install the markserv long-running service (same loop pattern as 14c/14d/14e).
+for unit in claude-soma-markserv.service; do
+    if [ -f "${SYSTEMD_SRC_DIR}/${unit}" ]; then
+        sudo install -m 0644 -o root -g root "${SYSTEMD_SRC_DIR}/${unit}" "/etc/systemd/system/${unit}"
+        echo "installed /etc/systemd/system/${unit}"
+    else
+        echo "WARN: ${unit} not found in ${SYSTEMD_SRC_DIR}; skipping" >&2
+    fi
+done
+if [ -f /etc/systemd/system/claude-soma-markserv.service ]; then
+    sudo systemctl daemon-reload
+    sudo systemctl enable claude-soma-markserv.service
+    echo "claude-soma-markserv.service enabled (not started — run migrate-staging.sh first)"
+fi
+
 step "15/15  DONE  Next steps"
 cat <<'NEXT'
 1. claude auth login   # one-time browser OAuth for interactive --channels

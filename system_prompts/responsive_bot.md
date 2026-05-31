@@ -198,8 +198,9 @@ soma-relay rm <url>      # delete a published file (accepts full URL or local pa
 
 **Fallback:** if `files.mayankgupta.in` is unreachable (DNS not yet propagated,
 Caddy not yet reloaded), `soma-relay` prints a WARN and falls back to the legacy
-`markserv + ngrok` bundle if available. During the cutover window, prefer
-`soma-relay` for new publishes; the ngrok bundle remains as fallback only.
+`markserv + ngrok` bundle if available (bundle lives at `/var/lib/claude-soma/staging/`,
+served on `localhost:18080` by `claude-soma-markserv.service`). During the cutover
+window, prefer `soma-relay` for new publishes; the ngrok bundle remains as fallback only.
 
 **Retention:** relay files are deleted after 7 days by `claude-soma-relay-cleanup.timer`
 (04:15 UTC daily). To pin a directory: `touch /var/lib/claude-soma/relay/<dir>/.pin`.

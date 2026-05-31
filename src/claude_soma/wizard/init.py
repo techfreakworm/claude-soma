@@ -320,6 +320,20 @@ def _build_wizard_services(paths: Paths) -> list[tuple[str, str]]:
         ),
     ]
 
+    # Markserv long-running service: renders /var/lib/claude-soma/staging/
+    # as browseable Markdown HTML on localhost:18080 (ngrok tunnel forwards).
+    markserv_service = Service(
+        name="claude-soma-markserv",
+        description="Claude Soma markdown render bundle (markserv on staging dir)",
+        exec_argv=[f"{code_root}/scripts/markserv-launch.sh"],
+        env={},
+        work_dir="/var/lib/claude-soma/staging",
+        restart_policy="on-failure",
+        restart_sec=10,
+        type_="simple",
+        user=user, group=user,
+    )
+
     timers = [
         ("claude-soma-healthcheck",   "*:0/10"),
         ("claude-soma-cache-refresh", "*:0/5"),
@@ -330,7 +344,7 @@ def _build_wizard_services(paths: Paths) -> list[tuple[str, str]]:
     ]
 
     units: list[tuple[str, str]] = []
-    for svc in services + timer_service_stubs:
+    for svc in services + timer_service_stubs + [markserv_service]:
         units.append((f"{svc.name}.service", _render_service(svc)))
     for timer_name, on_calendar in timers:
         units.append((
@@ -439,6 +453,7 @@ def run() -> int:
         "claude-soma-channel.service",
         "claude-soma-api.service",
         "claude-soma-frontend.service",
+        "claude-soma-markserv.service",
         "claude-soma-healthcheck.timer",
         "claude-soma-cache-refresh.timer",
         "claude-soma-usage-snapshot.timer",
