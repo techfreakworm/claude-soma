@@ -76,6 +76,7 @@ Weights: P0=10, P1=5, P2=2, P3=1. Effort: S=1, M=3, L=8. Leverage 1–5.
 | FI-GRAPH | Exact teammate handles in graph | P3 | 2 | M | low | **0.67** | open |
 | FI-FORK | Forking guide automation | P3 | 1 | M | low | **0.33** | open |
 | GROK | Grok Build integration (image + video) | — | — | S/M | medium | — | blocked: user decision |
+| FI-GROK-BIN | `grok_image` MCP hardcodes `/usr/local/bin/grok` — resolve via `shutil.which("grok")` + `GROK_BIN` env override | P2 | 3 | S | low | **6** | open — surfaced 2026-05-31 during live dual-photo verify; bot used direct `grok` workaround |
 
 *Dependency-demoted rows: FI-TEAM and FI-REAPER score 1.33 but cannot start until BUG-2 lands.
 FI-CADDY (score 8.33) cannot start until FI-DOMAIN ships the `SOMA_DOMAIN` env knob (score 6, Round N
