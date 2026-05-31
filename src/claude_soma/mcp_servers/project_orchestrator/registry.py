@@ -24,7 +24,8 @@ CREATE TABLE IF NOT EXISTS projects (
     permission_mode TEXT NOT NULL DEFAULT 'acceptEdits',
     spawned_at     REAL NOT NULL,
     last_activity  REAL NOT NULL,
-    brief          TEXT
+    brief          TEXT,
+    session_uuid   TEXT DEFAULT NULL
 );
 
 CREATE INDEX IF NOT EXISTS idx_projects_status ON projects(status);
@@ -67,6 +68,16 @@ class Registry:
         self._conn.row_factory = sqlite3.Row
         with self._lock:
             self._conn.executescript(SCHEMA)
+            # Backward-compat migration: add session_uuid column to existing DBs.
+            # On a fresh DB the column is already in the SCHEMA above, so this
+            # raises OperationalError("duplicate column name") and we silently
+            # skip. On an existing DB that pre-dates this column, it succeeds.
+            try:
+                self._conn.execute(
+                    "ALTER TABLE projects ADD COLUMN session_uuid TEXT DEFAULT NULL"
+                )
+            except sqlite3.OperationalError:
+                pass
 
     def register(
         self,
@@ -147,6 +158,22 @@ class Registry:
         if not row:
             return 0.0
         return max(0.0, time.time() - float(row["last_activity"]))
+
+    def get_session_uuid(self, name: str) -> str | None:
+        """Return the cloud session UUID for a project, or None if not set."""
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT session_uuid FROM projects WHERE name = ?", (name,)
+            ).fetchone()
+        return row["session_uuid"] if row else None
+
+    def set_session_uuid(self, name: str, session_uuid: str) -> None:
+        """Store the cloud session UUID so a dead lead can be resumed later."""
+        with self._lock:
+            self._conn.execute(
+                "UPDATE projects SET session_uuid = ? WHERE name = ?",
+                (session_uuid, name),
+            )
 
     def delete(self, name: str) -> None:
         with self._lock:

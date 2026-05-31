@@ -11,7 +11,8 @@ from mcp.server.fastmcp import FastMCP
 
 from .registry import Registry
 from .spawner import (
-    spawn_background_lead, kill_session, is_lead_alive, discover_team,
+    spawn_background_lead, resume_background_lead, kill_session,
+    is_lead_alive, discover_team,
 )
 from .templates import load_template, list_template_names, TemplateNotFound
 
@@ -98,11 +99,13 @@ def spawn_project_impl(
         cwd=str(cwd), rc_url=spawn.get("rc_url"),
         permission_mode=permission_mode, brief=composed_brief,
     )
+    _reg().set_session_uuid(name, spawn["session_uuid"])
     return {
         "agent_id": spawn["agent_id"],
         "rc_url": spawn.get("rc_url", ""),
         "cwd": str(cwd),
         "type": tmpl["type"],
+        "session_uuid": spawn["session_uuid"],
     }
 
 
@@ -173,6 +176,56 @@ def kill_project_impl(*, name: str, archive: bool = True) -> dict:
     return {"name": name, "killed_at": time.time()}
 
 
+def resume_project_impl(*, name: str) -> dict:
+    """Resume a dead/killed project lead from its cloud session (--resume <uuid>).
+
+    Requires that the project was originally spawned after session_uuid tracking
+    was added. If the lead is still alive, raises to prevent a duplicate spawn.
+    """
+    p = _reg().get(name)
+    if not p:
+        raise RuntimeError(f"no project named {name!r}")
+
+    session_uuid = _reg().get_session_uuid(name)
+    if session_uuid is None:
+        raise RuntimeError(
+            f"project {name!r} has no session_uuid; it was spawned before "
+            "session tracking was added. Kill it and use spawn_project to "
+            "create a new session (resume requires a cloud session ID)."
+        )
+
+    if is_lead_alive(name):
+        raise RuntimeError(
+            f"project {name!r} is still alive; kill it before resuming."
+        )
+
+    cwd = Path(p["cwd"])
+    spawn = resume_background_lead(
+        name=name,
+        cwd=cwd,
+        permission_mode=p["permission_mode"],
+        session_uuid=session_uuid,
+    )
+    # Refresh agent_id and rc_url in registry (new tmux session, same uuid).
+    # register() upsert does not touch session_uuid, so it is preserved.
+    _reg().register(
+        name,
+        agent_id=spawn["agent_id"],
+        type_=p["type"],
+        cwd=str(cwd),
+        rc_url=spawn.get("rc_url"),
+        permission_mode=p["permission_mode"],
+        brief=p["brief"],
+    )
+    return {
+        "agent_id": spawn["agent_id"],
+        "rc_url": spawn.get("rc_url", ""),
+        "cwd": str(cwd),
+        "type": p["type"],
+        "session_uuid": session_uuid,
+    }
+
+
 def get_status_impl(name: str) -> dict:
     p = _reg().get(name)
     if not p:
@@ -240,6 +293,19 @@ def touch_project(name: str) -> dict:
 def kill_project(name: str, archive: bool = True) -> dict:
     """Mark a project as killed; reaper will gracefully shut it down."""
     return kill_project_impl(name=name, archive=archive)
+
+
+@mcp.tool()
+def resume_project(name: str) -> dict:
+    """Resume a dead or killed project lead from its cloud session.
+
+    Uses --resume <session_uuid> to pull the session from the Claude cloud so
+    the lead picks up its full prior transcript even if the local cwd transcript
+    is gone. The session_uuid must have been set when the project was originally
+    spawned (projects spawned before session tracking require a fresh spawn_project
+    instead). The lead must not be currently alive; kill it first if needed.
+    """
+    return resume_project_impl(name=name)
 
 
 @mcp.tool()

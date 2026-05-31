@@ -9,6 +9,7 @@ import shutil
 import subprocess
 import tempfile
 import time
+import uuid
 from pathlib import Path
 
 
@@ -261,6 +262,7 @@ def spawn_background_lead(
     brief: str,
     cwd: Path,
     permission_mode: str,
+    session_uuid: str | None = None,
     extra_args: list[str] | None = None,
 ) -> dict:
     if not NAME_RX.match(name):
@@ -275,6 +277,12 @@ def spawn_background_lead(
     # safety dialog forever in a detached tmux pane (no human to hit Enter).
     _pretrust_cwd(cwd)
 
+    # Generate a cloud session UUID for this lead if none was supplied. The UUID
+    # is passed as --session-id so claude uploads this session to the cloud under
+    # a stable identifier, enabling --resume <uuid> after a kill/OOM/crash.
+    if session_uuid is None:
+        session_uuid = str(uuid.uuid4())
+
     session = _session_name(name)
     socket = _lead_socket(name)
     claude_argv: list[str] = [
@@ -285,6 +293,12 @@ def spawn_background_lead(
         # prior transcript yet), claude falls back to a fresh session.
         # Mirrors the channel-claude wrapper's pattern (scripts/channel-claude.sh).
         "--continue",
+        # --session-id <uuid>: pins a stable cloud session ID so the operator
+        # can later pull this exact session back via --resume <uuid> after a
+        # kill/OOM/crash. On first spawn --continue has no prior transcript to
+        # resume, so it degrades to a fresh session; --session-id then names
+        # that fresh session for future cloud retrieval.
+        "--session-id", session_uuid,
         # --remote-control <name>: project leads stay alive after their first
         # task completes (otherwise claude exits) AND get an rc.claude.com URL
         # the operator can attach to from the Claude mobile app / web. The name
@@ -371,6 +385,94 @@ def spawn_background_lead(
         "agent_id": session,
         "rc_url": rc_url,
         "cwd": str(cwd),
+        "session_uuid": session_uuid,
+    }
+
+
+def resume_background_lead(
+    *,
+    name: str,
+    cwd: Path,
+    permission_mode: str,
+    session_uuid: str,
+    extra_args: list[str] | None = None,
+) -> dict:
+    """Spawn a tmux+systemd lead using --resume <session_uuid> instead of --continue.
+
+    Used by the `resume_project` MCP tool after a lead dies from OOM/crash/kill.
+    --resume pulls the named session from the Claude cloud, so the lead picks up
+    its full prior transcript even if the local cwd transcript is gone.
+
+    Calls kill_session(name) first to clear any lingering `active (exited)` unit
+    that would cause systemd-run to reject the spawn with "already exists".
+    """
+    if not NAME_RX.match(name):
+        raise InvalidProjectName(
+            f"project name must match {NAME_RX.pattern}, got {name!r}"
+        )
+    cwd.mkdir(parents=True, exist_ok=True)
+    _pretrust_cwd(cwd)
+
+    # Clean up any lingering transient unit (active (exited)) from the dead lead.
+    kill_session(name)
+
+    session = _session_name(name)
+    socket = _lead_socket(name)
+    # Fixed resume prompt: the lead's full transcript is restored from the cloud
+    # via --resume; the brief below is a new user message telling it to continue.
+    resume_prompt = (
+        "You have been resumed after an interruption. "
+        "Review your prior work in this session and continue from where you left off."
+    )
+    claude_argv: list[str] = [
+        _claude(),
+        # --resume <uuid>: pull session from cloud. REPLACES --continue (we want
+        # the cloud transcript, not --continue's local-file fallback).
+        "--resume", session_uuid,
+        "--remote-control", session,
+        "--add-dir", str(cwd),
+        "--permission-mode", permission_mode,
+        "--dangerously-skip-permissions",
+        "--effort", "max",
+        "--setting-sources", "user,project,local",
+    ]
+    lead_mcp_config = os.environ.get("HERMES_LEAD_MCP_CONFIG", LEAD_MCP_CONFIG_DEFAULT)
+    if Path(lead_mcp_config).exists():
+        claude_argv += ["--mcp-config", lead_mcp_config]
+    if extra_args:
+        claude_argv.extend(extra_args)
+    claude_argv += ["--", resume_prompt]
+
+    log_path = _lead_log_path(name)
+    try:
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        pass
+
+    tmux_argv: list[str] = [
+        _tmux(), "-L", socket, "new-session", "-d", "-s", session,
+        "-c", str(cwd), *claude_argv,
+        ";", "pipe-pane", "-O", "-o", "-t", session,
+        f"cat >> {shlex.quote(str(log_path))}",
+    ]
+    cmd: list[str] = _wrap_in_transient_unit(name, tmux_argv)
+
+    try:
+        subprocess.run(
+            cmd, capture_output=True, text=True, check=True, timeout=SPAWN_TIMEOUT,
+        )
+    except subprocess.CalledProcessError as e:
+        stderr = (e.stderr or "")[-500:]
+        raise RuntimeError(f"resume failed for {name!r}: {stderr}") from e
+    except subprocess.TimeoutExpired as e:
+        raise RuntimeError(f"resume timed out for {name!r} ({SPAWN_TIMEOUT}s)") from e
+
+    rc_url = _capture_rc_url(session, socket)
+    return {
+        "agent_id": session,
+        "rc_url": rc_url,
+        "cwd": str(cwd),
+        "session_uuid": session_uuid,
     }
 
 

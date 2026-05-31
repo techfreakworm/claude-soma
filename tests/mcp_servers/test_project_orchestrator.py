@@ -9,6 +9,7 @@ import pytest
 
 from claude_soma.mcp_servers.project_orchestrator import server as orch
 from claude_soma.mcp_servers.project_orchestrator import spawner
+from claude_soma.mcp_servers.project_orchestrator.spawner import resume_background_lead
 
 
 @pytest.fixture(autouse=True)
@@ -347,6 +348,76 @@ def test_spawn_project_prepends_notify_convention(monkeypatch) -> None:
     assert "ERROR" in captured["brief"]
     assert "mcp__hermes-notify__notify_orchestrator" in captured["brief"]
     assert captured["brief"].index("Standing Notify Convention") < captured["brief"].index("Do the thing.")
+
+
+def test_spawn_project_persists_session_uuid(monkeypatch) -> None:
+    """spawn_project_impl must call set_session_uuid after a successful spawn
+    so the registry holds the UUID for future --resume operations."""
+    _no_url_poll(monkeypatch)
+    with patch("subprocess.run", side_effect=_tmux_side_effect("")):
+        r = orch.spawn_project_impl(
+            name="uuid-persist", type_="custom",
+            brief="Test session uuid.", permission_mode="default",
+        )
+    # Return value must include session_uuid.
+    assert "session_uuid" in r
+    assert r["session_uuid"] is not None
+    # Registry must have it persisted.
+    stored = orch._reg().get_session_uuid("uuid-persist")
+    assert stored == r["session_uuid"]
+
+
+def test_resume_project_raises_if_no_session_uuid(monkeypatch) -> None:
+    """resume_project_impl raises if the project has no session_uuid (was spawned
+    before session tracking). Operator must kill and re-spawn."""
+    _no_url_poll(monkeypatch)
+    with patch("subprocess.run", side_effect=_tmux_side_effect("")):
+        orch.spawn_project_impl(name="nosid-proj", type_="custom",
+                                brief="x", permission_mode="default")
+    # Manually clear the session_uuid to simulate pre-tracking spawn.
+    orch._reg().set_session_uuid("nosid-proj", None)  # type: ignore[arg-type]
+
+    # Patch is_lead_alive to False so we don't fail on the alive check.
+    with patch.object(orch, "is_lead_alive", return_value=False):
+        with pytest.raises(RuntimeError, match="no session_uuid"):
+            orch.resume_project_impl(name="nosid-proj")
+
+
+def test_resume_project_raises_if_lead_alive(monkeypatch) -> None:
+    """resume_project_impl raises if the lead is still alive to prevent duplicates."""
+    _no_url_poll(monkeypatch)
+    with patch("subprocess.run", side_effect=_tmux_side_effect("")):
+        orch.spawn_project_impl(name="alive-proj", type_="custom",
+                                brief="x", permission_mode="default")
+    with patch.object(orch, "is_lead_alive", return_value=True):
+        with pytest.raises(RuntimeError, match="still alive"):
+            orch.resume_project_impl(name="alive-proj")
+
+
+def test_resume_project_uses_resume_flag(monkeypatch) -> None:
+    """resume_project_impl spawns via resume_background_lead with --resume <uuid>."""
+    _no_url_poll(monkeypatch)
+    with patch("subprocess.run", side_effect=_tmux_side_effect("")):
+        spawn_r = orch.spawn_project_impl(name="resume-proj", type_="custom",
+                                          brief="x", permission_mode="default")
+    original_uuid = spawn_r["session_uuid"]
+    assert original_uuid is not None
+
+    captured: dict = {}
+
+    def _fake_resume(**kwargs):
+        captured.update(kwargs)
+        return {"agent_id": "soma-proj-resume-proj", "rc_url": "", "cwd": "/x",
+                "session_uuid": kwargs["session_uuid"]}
+
+    with patch.object(orch, "is_lead_alive", return_value=False):
+        with patch.object(orch, "resume_background_lead", side_effect=_fake_resume):
+            r = orch.resume_project_impl(name="resume-proj")
+
+    assert captured["session_uuid"] == original_uuid
+    assert r["session_uuid"] == original_uuid
+    # Registry updated: status active, uuid unchanged.
+    assert orch._reg().get_session_uuid("resume-proj") == original_uuid
 
 
 def test_kill_project_archive_logs_when_no_memory(monkeypatch, caplog) -> None:

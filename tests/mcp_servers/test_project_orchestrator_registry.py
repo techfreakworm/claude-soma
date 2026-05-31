@@ -105,3 +105,78 @@ def test_registry_usable_from_other_threads(tmp_path: Path) -> None:
         results = [f.result() for f in [pool.submit(worker, i) for i in range(16)]]
     assert results == ["active"] * 16  # no ProgrammingError raised in any worker
     r.close()
+
+
+# --- session_uuid tests ---
+
+def test_get_session_uuid_returns_none_for_new_project(tmp_path: Path) -> None:
+    """Projects registered without a session_uuid have None by default."""
+    r = Registry(tmp_path / "reg.sqlite")
+    r.register("nosid", agent_id="a-1", type_="custom", cwd="/x", rc_url=None)
+    assert r.get_session_uuid("nosid") is None
+
+
+def test_get_session_uuid_returns_none_for_unknown_project(tmp_path: Path) -> None:
+    r = Registry(tmp_path / "reg.sqlite")
+    assert r.get_session_uuid("does-not-exist") is None
+
+
+def test_set_and_get_session_uuid(tmp_path: Path) -> None:
+    """set_session_uuid persists the uuid; get_session_uuid retrieves it.
+    The full get() dict also exposes the column."""
+    r = Registry(tmp_path / "reg.sqlite")
+    r.register("withsid", agent_id="a-1", type_="custom", cwd="/x", rc_url=None)
+    test_uuid = "aaaabbbb-cccc-4ddd-eeee-ffffffffffff"
+    r.set_session_uuid("withsid", test_uuid)
+    assert r.get_session_uuid("withsid") == test_uuid
+    assert r.get("withsid")["session_uuid"] == test_uuid
+
+
+def test_migration_adds_column_to_existing_db(tmp_path: Path) -> None:
+    """Simulate an existing DB that pre-dates the session_uuid column.
+    Opening a Registry on it must add the column (migration) and leave
+    existing rows intact with session_uuid=NULL."""
+    import sqlite3
+
+    db_path = tmp_path / "old.sqlite"
+    # Create a minimal DB without session_uuid (pre-migration schema)
+    conn = sqlite3.connect(db_path)
+    conn.execute("""
+        CREATE TABLE projects (
+            name TEXT PRIMARY KEY, agent_id TEXT NOT NULL, type TEXT NOT NULL,
+            cwd TEXT NOT NULL, rc_url TEXT, status TEXT NOT NULL DEFAULT 'active',
+            permission_mode TEXT NOT NULL DEFAULT 'acceptEdits',
+            spawned_at REAL NOT NULL, last_activity REAL NOT NULL, brief TEXT
+        )
+    """)
+    conn.execute(
+        "INSERT INTO projects VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        ("old-lead", "soma-proj-old-lead", "custom", "/x", None, "active",
+         "acceptEdits", 1.0, 1.0, None),
+    )
+    conn.commit()
+    conn.close()
+
+    # Opening Registry must run the migration without crashing.
+    r = Registry(db_path)
+    row = r.get("old-lead")
+    assert row is not None
+    assert row["name"] == "old-lead"
+    # Existing row gets session_uuid=NULL from the ALTER TABLE default.
+    assert row["session_uuid"] is None
+    # New rows can have a session_uuid.
+    r.register("new-lead", agent_id="a-2", type_="custom", cwd="/y", rc_url=None)
+    r.set_session_uuid("new-lead", "new-uuid-1234")
+    assert r.get_session_uuid("new-lead") == "new-uuid-1234"
+
+
+def test_register_upsert_preserves_session_uuid(tmp_path: Path) -> None:
+    """register() upsert does NOT clobber an existing session_uuid.
+    A re-register (e.g. agent_id refresh) must leave the uuid intact."""
+    r = Registry(tmp_path / "reg.sqlite")
+    r.register("rep", agent_id="a-1", type_="custom", cwd="/x", rc_url=None)
+    r.set_session_uuid("rep", "stable-uuid-0000")
+    # Re-register with a new agent_id (upsert path).
+    r.register("rep", agent_id="a-2", type_="custom", cwd="/x", rc_url=None)
+    # session_uuid must survive the upsert.
+    assert r.get_session_uuid("rep") == "stable-uuid-0000"

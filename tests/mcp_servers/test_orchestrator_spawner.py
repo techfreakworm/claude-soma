@@ -10,7 +10,8 @@ import pytest
 
 from claude_soma.mcp_servers.project_orchestrator import spawner
 from claude_soma.mcp_servers.project_orchestrator.spawner import (
-    spawn_background_lead, BriefTooLong, InvalidProjectName, kill_session
+    spawn_background_lead, resume_background_lead,
+    BriefTooLong, InvalidProjectName, kill_session,
 )
 
 
@@ -391,11 +392,11 @@ def test_brief_is_guarded_by_dashdash_without_mcp_config(tmp_path: Path, monkeyp
     assert args[args.index(brief) - 1] == "--"
 
 
-def test_spawn_includes_continue_flag_before_remote_control(tmp_path: Path) -> None:
-    """Regression: spawn_background_lead must pass --continue right after the
-    claude binary so a unit restart resumes the prior transcript (mirrors the
-    channel-claude.sh pattern). On first spawn with no prior transcript claude
-    falls back to a fresh session — the flag is always safe to include."""
+def test_spawn_includes_continue_and_session_id_before_remote_control(tmp_path: Path) -> None:
+    """spawn_background_lead must pass --continue AND --session-id <uuid> before
+    --remote-control. --continue resumes local transcript on unit restart;
+    --session-id names the cloud session for future --resume retrieval.
+    Ordering: --continue, --session-id, <uuid>, --remote-control."""
     cwd = tmp_path / "cont"
     cwd.mkdir()
     with patch("subprocess.run", side_effect=[_ok(), _ok("")]) as run:
@@ -404,12 +405,18 @@ def test_spawn_includes_continue_flag_before_remote_control(tmp_path: Path) -> N
         )
     args = run.call_args_list[0][0][0]
     assert "--continue" in args
-    # --continue must appear immediately before --remote-control in the argv.
+    assert "--session-id" in args
+    assert "--remote-control" in args
     cont_idx = args.index("--continue")
+    sid_idx = args.index("--session-id")
     rc_idx = args.index("--remote-control")
-    assert rc_idx == cont_idx + 1, (
-        f"--continue at {cont_idx}, --remote-control at {rc_idx}; expected adjacent"
+    # --continue comes first, then --session-id <uuid>, then --remote-control
+    assert cont_idx < sid_idx < rc_idx, (
+        f"expected --continue ({cont_idx}) < --session-id ({sid_idx}) "
+        f"< --remote-control ({rc_idx})"
     )
+    # --session-id is immediately followed by the UUID value
+    assert sid_idx + 1 < rc_idx
 
 
 def test_spawn_injects_hermes_lead_name_and_notify_endpoint(tmp_path: Path) -> None:
@@ -590,3 +597,100 @@ def test_discover_team_empty_on_dead_session_or_error() -> None:
         assert spawner.discover_team("ghost") == []
     with patch("subprocess.run", side_effect=sp.TimeoutExpired(cmd=["tmux"], timeout=10)):
         assert spawner.discover_team("ghost") == []
+
+
+# --- session-id / resume tests ---
+
+def test_first_spawn_injects_session_id_flag(tmp_path: Path) -> None:
+    """spawn_background_lead must pass --session-id <uuid> so claude records the
+    session in the cloud under a stable ID, enabling --resume after a crash."""
+    cwd = tmp_path / "sid"
+    cwd.mkdir()
+    with patch("subprocess.run", side_effect=[_ok(), _ok("")]) as run:
+        result = spawn_background_lead(
+            name="sid", brief="x", cwd=cwd, permission_mode="acceptEdits",
+        )
+    args = run.call_args_list[0][0][0]
+    assert "--session-id" in args
+    # The value after --session-id is a UUID4 (32 hex digits + 4 hyphens = 36 chars)
+    sid_value = args[args.index("--session-id") + 1]
+    import re as _re
+    uuid4_rx = _re.compile(
+        r"^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    )
+    assert uuid4_rx.match(sid_value), f"expected uuid4, got {sid_value!r}"
+    # Result dict must expose the uuid so the registry can persist it.
+    assert "session_uuid" in result
+    assert result["session_uuid"] == sid_value
+
+
+def test_first_spawn_accepts_explicit_session_uuid(tmp_path: Path) -> None:
+    """Caller can supply a session_uuid (e.g. for testing); spawn must use it."""
+    cwd = tmp_path / "expl"
+    cwd.mkdir()
+    fixed_uuid = "aaaabbbb-cccc-4ddd-eeee-ffffffffffff"
+    with patch("subprocess.run", side_effect=[_ok(), _ok("")]) as run:
+        result = spawn_background_lead(
+            name="expl", brief="x", cwd=cwd, permission_mode="acceptEdits",
+            session_uuid=fixed_uuid,
+        )
+    args = run.call_args_list[0][0][0]
+    assert "--session-id" in args
+    assert args[args.index("--session-id") + 1] == fixed_uuid
+    assert result["session_uuid"] == fixed_uuid
+
+
+def test_resume_spawn_uses_resume_flag_not_continue(tmp_path: Path) -> None:
+    """resume_background_lead must pass --resume <uuid> and MUST NOT pass
+    --continue or --session-id (those are first-spawn only).
+
+    kill_session issues two subprocess calls (systemctl stop + tmux kill-session)
+    before the new-session spawn, so the spawn call is the THIRD call.
+    """
+    cwd = tmp_path / "res"
+    cwd.mkdir()
+    fixed_uuid = "11112222-3333-4444-5555-666677778888"
+    # kill_session: 2 calls (systemctl stop + tmux kill-session)
+    # spawn:        1 call (tmux new-session via systemd-run)
+    # capture_rc:   1 call (tmux capture-pane)
+    with patch("subprocess.run", side_effect=[_ok(), _ok(), _ok(), _ok("")]) as run:
+        result = resume_background_lead(
+            name="res", cwd=cwd, permission_mode="acceptEdits",
+            session_uuid=fixed_uuid,
+        )
+    # The spawn call is the THIRD subprocess.run: after systemctl stop and tmux kill-session.
+    spawn_call = run.call_args_list[2][0][0]
+    assert "--resume" in spawn_call
+    assert spawn_call[spawn_call.index("--resume") + 1] == fixed_uuid
+    assert "--continue" not in spawn_call
+    assert "--session-id" not in spawn_call
+    assert result["session_uuid"] == fixed_uuid
+
+
+def test_resume_spawn_calls_kill_session_first(tmp_path: Path) -> None:
+    """resume_background_lead cleans up any lingering unit before spawning.
+    kill_session issues systemctl stop + tmux kill-session; those must precede the
+    new tmux new-session call."""
+    cwd = tmp_path / "reskill"
+    cwd.mkdir()
+    fixed_uuid = "deadbeef-0000-4000-8000-000000000001"
+    commands: list[list[str]] = []
+
+    def _record_run(*args, **kwargs) -> MagicMock:
+        cmd = args[0] if args else []
+        commands.append(cmd)
+        return _ok()
+
+    with patch("subprocess.run", side_effect=_record_run):
+        resume_background_lead(
+            name="reskill", cwd=cwd, permission_mode="acceptEdits",
+            session_uuid=fixed_uuid,
+        )
+
+    # First batch of calls is kill_session: systemctl stop + tmux kill-session
+    systemctl_calls = [c for c in commands if any("systemctl" in a for a in c)]
+    new_session_calls = [c for c in commands if "new-session" in c]
+    assert systemctl_calls, "kill_session must have called systemctl stop"
+    assert new_session_calls, "must have called tmux new-session for the resume spawn"
+    # systemctl stop must precede new-session
+    assert commands.index(systemctl_calls[0]) < commands.index(new_session_calls[0])
