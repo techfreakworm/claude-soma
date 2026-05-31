@@ -8,16 +8,19 @@ Generated: 2026-05-31 by soma-improver after a planning + prioritization pass.
 
 - **Round N** (start here): one maintenance-window bundle (activate FI-NOTIFY + DM HTML fix +
   attachment hardening via the restart those already-shipped commits require anyway; BUG-7 subagent
-  vector verify + BUG-9 T1-T5 close ride along at ~0 marginal cost) plus eight no-restart items —
+  vector verify + BUG-9 T1-T5 close ride along at ~0 marginal cost) plus nine no-restart items —
   gate false positives (top scorer, immediate relief), `last_activity` bump, `.mcp.json` env fix,
   schedule-routine bash-fallback, concurrency-cap defensive guard, archive log, routines prewarm,
-  and T11 verify.
+  T11 verify, and FI-DOMAIN domain-config unification (promoted from N+2; S effort, unblocks
+  FI-CADDY).
 - **Round N+1**: the two highest-leverage M items — lead notify channel (biggest daily UX gap) and
   the channel-stall root fix — plus the admin file dropper that completes the large-file upload
   story.
-- **Round N+2**: architecture prerequisites — domain config unification (gates Caddy relay), Caddy
-  file relay itself, and killed-lead resume (the long-tail L item that unblocks team-roster and
-  reaper integration).
+- **Round N+2**: FI-CADDY as the dedicated Caddy relay implementation round (FI-DOMAIN has moved to
+  Round N's no-restart sweep, so the relay can start as soon as N ships; ~400–600 LOC, M effort, no
+  channel restart required — `caddy reload` is graceful); see `PLAN-FI-DOMAIN.md` for the full
+  design. Plus killed-lead resume (the long-tail L item that unblocks team-roster and reaper
+  integration).
 - Grok Build integration stays blocked until the user picks a path for the image-gen clash.
 - Anything downstream of killed-lead resume (team-roster persistence, reaper integration) cannot
   move until resume lands; they are sequenced into Round N+3 or beyond.
@@ -49,17 +52,17 @@ Weights: P0=10, P1=5, P2=2, P3=1. Effort: S=1, M=3, L=8. Leverage 1–5.
 | FI-GATE | Orchestrator gate false positives | P1 | 4 | S | low | **20** | open |
 | BUG-7 | Subagent vector verify (poller hijack residual) | P1 | 4 | S | high | **20** | verify-only (maintenance window) |
 | FI-NOTIFY | Lead → orchestrator notify channel | P1 | 5 | M | medium | **8.33** | shipped (`c348675`); awaiting restart activation |
+| FI-CADDY | Caddy-via-own-domain file relay (replace ngrok) | P1 | 5 | M | low | **8.33** | open — see `PLAN-FI-DOMAIN.md` for full design |
 | FI-ACT | `last_activity` column not bumped by tmux send-keys | P2 | 4 | S | low | **8** | open |
 | BUG-9 | T1–T5 acceptance verify-close | P2 | 3 | S | low | **6** | verify-only (substantially closed by today's live run) |
 | FI-MCP | `.mcp.json` env vs `secrets.env` source of truth | P2 | 3 | S | low | **6** | open |
+| FI-DOMAIN | Hard-coded domain/handle cleanup | P2 | 3 | S | low | **6** | open — enabler for FI-CADDY (`SOMA_DOMAIN` env knob) |
 | BUG-10 | Channel stall on large attachment | P1 | 3 | M | medium | **5** | open |
 | FI-SCHED | Codify schedule-routine bash-fallback | P2 | 2 | S | low | **4** | open |
 | FI-CAP | Concurrency-cap accounting (defensive) | P2 | 2 | S | low | **4** | open |
 | FI-PREWARM | Routines cloud-cache prewarm | P2 | 2 | S | low | **4** | open |
 | FI-DROPPER | Admin file dropper for large uploads (>20 MB) | P1 | 2 | M | medium | **3.33** | open |
-| FI-CADDY | Caddy-via-own-domain file relay (replace ngrok) | P2 | 3 | M | medium | **2** | open |
 | FI-ARCHIVE | `kill_project` archive log for no-memory leads | P3 | 2 | S | low | **2** | open |
-| FI-DOMAIN | Hard-coded domain/handle cleanup | P2 | 3 | M | medium | **2** | open |
 | FI-T11 | Usage-snapshot validation (T11) | P2 | 1 | S | low | **2** | verify-only |
 | BUG-4 | Routines registry never populated | P2 | 2 | M | medium | **1.33** | open |
 | FI-TEAM | Team-roster persistence | P2 | 2 | M | medium | **1.33** | blocked: depends on BUG-2 |
@@ -75,7 +78,10 @@ Weights: P0=10, P1=5, P2=2, P3=1. Effort: S=1, M=3, L=8. Leverage 1–5.
 | GROK | Grok Build integration (image + video) | — | — | S/M | medium | — | blocked: user decision |
 
 *Dependency-demoted rows: FI-TEAM and FI-REAPER score 1.33 but cannot start until BUG-2 lands.
-FI-CADDY scores 2 but cannot start until FI-DOMAIN converges the config layer (equal score, topology tie-break).*
+FI-CADDY (score 8.33) cannot start until FI-DOMAIN ships the `SOMA_DOMAIN` env knob (score 6, Round N
+no-restart sweep). The scores reflect the 2026-05-31 re-evaluation: user constraint — files stay PUBLIC
+(no auth gate); serving mechanism must be ISOLATED from soma.mayankgupta.in; primary motivation is
+bandwidth. See `PLAN-FI-DOMAIN.md` for the full re-evaluation, Caddyfile snippet, and migration plan.*
 
 ---
 
@@ -182,6 +188,18 @@ The bot already needs a channel restart to activate three commits that have land
   - **FI-T11**: Usage-snapshot T11 in the checklist is still marked unverified. Verify and mark done.
   - Both are S; neither requires a restart; bundle into the no-restart sweep.
 
+- **FI-DOMAIN: Hard-coded domain/handle cleanup** (P2, leverage 3, effort S, low risk — promoted from Round N+2)
+  - **Why now**: `claude.mayankgupta.in` vs `soma.mayankgupta.in` drift appears in `api/main.py`
+    (CORS origin list, hard-coded at line 13), `wizard/init.py`, Caddyfile, and systemd units. This is
+    the PREREQUISITE for FI-CADDY — the relay explicitly requires `SOMA_DOMAIN` (or `SOMA_RELAY_DOMAIN`)
+    to converge on a single knob in `secrets.env`. Doing the cleanup first prevents a third definition of
+    the domain string being introduced by the Caddy relay implementation. The work is S effort (centralize
+    in `secrets.env`; update `wizard/init.py`'s `render_caddyfile()` to read from it; update the hard-coded
+    CORS origin; regenerate the Caddyfile snippet). No channel restart required.
+  - **Depends on**: MULTI_PLATFORM_INSTALL config layer Phase 1 (landed in `8e8c094`; done)
+  - **Out-of-band considerations**: Centralize in `secrets.env`; verify CORS origin is read from env after
+    the change (`api/main.py` line 13). See `PLAN-FI-DOMAIN.md` for the full design and Caddyfile snippet.
+
 ---
 
 ### Round N+1 (after Round N lands)
@@ -247,30 +265,24 @@ The bot already needs a channel restart to activate three commits that have land
 
 ---
 
-### Round N+2 (further out)
+### Round N+2 (after Round N+1 lands)
 
-- **FI-DOMAIN: Hard-coded domain/handle cleanup** (P2, leverage 3, effort M, medium risk)
-  - **Why now**: `claude.mayankgupta.in` vs `soma.mayankgupta.in` drift appears in `api/main.py`
-    (CORS origin list, hard-coded at line 13), `wizard/init.py`, Caddyfile, and systemd units.
-    This is the PREREQUISITE for Caddy file relay (FI-CADDY) — the relay design explicitly requires
-    `SOMA_RELAY_DOMAIN` to converge with the dashboard domain config on a single `SOMA_DOMAIN` knob
-    in `secrets.env`. Doing domain cleanup first prevents a third definition of the domain string
-    being introduced by the Caddy relay implementation.
-  - **Depends on**: MULTI_PLATFORM_INSTALL config layer (Phase 1 landed in `8e8c094`; Phase 2 TBD)
-  - **Out-of-band considerations**: centralize in `secrets.env`; update `wizard/init.py`
-    `render_caddyfile()` to read from it.
-
-- **FI-CADDY: Caddy-via-own-domain file relay** (P2, leverage 3, effort M, medium risk)
-  - **Why now**: ngrok bandwidth pain hit while relaying the 235 MB pptx on 2026-05-30; the ngrok
-    interstitial also breaks automated Medium image ingestion. Since Caddy is already live on
-    `claude.mayankgupta.in` with an ACME cert, adding a path-suffix `handle /files/*` block is
-    trivially safe. The full design (two-tier namespace: private `/files/<lead>/` via `forward_auth`,
-    public `/files/pub/<uuid>/` unauthenticated with UUID-as-credential; `soma-relay` helper with
-    ngrok fallback; per-lead isolation) is already specified in `FUTURE_IMPROVEMENTS.md`. Cannot start
-    until FI-DOMAIN unifies the `SOMA_DOMAIN` / `SOMA_RELAY_DOMAIN` knob.
-  - **Depends on**: FI-DOMAIN
-  - **Out-of-band considerations**: `soma-relay` helper must be written first; the Caddyfile change
-    is one block.
+- **FI-CADDY: Caddy-via-own-domain file relay** (P1, leverage 5, effort M, low risk — dedicated implementation round)
+  - **Why now (2026-05-31 re-evaluation)**: ngrok bandwidth pain hit while relaying the 235 MB pptx on
+    2026-05-30; the ngrok interstitial also breaks automated Medium image ingestion. User constraints
+    (binding): files stay PUBLIC (no auth gate — the prior `forward_auth` design in commit `c7f501d` is
+    superseded); serving mechanism must be ISOLATED from soma.mayankgupta.in and the admin pages;
+    primary motivation is bandwidth. Since Caddy is already live with an ACME cert, adding a
+    path-suffix `handle /files/*` block is the lowest-risk path: no new DNS record, no cert expansion,
+    no cross-cutting auth change. FI-DOMAIN (promoted to Round N's no-restart sweep) ships the
+    `SOMA_DOMAIN` env knob this relay consumes — so by the time Round N+2 starts, the config
+    prerequisite is already in place. Estimated implementation: ~400–600 LOC. No channel restart
+    required — `caddy reload` is graceful.
+  - **Depends on**: FI-DOMAIN (ships in Round N; done before this round starts)
+  - **Out-of-band considerations**: `soma-relay` helper must be written first; the Caddyfile change is
+    one block. See `PLAN-FI-DOMAIN.md` for the full design, Caddyfile snippet, and migration plan.
+    Note: `PLAN-FI-DOMAIN.md` supersedes the forward_auth / two-tier-namespace design in
+    `FUTURE_IMPROVEMENTS.md` — the public-only namespace eliminates the auth complexity.
 
 - **BUG-2: Killed-lead resume** (P1, leverage 2, effort L, high risk)
   - **Why now**: A dead (non-retired) lead loses all conversation history, in-progress task state, and
@@ -397,20 +409,31 @@ together because they address opposite directions of the same 235 MB pptx incide
 prevents the channel going deaf on failed downloads; the dropper gives the user a clean upload path
 that bypasses Telegram's 20 MB cap. Neither is complete without the other.
 
-**Round N+2 is governed by two dependency chains.** Domain cleanup (FI-DOMAIN) must precede Caddy
-file relay (FI-CADDY) because both designs converge on a single `SOMA_DOMAIN` / `SOMA_RELAY_DOMAIN`
-knob in `secrets.env` — shipping the relay before the cleanup would introduce a third definition of
-the domain string and create exactly the kind of drift the cleanup is supposed to fix. The second
-chain is killed-lead resume (BUG-2): its raw score (1.25) underrepresents its structural importance
-because L effort drives the denominator up. But two items scoring 1.33 (team-roster persistence,
-reaper-resume) cannot start without it. Those items are in the queue; resume must come first.
+**FI-CADDY and FI-DOMAIN were promoted to HIGH on 2026-05-31.** The user's verbatim constraint:
+"files can stay PUBLIC; serving mechanism must be ISOLATED from soma.mayankgupta.in; primary
+motivation = bandwidth." This changes the design: the prior `c7f501d` FUTURE_IMPROVEMENTS.md
+recommendation (two-tier namespace with `forward_auth` for the private path) is superseded by a
+simpler public-only design specified in `PLAN-FI-DOMAIN.md`. With auth complexity removed, both
+implementation risk and effort estimates fall — FI-CADDY moves from P2/medium risk to P1/low risk
+(score 2 → 8.33) and FI-DOMAIN corrects its effort to S/low risk (score 2 → 6). The topology
+rule still holds: FI-DOMAIN ships first (Round N, no restart, S effort) to unify the `SOMA_DOMAIN`
+env knob; FI-CADDY consumes it in Round N+2. Round N+2 is now the dedicated Caddy relay round —
+the only substantial item in that round aside from BUG-2.
+
+**Round N+2 is governed by two dependency chains.** Domain cleanup (FI-DOMAIN, now in Round N)
+must precede Caddy file relay (FI-CADDY) because the relay consumes the `SOMA_DOMAIN` / `SOMA_RELAY_DOMAIN`
+knob that FI-DOMAIN centralizes — shipping the relay before the cleanup would introduce a third
+definition of the domain string and create exactly the kind of drift the cleanup is supposed to fix.
+The second chain is killed-lead resume (BUG-2): its raw score (1.25) underrepresents its structural
+importance because L effort drives the denominator up. But two items scoring 1.33 (team-roster
+persistence, reaper-resume) cannot start without it. Those items are in the queue; resume must come first.
 
 **Dependency topology forced three demotions from raw score.** Team-roster persistence (1.33) and
 reaper-resume integration (1.33) both score above killed-lead resume (1.25), but both are structurally
 blocked by it — they have no implementation path until `--session-id` + `--resume` exists in the
-spawner. Caddy file relay (score 2) ties domain cleanup (score 2) on raw score but cannot start until
-domain cleanup unifies the config knob; the topology makes the order unambiguous. These are the only
-three demotions in the queue; every other sequencing decision follows directly from the score ranking.
+spawner. Caddy file relay (score 8.33) cannot start until FI-DOMAIN (score 6) ships the config knob;
+the topology makes the order unambiguous even though their scores now differ. These are the only
+three demotions; every other sequencing decision follows directly from the score ranking.
 
 **The Grok proposal sits outside the sequence by design.** It is genuinely blocked — not low-priority
 but undecided. The image-gen clash (`codex-image-gen` vs `grok-build`) is a user preference call,
@@ -421,25 +444,28 @@ is made. Until the user picks a path, nothing in the Grok section belongs in any
 
 ## Open questions for the user
 
-1. **#7 subagent vector — fallback decision**: If the maintenance-window test reveals that subagents
+1. **FI-CADDY / FI-DOMAIN DNS, Caddyfile, and public-token retention**: See `PLAN-FI-DOMAIN.md` §10
+   for the open questions the parallel design pass surfaced (token TTL, DNS record strategy, relay
+   directory ownership, migration gating).
+
+2. **#7 subagent vector — fallback decision**: If the maintenance-window test reveals that subagents
    DO inherit `--settings` (and thus re-introduce the poller hijack), the fallback is to route all
    heavy work through orchestrator-spawned leads (already plugin-skipped + cgroup-isolated) via
    `system_prompts/responsive_bot.md`. Are you committed to that fallback as the design, or do you
    want to explore patching the third-party plugin (last-resort option; fragile on upgrade)?
 
-2. **Grok Build integration**: (a) keep both `codex-image-gen` + `grok-build` and route by preference;
+3. **Grok Build integration**: (a) keep both `codex-image-gen` + `grok-build` and route by preference;
    (b) replace `codex-image-gen` entirely; (c) generic `image-gen` skill with `--provider` arg. Also:
    should video integration ship before the image-clash decision is resolved, since video has no
    existing competitor in the skill set?
 
-3. **Killed-lead resume v1 scope**: For v1, the recommendation is option (a) — teams are ephemeral;
+4. **Killed-lead resume v1 scope**: For v1, the recommendation is option (a) — teams are ephemeral;
    the resumed lead re-plans from its own transcript. Is that acceptable, or does the full team
    restore (option b: persist the team roster and re-spawn teammates on resume) need to be in scope
    for v1?
 
-4. **Caddy relay public-namespace token TTL**: The design specifies a tokenized `/files/pub/<uuid>/`
-   path with no TTL (UUID slug as permanent credential). Should public tokens expire (e.g., 30 days),
-   and if so, should expired tokens return 404 or redirect to a "link expired" page?
+5. **Caddy relay public-namespace token TTL**: Superseded by `PLAN-FI-DOMAIN.md` §10; refer there
+   for the current design's token retention and expiry questions.
 
 ---
 
