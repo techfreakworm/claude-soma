@@ -386,6 +386,114 @@ Use `mcp__hermes_api__get_recent_lead_events(lead="<name>", limit=20)` to query
 the full event history for a lead without capture-pane. This is fast (indexed
 SQLite query, < 10 ms) and does not require a background agent dispatch.
 
+## Image and video generation
+
+### Photo requests (any phrasing: draw / render / generate / create / sketch / design an image)
+
+Dispatch **two** background Agents in parallel — one for each provider. Do NOT wait for
+one to finish before starting the other.
+
+```
+1. Agent(
+     subagent_type="general-purpose",
+     model="opus",
+     run_in_background=true,
+     description="Generate image via grok: <prompt>",
+     prompt="Call mcp__grok_image__generate_image with prompt='<user prompt>'
+       and output_dir='/tmp'. Return ONLY the JSON: {\"path\": \"<absolute path>\",
+       \"session_id\": \"<id>\"}. Do NOT send to Telegram yourself."
+   )
+
+2. Agent(
+     subagent_type="general-purpose",
+     model="opus",
+     run_in_background=true,
+     description="Generate image via codex: <prompt>",
+     prompt="Invoke the claude-soma:codex-image-gen skill with prompt:
+       '<user prompt>'. Save the PNG to /tmp/codex_img_<uuid>.png and return
+       ONLY the absolute file path. Do NOT send to Telegram yourself."
+   )
+
+3. mcp__plugin_telegram_telegram__reply(chat_id="935376085",
+     text="Generating your image from two sources — grok and codex. Will send both shortly.")
+
+4. End turn.
+```
+
+When **both** agents complete (two `<task-notification>` events), collect both paths and
+send a **single** `mcp__hermes_api__send_tg_reply` call with both files and a labeled caption:
+
+```
+mcp__hermes_api__send_tg_reply(
+  chat_id="935376085",
+  text="grok: image 1 of 2\ncodex: image 2 of 2",
+  files=["/tmp/grok_<session_id>.png", "/tmp/codex_img_<uuid>.png"]
+)
+```
+
+If **one provider errors**, the other's output still ships. Include a note in the caption:
+
+```
+text="grok: image attached\n(codex errored: <short error message>)"
+```
+
+or
+
+```
+text="codex: image attached\n(grok errored: <short error message>)"
+```
+
+Never suppress errors silently. Never default to just one provider when the user asked for
+an image without specifying — always attempt both.
+
+### Video requests
+
+Providers: `grok-video` (CLI: `grok -p "/imagine-video ..."`) and the `make-video` skill.
+
+- If the user **names a provider** (says "use grok" / "make-video" / "grok video" / "make
+  a video with make-video") — honor it. Dispatch the appropriate Agent.
+- If the user **does NOT specify** a provider — reply immediately:
+
+```
+mcp__plugin_telegram_telegram__reply(chat_id="935376085",
+  text="grok or make-video?")
+```
+
+Then end your turn. **NEVER default to one provider.** Wait for the user's answer before
+dispatching.
+
+## Admin file dropper — large-file intake
+
+Files that exceed the Telegram 20 MB Bot-API cap (e.g. large PPTX decks,
+datasets, recordings) can be uploaded via the admin dashboard without any
+scp or ngrok ceremony.
+
+**Upload URL:** `https://claude.mayankgupta.in/admin/<lead-name>/upload`
+
+Files land at `/var/lib/claude-soma/staging/<lead-name>/inbox/<filename>`.
+A manifest (`<filename>.manifest.json`) is written alongside with:
+- `name` — original filename
+- `size` — bytes
+- `sha256` — hex digest
+- `uploaded_at` — ISO 8601 UTC timestamp
+
+**Reading the file in the bot:**
+```
+Read /var/lib/claude-soma/staging/<lead>/inbox/<filename>
+```
+
+**Passing the file to a lead via tmux:**
+```bash
+tmux -L soma-lead-<lead> send-keys -t soma-proj-<lead> \
+  "Read /var/lib/claude-soma/staging/<lead>/inbox/<filename>" Enter
+```
+
+The upload endpoint streams the body in 1 MB chunks so even a 200+ MB file
+does not OOM the API process. Auth is gated by the same GitHub OAuth session
+that protects all other `/admin/*` routes. The dropper also fires a
+NEEDS_INPUT notification to the FI-NOTIFY listener so the bot receives an
+`additionalContext` alert on the next user turn.
+
 ## Why this matters
 
 If you do "install docker" inline, you're tied up for several minutes and

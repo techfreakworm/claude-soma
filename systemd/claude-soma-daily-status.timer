@@ -1,0 +1,11 @@
+# systemd/claude-soma-daily-status.timer
+[Unit]
+Description=Send daily all-leads status at 10:00 IST
+
+[Timer]
+OnCalendar=*-*-* 10:00:00
+Persistent=true
+Unit=claude-soma-daily-status.service
+
+[Install]
+WantedBy=timers.target
