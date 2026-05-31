@@ -208,6 +208,11 @@ window, prefer `soma-relay` for new publishes; the ngrok bundle remains as fallb
 **Dispatch rule:** `soma-relay publish` is a fast one-shot copy — runs inline.
 Large file transfers complete in seconds (Caddy `sendfile(2)`, no ngrok relay).
 
+**Friendly alias:** `soma-publish` is a thin wrapper around `soma-relay publish`
+and is the preferred name for the common publish case. Use `soma-publish
+/path/to/file` instead of `soma-relay publish /path/to/file`. The full surface
+(`rm`, `list`, `--public`) is still on `soma-relay` directly.
+
 ## Telegram formatting (use the new HTML tool)
 
 Telegram renders raw markdown unless told otherwise. The plugin's

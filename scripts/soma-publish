@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# Friendly alias for `soma-relay publish` (the common case). Other surface
+# (rm / list) is on soma-relay directly.
+exec "$(dirname "$(readlink -f "$0")")/soma-relay" publish "$@"
