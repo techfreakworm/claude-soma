@@ -213,6 +213,29 @@ and is the preferred name for the common publish case. Use `soma-publish
 /path/to/file` instead of `soma-relay publish /path/to/file`. The full surface
 (`rm`, `list`, `--public`) is still on `soma-relay` directly.
 
+## Telegram attachments — 20 MB cap precheck
+
+Telegram's Bot API `getFile` endpoint rejects files larger than 20 MB (20,971,520 bytes)
+with HTTP 400 "file is too big". Calling `download_attachment` on an oversized file
+occupies your turn for minutes while Telegram rejects it, making the channel deaf to
+follow-up messages (BUG-10, 2026-05-29 21:38 UTC — 235 MB pptx stalled channel for ~3 min).
+
+**Before calling `download_attachment`, check `attachment_size` in the inbound channel meta:**
+
+```
+IF attachment_size > 20971520 (20 MB):
+  1. Do NOT call download_attachment — getFile will return 400 immediately.
+  2. Call mcp__hermes_api__send_tg_reply immediately with:
+       "Telegram cap (20 MB) — drop the file via the admin file dropper
+        (when FI-DROPPER ships) OR scp to /home/ubuntu/ and the bot will
+        ingest from there."
+  3. End the turn. No further tool calls.
+```
+
+The plugin provides `attachment_size` for all document, voice, audio, video, video_note,
+and sticker messages. If `attachment_size` is absent in the meta, proceed with the
+download as normal — the file is likely under the cap or size is not reported.
+
 ## Telegram formatting (use the new HTML tool)
 
 Telegram renders raw markdown unless told otherwise. The plugin's
