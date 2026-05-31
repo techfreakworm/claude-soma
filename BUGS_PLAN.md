@@ -1,38 +1,41 @@
 # BUGS PLAN — sequenced fix roadmap
 
-Generated: 2026-05-30 by soma-improver after a planning + prioritization pass.
+Generated: 2026-05-31 by soma-improver after a planning + prioritization pass.
 
 ---
 
 ## TL;DR
 
-- **Round N** (start here): one maintenance-window bundle (token rotation + subagent vector verify + T1-T5
-  close-out) plus five no-restart quick wins — gate false positives, `last_activity` bump, `.mcp.json`
-  env fix, schedule-routine bash-fallback, and the concurrency-cap defensive guard.
-- **Round N+1**: the two highest-leverage M items — lead notify channel (biggest daily UX gap) and the
-  channel-stall root fix — plus the admin file dropper that completes the large-file upload story.
-- **Round N+2**: architecture prerequisites — domain config unification (gates Caddy relay), Caddy file
-  relay itself, and killed-lead resume (the long-tail L item that unblocks team-roster and reaper
-  integration).
+- **Round N** (start here): one maintenance-window bundle (activate FI-NOTIFY + DM HTML fix +
+  attachment hardening via the restart those already-shipped commits require anyway; BUG-7 subagent
+  vector verify + BUG-9 T1-T5 close ride along at ~0 marginal cost) plus eight no-restart items —
+  gate false positives (top scorer, immediate relief), `last_activity` bump, `.mcp.json` env fix,
+  schedule-routine bash-fallback, concurrency-cap defensive guard, archive log, routines prewarm,
+  and T11 verify.
+- **Round N+1**: the two highest-leverage M items — lead notify channel (biggest daily UX gap) and
+  the channel-stall root fix — plus the admin file dropper that completes the large-file upload
+  story.
+- **Round N+2**: architecture prerequisites — domain config unification (gates Caddy relay), Caddy
+  file relay itself, and killed-lead resume (the long-tail L item that unblocks team-roster and
+  reaper integration).
 - Grok Build integration stays blocked until the user picks a path for the image-gen clash.
-- Anything downstream of killed-lead resume (team-roster persistence, reaper integration) cannot move
-  until resume lands; they are sequenced into Round N+3 or beyond.
+- Anything downstream of killed-lead resume (team-roster persistence, reaper integration) cannot
+  move until resume lands; they are sequenced into Round N+3 or beyond.
 
 ---
 
 ## The shape of the queue (snapshot)
 
-As of 2026-05-30 there are six open KNOWN_BUGS entries: two are verify-only tasks that close in the
+As of 2026-05-31 there are six open KNOWN_BUGS entries: two are verify-only tasks that close in the
 next maintenance window (#7 subagent vector, #9 T1-T5 acceptance), two need implementation (#2
 killed-lead resume, #10 channel stall), one has a code fix on main that needs empirical confirmation
 (#1 poller hijack structural fix, same window as #7), and one is a dashboard observability gap (#4
-routines registry). On the improvement side there are 21 ready-to-implement items ranging from trivial
-S fixes (`.mcp.json` env override, `last_activity` column, token rotation) to full M features (lead
-notify channel, Caddy file relay) to one architectural L item (killed-lead resume). One proposal —
-Grok Build integration — is blocked on a user decision about the image-gen clash with `codex-image-gen`
-and is not sequenced until that decision is made. The leaked Telegram token in the Security section
-scores P0 (50 by the formula); it is the highest-priority single item in the queue and anchors the
-maintenance window.
+routines registry). On the improvement side there are 21 ready-to-implement items ranging from
+trivial S fixes (`.mcp.json` env override, `last_activity` column) to full M features (lead notify
+channel — already shipped in `c348675`, awaiting restart activation — Caddy file relay) to one
+architectural L item (killed-lead resume). One proposal — Grok Build integration — is blocked on a
+user decision about the image-gen clash with `codex-image-gen` and is not sequenced until that
+decision is made.
 
 ---
 
@@ -43,12 +46,11 @@ Weights: P0=10, P1=5, P2=2, P3=1. Effort: S=1, M=3, L=8. Leverage 1–5.
 
 | ID | Title | Severity | Leverage | Effort | Risk | Score | Status |
 |---|---|---|---|---|---|---|---|
-| SEC-1 | Rotate leaked Telegram token | P0 | 5 | S | high | **50** | open |
 | FI-GATE | Orchestrator gate false positives | P1 | 4 | S | low | **20** | open |
 | BUG-7 | Subagent vector verify (poller hijack residual) | P1 | 4 | S | high | **20** | verify-only (maintenance window) |
-| FI-NOTIFY | Lead → orchestrator notify channel | P1 | 5 | M | medium | **8.33** | open |
+| FI-NOTIFY | Lead → orchestrator notify channel | P1 | 5 | M | medium | **8.33** | shipped (`c348675`); awaiting restart activation |
 | FI-ACT | `last_activity` column not bumped by tmux send-keys | P2 | 4 | S | low | **8** | open |
-| BUG-9 | T1–T5 acceptance verify-close | P2 | 3 | S | low | **6** | verify-only (today's live run) |
+| BUG-9 | T1–T5 acceptance verify-close | P2 | 3 | S | low | **6** | verify-only (substantially closed by today's live run) |
 | FI-MCP | `.mcp.json` env vs `secrets.env` source of truth | P2 | 3 | S | low | **6** | open |
 | BUG-10 | Channel stall on large attachment | P1 | 3 | M | medium | **5** | open |
 | FI-SCHED | Codify schedule-routine bash-fallback | P2 | 2 | S | low | **4** | open |
@@ -65,6 +67,7 @@ Weights: P0=10, P1=5, P2=2, P3=1. Effort: S=1, M=3, L=8. Leverage 1–5.
 | FI-PW | Playwright cookie store hardening | P2 | 2 | M | medium | **1.33** | open |
 | BUG-2 | Killed-lead resume (`--session-id`/`--resume`) | P1 | 2 | L | high | **1.25** | open |
 | FI-MKT | `marketplace.json` publish test | P3 | 1 | S | low | **1** | open |
+| SEC-1 | Rotate leaked Telegram token | P3 | 1 | S | medium | **1** | open (backlog LOW) |
 | FI-LOG | Per-lead log viewer in admin | P3 | 2 | M | low | **0.67** | open |
 | FI-PLAT | More social platforms (Bluesky, Mastodon, Threads) | P3 | 2 | M | low | **0.67** | open |
 | FI-GRAPH | Exact teammate handles in graph | P3 | 2 | M | low | **0.67** | open |
@@ -80,16 +83,11 @@ FI-CADDY scores 2 but cannot start until FI-DOMAIN converges the config layer (e
 
 ### Round N (next round — start here)
 
-#### Maintenance-window bundle (one channel restart covers all three)
+#### Maintenance-window bundle (activate already-shipped FI-NOTIFY + DM fix + attachment hardening; ride BUG-7 verify + BUG-9 close at ~0 marginal cost)
 
-- **SEC-1: Rotate leaked Telegram token** (P0, leverage 5, effort S, restart required)
-  - **Why now**: A bot token was pasted in a transcript and has not been revoked. This is the single
-    highest-scoring item in the entire queue (50 by formula: P0 × leverage 5 / S). A leaked token is
-    an always-open door regardless of everything else in the queue. The channel restart it requires is
-    a cost already being paid for items below — bundle it first so nothing runs on a compromised token.
-  - **Depends on**: none (BotFather `/revoke` + `secrets.env` update + `systemctl restart`)
-  - **Out-of-band considerations**: restart is the gate event for the two verify-only items below;
-    schedule all three in the same window.
+The bot already needs a channel restart to activate three commits that have landed on main:
+`c348675` (FI-NOTIFY shipped), `05f97a7` (DM HTML fix), and `1502e93` (attachment hardening with
+50 MB cap + placeholder for oversized). Schedule the restart; BUG-7 and BUG-9 ride along for free.
 
 - **BUG-7: Subagent vector verify** (P1, leverage 4, effort S, restart required)
   - **Why now**: The poller-hijack structural fix (`4082e3b`) is on main and deployed per repo memory
@@ -97,20 +95,20 @@ FI-CADDY scores 2 but cannot start until FI-DOMAIN converges the config layer (e
     restart, watch ~35 s for a second `bun server.ts` process or a changed `bot.pid`. If a second bun
     appears, the fallback is already designed — route heavy work to orchestrator-spawned leads (already
     plugin-skipped + cgroup-isolated) via `system_prompts/responsive_bot.md`. The 35-second window from
-    the earlier partial test is the partial-close; this is the channel-side confirmation that fully
-    closes #1/#7.
-  - **Depends on**: maintenance window (channel restart); token rotation (SEC-1) should fire first so
-    the test runs on a fresh, known-good token.
+    the earlier partial test covered the leads→subagent path; this confirmation is the channel→subagent
+    path which only the bot can test.
+  - **Depends on**: maintenance window (channel restart)
   - **Out-of-band considerations**: if inheritance is confirmed, the fallback decision (route via leads)
     needs a system prompt edit before the window closes — have the edit staged in advance.
 
 - **BUG-9: T1–T5 acceptance verify-close** (P2, leverage 3, effort S, low risk)
   - **Why now**: The checklist records T1–T5 as Pending despite the spawner rewrite landing in
-    `d31df9a` months ago. Today's live T1–T5 run should have exercised spawn / status / kill / message /
-    schedule against the deployed bot. If the run returned green, update `docs/CHECKLIST.md` and close
-    #9. If any leg failed, promote the failure to a new Round N item immediately (before the window
-    closes). Note that T3 (kill) additionally exercises the `kill_project_impl` post-kill liveness
-    verification hardened in `c99c743`; a clean T3 confirms that fix in the field.
+    `d31df9a` months ago. Today's live T1–T5 run substantially closed this — the run exercised spawn /
+    status / kill / message / schedule against the deployed bot. If the run returned green, update
+    `docs/CHECKLIST.md` and close #9. If any leg failed, promote the failure to a new Round N item
+    immediately (before the window closes). Note that T3 (kill) additionally exercises the
+    `kill_project_impl` post-kill liveness verification hardened in `c99c743`; a clean T3 confirms
+    that fix in the field.
   - **Depends on**: maintenance window (the restart reloads `kill_project_impl`'s hardened code)
   - **Out-of-band considerations**: if T3 produces a zombie lead, `is_lead_alive()` retry path fires
     and raises `RuntimeError` — that surface is good evidence the hardening works.
@@ -188,8 +186,8 @@ FI-CADDY scores 2 but cannot start until FI-DOMAIN converges the config layer (e
 
 ### Round N+1 (after Round N lands)
 
-- **FI-NOTIFY: Lead → orchestrator notify channel** (P1, leverage 5, effort M, restart NOT required
-  for the new feature — new MCP server added to `lead-mcp.json`)
+- **FI-NOTIFY: Lead → orchestrator notify channel** (P1, leverage 5, effort M — code shipped in
+  `c348675`; restart to activate is in Round N maintenance window)
   - **Why now**: The single biggest UX friction in the current system. Every time a lead is working, the
     user must manually ping the bot with "Status?" to learn what the lead has done. The bot must
     `capture-pane` every active lead on every ping. This friction was observed roughly eight times on
@@ -199,7 +197,7 @@ FI-CADDY scores 2 but cannot start until FI-DOMAIN converges the config layer (e
     fully designed in `FUTURE_IMPROVEMENTS.md`. A `hermes-notify` MCP shim added to `lead-mcp.json`
     is the narrowest possible scope expansion for leads — one tool (`notify_orchestrator`), no spawn
     or kill access.
-  - **Depends on**: none
+  - **Depends on**: Round N restart (activates the shipped code)
   - **Out-of-band considerations**: adding `hermes-notify` to `lead-mcp.json` takes effect on the next
     lead spawn (already-running leads do not get it until they are restarted or replaced). Consider
     also a one-line `HERMES_NOTIFY_PORT` env injection in the spawner at the same time.
@@ -332,6 +330,31 @@ The following items cannot start until killed-lead resume (BUG-2) is shipped and
 
 ---
 
+### Backlog (LOW priority)
+
+Items that are not sequenced into any active round. Do not re-promote without reading the rationale.
+
+- **SEC-1: Rotate leaked Telegram token** (P3, leverage 1, effort S, medium risk, score **1**)
+  - **User decision 2026-05-31**: The leaked prefix in `docs/CHECKLIST.md` line 55 is already
+    truncated (only the 10-digit public bot ID plus 3 chars of secret, with ellipsis), not a full
+    token. Practical risk is low even though the conservative treat-partial-as-full convention is
+    still on the books. The original full-token transcript is the real exposure but that lives in
+    older Claude session logs not in public files.
+  - **What the work is**: BotFather `/revoke` + new token → `secrets.env` update →
+    `docs/CHECKLIST.md` line 55 cleanup → `systemctl restart claude-soma-channel.service`. Effort S.
+    Risk: medium (a planned restart rather than an emergency; schedule alongside any future
+    maintenance window that needs a restart for other reasons).
+  - **Why demoted from P0 (score 50) to P3 (score 1)**: The original P0 assumed a full usable token
+    in a public file. The actual exposure is a partial token (public bot ID + 3 chars of secret) in
+    a doc file — not actionable by an attacker. The full-token session log is private. The practical
+    attack surface is near-zero. Re-scored: P3 weight (1) × leverage 1 / effort S (1) = 1. Risk
+    downgraded from high to medium because this is now a scheduled maintenance item, not an emergency.
+  - **Depends on**: none
+  - **Out-of-band considerations**: when scheduling, bundle with any restart already needed for other
+    reasons to avoid paying the restart cost twice.
+
+---
+
 ### Blocked / awaiting user decision
 
 - **GROK: Grok Build integration (image + video)**
@@ -349,16 +372,19 @@ The following items cannot start until killed-lead resume (BUG-2) is shipped and
 
 ## Why this order — the story
 
-**Round N is shaped by two constraints that dominate everything else.** The first is the leaked
-Telegram token — a P0 security item scoring 50 by the formula (the highest in the queue). It demands
-a channel restart, and a channel restart is an operationally costly event. The second constraint is
-that two verify-only items (#7 subagent vector, #9 T1-T5) also need exactly one channel restart to
-close. The right move is obvious: pay the restart cost once and close all three. Everything else in
-Round N is either a no-restart fix that can ship immediately (gate false positives, `last_activity`,
-`.mcp.json` env) or a trivial S item that bundles into a single commit (concurrency-cap, archive log).
-Gate false positives ties #7 on raw score (both 20) but fires immediately — the script is exec'd
-fresh per PreToolUse event, so patching it is same-day relief for the daily friction the gate has
-been causing since 2026-05-29.
+**Round N is shaped by one scheduling constraint and one score tie.** The scheduling constraint is
+that three commits already on main — `c348675` (FI-NOTIFY shipped), `05f97a7` (DM HTML fix), and
+`1502e93` (attachment hardening: 50 MB cap + placeholder for oversized) — are inactive until the bot
+restarts. The restart has to happen anyway; BUG-7 subagent vector verify and BUG-9 T1-T5 close
+ride that restart at ~0 marginal cost. Everything else in Round N is either a no-restart fix that can
+ship immediately (gate false positives, `last_activity`, `.mcp.json` env) or a trivial S item that
+bundles into a single commit (concurrency-cap, archive log, routines prewarm, T11 verify).
+
+The score tie: gate false positives (FI-GATE, score 20) and BUG-7 (score 20) are co-equals at the
+top of the non-SEC-1 queue. FI-GATE fires immediately — the gate script is exec'd fresh per
+PreToolUse event, so patching it is same-day relief for the daily friction caused by the two live
+false positives since 2026-05-29. BUG-7 is gated by the maintenance window. That sequencing resolves
+the tie: FI-GATE is the first actionable item; BUG-7 is the first maintenance-window item.
 
 **Round N+1 is the lead notify channel, and here leverage outvoted severity.** The channel stall
 (BUG-10, score 5) has higher severity than the `last_activity` bump (score 8) but lower leverage;
@@ -395,27 +421,23 @@ is made. Until the user picks a path, nothing in the Grok section belongs in any
 
 ## Open questions for the user
 
-1. **Leaked Telegram token urgency**: Is the token rotation P0-urgent enough to do today (outside the
-   planned maintenance window), or can it wait for the next scheduled window? If the token was pasted
-   in a public transcript accessible to third parties, immediate revocation is the right call.
-
-2. **#7 subagent vector — fallback decision**: If the maintenance-window test reveals that subagents
+1. **#7 subagent vector — fallback decision**: If the maintenance-window test reveals that subagents
    DO inherit `--settings` (and thus re-introduce the poller hijack), the fallback is to route all
    heavy work through orchestrator-spawned leads (already plugin-skipped + cgroup-isolated) via
    `system_prompts/responsive_bot.md`. Are you committed to that fallback as the design, or do you
    want to explore patching the third-party plugin (last-resort option; fragile on upgrade)?
 
-3. **Grok Build integration**: (a) keep both `codex-image-gen` + `grok-build` and route by preference;
+2. **Grok Build integration**: (a) keep both `codex-image-gen` + `grok-build` and route by preference;
    (b) replace `codex-image-gen` entirely; (c) generic `image-gen` skill with `--provider` arg. Also:
    should video integration ship before the image-clash decision is resolved, since video has no
    existing competitor in the skill set?
 
-4. **Killed-lead resume v1 scope**: For v1, the recommendation is option (a) — teams are ephemeral;
+3. **Killed-lead resume v1 scope**: For v1, the recommendation is option (a) — teams are ephemeral;
    the resumed lead re-plans from its own transcript. Is that acceptable, or does the full team
    restore (option b: persist the team roster and re-spawn teammates on resume) need to be in scope
    for v1?
 
-5. **Caddy relay public-namespace token TTL**: The design specifies a tokenized `/files/pub/<uuid>/`
+4. **Caddy relay public-namespace token TTL**: The design specifies a tokenized `/files/pub/<uuid>/`
    path with no TTL (UUID slug as permanent credential). Should public tokens expire (e.g., 30 days),
    and if so, should expired tokens return 404 or redirect to a "link expired" page?
 
@@ -425,6 +447,13 @@ is made. Until the user picks a path, nothing in the Grok section belongs in any
 
 These commits closed items that are intentionally absent from the queue above:
 
+- **`1502e93`** — attachment hardening: DM pipeline delivers files up to 50 MB, placeholder response
+  for oversized files, per-attachment isolation. Awaiting restart activation.
+- **`05f97a7`** — FI-NOTIFY DM HTML fix: skip `gfm_to_html`, html-escape user fields in DM pipeline.
+  Awaiting restart activation.
+- **`c348675`** — FI-NOTIFY shipped: lead → orchestrator notify channel. Awaiting restart activation.
+- **`7387bd0`** — `send_tg_reply` tool in `hermes_api`: GFM-to-HTML conversion for Telegram replies,
+  replacing the plugin's `format='text'` default.
 - **`c99c743`** — `kill_project_impl` post-kill liveness verification + one retry; raises `RuntimeError`
   if the lead survives both attempts (prevents zombie rows masking as `killed`).
 - **`53f7113`** — reaper skips hibernation when the tmux session is still alive (`is_lead_alive()`
@@ -432,8 +461,6 @@ These commits closed items that are intentionally absent from the queue above:
 - **`9b26c72`** — orchestrator hard gates: LOW default effort + PreToolUse deny-list hook
   (`scripts/orchestrator_gate.sh`).
 - **`99be0fd`** — daily RC-URL refresh for project leads (captures fresh `/remote-control` URLs).
-- **`7387bd0`** — `send_tg_reply` tool in `hermes_api`: GFM-to-HTML conversion for Telegram replies,
-  replacing the plugin's `format='text'` default.
 - **`5a001b3`** — round-2 small-batch: whisper `base.en`, Node 22, OCI iptables gate, logrotate,
   secrets backup, `NEEDS_REAUTH` ping surfacing. Closed KNOWN_BUGS #5, #6, #8.
 - **`ae7d7be`/`346af89`** — cgroup isolation: each lead in its own transient `systemd-run` unit.
