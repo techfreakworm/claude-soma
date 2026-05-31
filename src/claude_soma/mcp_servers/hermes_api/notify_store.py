@@ -93,18 +93,64 @@ class EventStore:
         ts: float,
         payload_json: str,
     ) -> int:
-        """Insert a new lead_events row. Returns the new row id."""
+        """Insert a new lead_events row. Returns the new row id.
+
+        For type_='NEEDS_INPUT', also atomically inserts a pending_inputs
+        companion row so that mark_pending_resolved() succeeds regardless of
+        which call path (MCP tool or direct EventStore bypass) created the event.
+        """
         now = time.time()
+        if type_ != "NEEDS_INPUT":
+            with self._lock:
+                cur = self._conn.execute(
+                    """
+                    INSERT INTO lead_events
+                        (lead, type, ts, payload_json, created_at)
+                    VALUES (?, ?, ?, ?, ?)
+                    """,
+                    (lead, type_, ts, payload_json, now),
+                )
+            return cur.lastrowid  # type: ignore[return-value]
+
+        # NEEDS_INPUT: atomically create lead_events + pending_inputs companion.
+        # Parse question/options/timeout from payload_json; fall back gracefully
+        # if the payload is malformed so the event row is never silently lost.
+        try:
+            p = json.loads(payload_json)
+        except (json.JSONDecodeError, ValueError):
+            p = {}
+        question = str(p.get("question") or "(no question text)")
+        options = p.get("options")
+        options_json: str | None = json.dumps(options) if options else None
+        timeout_secs = p.get("timeout")
+        if not isinstance(timeout_secs, int) or timeout_secs <= 0:
+            timeout_secs = None
+
         with self._lock:
-            cur = self._conn.execute(
-                """
-                INSERT INTO lead_events
-                    (lead, type, ts, payload_json, created_at)
-                VALUES (?, ?, ?, ?, ?)
-                """,
-                (lead, type_, ts, payload_json, now),
-            )
-        return cur.lastrowid  # type: ignore[return-value]
+            self._conn.execute("BEGIN IMMEDIATE")
+            try:
+                cur_ev = self._conn.execute(
+                    """
+                    INSERT INTO lead_events
+                        (lead, type, ts, payload_json, created_at)
+                    VALUES (?, 'NEEDS_INPUT', ?, ?, ?)
+                    """,
+                    (lead, ts, payload_json, now),
+                )
+                event_id = cur_ev.lastrowid
+                self._conn.execute(
+                    """
+                    INSERT INTO pending_inputs
+                        (event_id, lead, question, options_json, timeout_secs, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                    """,
+                    (event_id, lead, question, options_json, timeout_secs, now),
+                )
+                self._conn.execute("COMMIT")
+            except Exception:
+                self._conn.execute("ROLLBACK")
+                raise
+        return event_id  # type: ignore[return-value]
 
     def insert_event_with_pending_input(
         self,

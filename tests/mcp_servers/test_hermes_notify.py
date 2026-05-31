@@ -148,6 +148,66 @@ def test_mark_pending_resolved_returns_false_for_unknown(store: EventStore) -> N
     assert result is False
 
 
+# ------------------------------------------------------------------ Bug (i) regression: insert_event bypass path for NEEDS_INPUT
+
+def test_insert_event_needs_input_creates_pending_companion(store: EventStore) -> None:
+    """insert_event with type_='NEEDS_INPUT' must create a pending_inputs companion row.
+
+    Regression for the 2026-05-31 bypass-path bug: events inserted via
+    insert_event (rather than insert_event_with_pending_input) left no
+    pending_inputs row, causing mark_pending_resolved to return False.
+    """
+    ts = time.time()
+    eid = store.insert_event(
+        lead="bypass-lead",
+        type_="NEEDS_INPUT",
+        ts=ts,
+        payload_json='{"question": "Which path?", "options": ["a", "b"], "timeout": 60}',
+    )
+    assert isinstance(eid, int)
+    assert eid > 0
+    pending = store.get_open_pending_inputs()
+    assert len(pending) == 1
+    assert pending[0]["event_id"] == eid
+    assert pending[0]["lead"] == "bypass-lead"
+    assert pending[0]["question"] == "Which path?"
+    assert pending[0]["options"] == ["a", "b"]
+
+
+def test_insert_event_needs_input_mark_pending_resolved_succeeds(store: EventStore) -> None:
+    """Full round-trip: insert_event(NEEDS_INPUT) → mark_pending_resolved → True."""
+    ts = time.time()
+    eid = store.insert_event(
+        lead="bypass-lead",
+        type_="NEEDS_INPUT",
+        ts=ts,
+        payload_json='{"question": "Yes or no?"}',
+    )
+    result = store.mark_pending_resolved(eid, "yes")
+    assert result is True
+    assert len(store.get_open_pending_inputs()) == 0
+
+
+def test_insert_event_needs_input_invalid_payload_creates_fallback_pending(
+    store: EventStore,
+) -> None:
+    """insert_event with NEEDS_INPUT and invalid payload_json creates a fallback pending row."""
+    ts = time.time()
+    eid = store.insert_event(
+        lead="bypass-lead",
+        type_="NEEDS_INPUT",
+        ts=ts,
+        payload_json="not-valid-json",
+    )
+    assert eid > 0
+    pending = store.get_open_pending_inputs()
+    assert len(pending) == 1
+    assert pending[0]["event_id"] == eid
+    assert "(no question text)" in pending[0]["question"]
+    # Round-trip: mark_pending_resolved should still return True
+    assert store.mark_pending_resolved(eid, "fallback-answer") is True
+
+
 def test_milestone_throttle_data(store: EventStore) -> None:
     ts = time.time()
     eid = store.insert_event(

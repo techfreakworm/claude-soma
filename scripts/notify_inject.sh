@@ -110,6 +110,35 @@ if [[ "$BLOCK_LEN" -gt "$MAX_CHARS" ]]; then
     BLOCK="${BLOCK}... (truncated — additional events in registry.sqlite)"
 fi
 
+# Auto-trigger restart if any unread MILESTONE contains "RESTART REQUIRED".
+# Only fires when HERMES_AUTO_RESTART_WINDOW_UTC is set and not yet expired.
+# The helper is spawned as a detached subprocess (setsid) so that restarting
+# claude-soma-channel.service does not kill it mid-flight.
+AUTO_RESTART_WINDOW="${HERMES_AUTO_RESTART_WINDOW_UTC:-}"
+if [[ -n "$AUTO_RESTART_WINDOW" && "$EVENT_COUNT" -gt 0 ]]; then
+    # Extract services list from first RESTART REQUIRED MILESTONE (if any).
+    # Payload format: {"progress": "RESTART REQUIRED — ... (services: svc1, svc2)"}
+    RESTART_SERVICES="$(jq -r '
+        .[] |
+        select(.type == "MILESTONE") |
+        .payload_json | fromjson | .progress // "" |
+        select(test("RESTART REQUIRED")) |
+        capture("services:\\s*(?P<svcs>[^)]+)") |
+        .svcs | gsub("\\s+";"")
+    ' <<<"$CHRONOLOGICAL" 2>/dev/null | head -1)" || RESTART_SERVICES=""
+
+    if [[ -n "$RESTART_SERVICES" ]]; then
+        NOW_EPOCH="$(date +%s 2>/dev/null)" || NOW_EPOCH=""
+        if [[ -n "$NOW_EPOCH" && "$NOW_EPOCH" -le "$AUTO_RESTART_WINDOW" ]]; then
+            _log_error "auto-restart triggered: services=${RESTART_SERVICES} window=${AUTO_RESTART_WINDOW}"
+            command -v setsid >/dev/null 2>&1 && \
+            setsid nohup sudo bash /opt/claude-soma/scripts/auto-restart-services.sh \
+                "$RESTART_SERVICES" \
+                >>/tmp/auto-restart-services.log 2>&1 &
+        fi
+    fi
+fi
+
 # Mark events as hook-injected via the HTTP listener
 if [[ "$(jq 'length' <<<"$EVENT_IDS" 2>/dev/null)" -gt 0 ]]; then
     MARK_BODY="$(jq -c '{event_ids: .}' <<<"$EVENT_IDS" 2>/dev/null)"
