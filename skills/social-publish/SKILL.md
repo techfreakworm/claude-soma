@@ -6,7 +6,7 @@ description: |
   generates branded diagrams via codex, writes per-platform content, then drives
   the platform-specific poster agents to draft or publish on each platform.
   Use when the user says "publish my build log", "launch a social campaign",
-  or "ship this to X + LinkedIn + Medium + Bluesky" (any subset).
+  or "ship this to X + LinkedIn + Medium" (any subset).
 allowed-tools:
   - Read
   - Bash(python3 *)
@@ -24,7 +24,12 @@ video. Supports the following platforms:
 - `x-article` — X long-form article, uses playwright-x
 - `linkedin` — LinkedIn newsletter or post, uses playwright-linkedin
 - `medium` — Medium long-form post, uses playwright-medium
-- `bluesky` — Bluesky post or linked-reply thread, 300 graphemes/post, AT Protocol direct API
+
+> **Note**: `bluesky` agents (`social-bluesky-writer`, `social-bluesky-poster`)
+> + `scripts/bluesky-post.py` shipped 2026-05-31 (S17, commit `d721e33`) but
+> are **INERT — user opted out 2026-05-31**. Code remains on disk for
+> reference but is not part of the active platform list. Do NOT dispatch
+> the bluesky agents from this skill.
 
 ## Process
 
@@ -38,7 +43,6 @@ video. Supports the following platforms:
    - `social-x-article-writer` for X long-form
    - `social-linkedin-writer` for LinkedIn
    - `social-medium-writer` for Medium
-   - `social-bluesky-writer` for Bluesky
 
 4. **Review** all drafts together. Present to the user for approval if running
    interactively. In autonomous mode, proceed directly to posting.
@@ -48,14 +52,13 @@ video. Supports the following platforms:
    - `social-x-article-poster` for X long-form
    - `social-linkedin-poster` for LinkedIn
    - `social-medium-poster` for Medium
-   - `social-bluesky-poster` for Bluesky
 
 ## Platform selection
 
-The user can specify a subset of platforms. Default is all five. Examples:
-- "ship to X and Bluesky" → x, bluesky only
+The user can specify a subset of platforms. Default is all four. Examples:
+- "ship to X and LinkedIn" → x, linkedin only
 - "LinkedIn + Medium" → linkedin, medium only
-- "everywhere" → all five
+- "everywhere" → all four
 
 ## Credential requirements
 
@@ -64,7 +67,6 @@ The user can specify a subset of platforms. Default is all five. Examples:
 | X         | Playwright session (pw-login.js)         | ~/.claude-pw/state-x.json        |
 | LinkedIn  | Playwright session (pw-login.js)         | ~/.claude-pw/state-linkedin.json |
 | Medium    | Playwright session (pw-login.js)         | ~/.claude-pw/state-medium.json   |
-| Bluesky   | AT Protocol app password (bluesky-login) | ~/.claude-pw/bluesky.json        |
 
 If a required credential file is missing, skip that platform and report which
 one needs re-auth.

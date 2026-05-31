@@ -72,7 +72,7 @@ Weights: P0=10, P1=5, P2=2, P3=1. Effort: S=1, M=3, L=8. Leverage 1–5.
 | FI-MKT | `marketplace.json` publish test | P3 | 1 | S | low | **1** | open |
 | SEC-1 | Rotate leaked Telegram token | P3 | 1 | S | medium | **1** | open (backlog LOW) |
 | FI-LOG | Per-lead log viewer in admin | P3 | 2 | M | low | **0.67** | open |
-| FI-PLAT | More social platforms (Bluesky, Mastodon, Threads) | P3 | 2 | M | low | **0.67** | open |
+| FI-PLAT | More social platforms (Mastodon, Threads — Bluesky opted out 2026-05-31; S17 code is inert) | P3 | 2 | M | low | **0.67** | open |
 | FI-GRAPH | Exact teammate handles in graph | P3 | 2 | M | low | **0.67** | open |
 | FI-FORK | Forking guide automation | P3 | 1 | M | low | **0.33** | open |
 | GROK | Grok Build integration (image + video) | — | — | S/M | medium | — | blocked: user decision |
@@ -312,9 +312,11 @@ The bot already needs a channel restart to activate three commits that have land
     `/usr/bin/playwright-mcp`). ~2x LOC, ~3x risk surface (systemd hook ordering + tmpfs lifecycle).
   - **Alternate path** (not selected): fs-level `ecryptfs` on `~/.claude-pw/` — OS-transparent but
     requires a kernel module + careful unmount handling on a remote-managed VPS.
-  - **Forward-compat already in place**: S17 FI-PLAT Bluesky (shipped 2026-05-31 inside `d721e33`)
-    stores credentials at `~/.claude-pw/bluesky.json` with an `encrypted` key sentinel; future
-    encrypt-existing script can detect unencrypted files and migrate them.
+  - **Forward-compat note (historical — Bluesky opted out 2026-05-31)**: S17 FI-PLAT Bluesky code
+    shipped 2026-05-31 (`d721e33`) introduced the `encrypted` key sentinel pattern at
+    `~/.claude-pw/bluesky.json`. The Bluesky agents themselves are now inert (user opt-out), but
+    the sentinel-pattern design is still useful: any future encrypt-existing script can use the
+    same `encrypted: true` JSON-level marker to detect unencrypted credentials and migrate them.
   - **Mitigation today**: filesystem-level access control — `chmod 600` on each `state-*.json` and
     `chmod 700` on `~/.claude-pw/`. Single-tenant VPS; threat model is "operator compromise" not
     "co-tenant exfil".
@@ -331,8 +333,12 @@ The bot already needs a channel restart to activate three commits that have land
     `strip-ansi` library) before implementing the viewer.
 
 - **FI-PLAT: More social platforms** (P3, leverage 2, effort M each)
-  - **Why now**: Writer/poster agents exist for X thread, X Article, LinkedIn, Medium. Bluesky,
-    Mastodon, and Threads are candidates. P3 with no blocking dependencies; Round N+2 gives the
+  - **Why now**: Writer/poster agents exist for X thread, X Article, LinkedIn, Medium.
+    **Bluesky shipped 2026-05-31 (S17 inside `d721e33`) but is INERT — user opted out
+    2026-05-31 and no credentials will be provided; agents/scripts/skill-list entry stay
+    on disk for reference but are not part of the active platform list.** Future FI-PLAT
+    iterations should pick Mastodon, Threads, or similar — do NOT add more Bluesky scope.
+    P3 with no blocking dependencies; Round N+2 gives the
     social pipeline time to stabilize on the Caddy file relay before adding new surface area.
   - **Depends on**: FI-CADDY (stable relay for asset serving to new platforms)
   - **Out-of-band considerations**: each platform is independent M effort; sequence by user priority.
