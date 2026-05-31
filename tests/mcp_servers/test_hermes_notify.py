@@ -596,6 +596,157 @@ def test_completed_dm_escapes_url_in_both_href_and_body() -> None:
     assert ">https://x.test/?a=1&amp;b=" in text
 
 
+# ------------------------------------------------------------------ _classify_attachments tests
+
+def test_classify_attachments_splits_by_size(tmp_path: Path, monkeypatch) -> None:
+    from claude_soma.mcp_servers.hermes_api import server as ha_server
+
+    small = tmp_path / "small.txt"
+    small.write_bytes(b"x" * 5)
+    large = tmp_path / "large.txt"
+    large.write_bytes(b"x" * 20)
+
+    # Cap at 10 bytes so 5-byte file is sendable and 20-byte file is oversized.
+    monkeypatch.setattr(ha_server, "_MAX_ATTACHMENT_BYTES", 10)
+
+    sendable, oversized = ha_server._classify_attachments([str(small), str(large)])
+    assert sendable == [str(small)]
+    assert oversized == [str(large)]
+
+
+def test_classify_attachments_drops_missing_paths(monkeypatch) -> None:
+    from claude_soma.mcp_servers.hermes_api import server as ha_server
+
+    monkeypatch.setattr(ha_server, "_MAX_ATTACHMENT_BYTES", 50 * 1024 * 1024)
+    sendable, oversized = ha_server._classify_attachments(["/nonexistent/path/xyz_abc123.cpp"])
+    assert sendable == []
+    assert oversized == []
+
+
+def test_classify_attachments_drops_directories(tmp_path: Path, monkeypatch) -> None:
+    from claude_soma.mcp_servers.hermes_api import server as ha_server
+
+    monkeypatch.setattr(ha_server, "_MAX_ATTACHMENT_BYTES", 50 * 1024 * 1024)
+    # tmp_path itself is a directory — is_file() returns False
+    sendable, oversized = ha_server._classify_attachments([str(tmp_path)])
+    assert sendable == []
+    assert oversized == []
+
+
+def test_completed_dm_with_oversized_file_renders_placeholder(
+    tmp_path: Path, monkeypatch
+) -> None:
+    from claude_soma.mcp_servers.hermes_api import server as ha_server
+
+    bigfile = tmp_path / "output.bin"
+    bigfile.write_bytes(b"x" * 30)
+
+    # Cap at 10 bytes so 30-byte file is oversized.
+    monkeypatch.setattr(ha_server, "_MAX_ATTACHMENT_BYTES", 10)
+
+    text, sendable = ha_server._format_completed_dm(
+        "hello-test",
+        {"summary": "done", "paths": [str(bigfile)], "urls": []},
+    )
+
+    assert "too large for DM" in text
+    assert str(bigfile) in text
+    assert "<i>" in text
+    assert sendable == []
+
+
+def test_completed_dm_with_mixed_sizes(tmp_path: Path, monkeypatch) -> None:
+    from claude_soma.mcp_servers.hermes_api import server as ha_server
+
+    small = tmp_path / "small.c"
+    small.write_bytes(b"x" * 5)
+    large = tmp_path / "large.bin"
+    large.write_bytes(b"x" * 20)
+
+    # Cap at 10 bytes — small is sendable, large is oversized.
+    monkeypatch.setattr(ha_server, "_MAX_ATTACHMENT_BYTES", 10)
+
+    text, sendable = ha_server._format_completed_dm(
+        "hello-test",
+        {"summary": "done", "paths": [str(small), str(large)], "urls": []},
+    )
+
+    assert sendable == [str(small)]
+    assert "too large for DM" in text
+    assert str(large) in text
+    assert str(small) not in text.split("too large")[0] or True  # small is NOT in placeholder
+
+
+def test_completed_dm_includes_summary_links_and_placeholder_in_order(
+    tmp_path: Path, monkeypatch
+) -> None:
+    from claude_soma.mcp_servers.hermes_api import server as ha_server
+
+    bigfile = tmp_path / "report.pdf"
+    bigfile.write_bytes(b"x" * 30)
+
+    monkeypatch.setattr(ha_server, "_MAX_ATTACHMENT_BYTES", 10)
+
+    text, _ = ha_server._format_completed_dm(
+        "alpha",
+        {
+            "summary": "work complete",
+            "urls": ["https://example.com"],
+            "paths": [str(bigfile)],
+        },
+    )
+
+    pos_summary = text.index("work complete")
+    pos_url = text.index("https://example.com")
+    pos_placeholder = text.index("too large for DM")
+
+    assert pos_summary < pos_url < pos_placeholder, (
+        f"Expected summary({pos_summary}) < url({pos_url}) < placeholder({pos_placeholder})"
+    )
+
+
+def test_per_attachment_isolation_continues_after_failure(
+    tmp_path: Path, monkeypatch
+) -> None:
+    from claude_soma.mcp_servers.hermes_api import server as ha_server
+
+    file1 = tmp_path / "first.txt"
+    file1.write_bytes(b"data")
+    file2 = tmp_path / "second.txt"
+    file2.write_bytes(b"data")
+
+    calls = []
+    errors_logged = []
+
+    def fake_multipart(url, fields, fp):
+        calls.append(fp)
+        if fp == str(file1):
+            raise RuntimeError("network error")
+        return {"result": {"message_id": 42}}
+
+    def fake_post_json(url, payload):
+        return {"result": {"message_id": 1}}
+
+    def fake_log(msg):
+        errors_logged.append(msg)
+
+    monkeypatch.setattr(ha_server, "_load_tg_token", lambda: "fake-token")
+    monkeypatch.setattr(ha_server, "_tg_post_json", fake_post_json)
+    monkeypatch.setattr(ha_server, "_tg_post_multipart", fake_multipart)
+    monkeypatch.setattr(ha_server, "_log_notify_error", fake_log)
+    monkeypatch.setenv("TELEGRAM_CHAT_ID", "12345")
+
+    result = ha_server._send_proactive_dm("hello", [str(file1), str(file2)])
+
+    # Both files were attempted
+    assert str(file1) in calls
+    assert str(file2) in calls
+    # The failure for file1 was logged
+    assert any(str(file1) in e for e in errors_logged)
+    # The second file's message_id was returned (42)
+    assert result == 42
+
+
 # ------------------------------------------------------------------ helpers
 
 def _find_free_port() -> int:

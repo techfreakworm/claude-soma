@@ -182,6 +182,9 @@ def _tg_post_multipart(url: str, fields: dict[str, str], file_path: str) -> dict
 
 
 _PHOTO_EXTS = {'.jpg', '.jpeg', '.png', '.gif', '.webp'}
+# Telegram's bot-upload cap for sendDocument / sendPhoto is 50 MB. Files
+# larger than this fall back to a placeholder line in the message text.
+_MAX_ATTACHMENT_BYTES = 50 * 1024 * 1024  # 50 MB
 
 
 @mcp.tool()
@@ -268,6 +271,32 @@ def _notify_chat_id() -> str:
     )
 
 
+def _classify_attachments(paths: list[str]) -> tuple[list[str], list[str]]:
+    """Split a list of file paths into (sendable, oversized).
+
+    sendable: paths that exist, are regular files, and are <= the 50 MB cap.
+    oversized: existing regular files > 50 MB — these get rendered as
+               placeholder lines in the message text instead of attached.
+    Missing or non-regular paths are silently dropped (belt-and-suspenders;
+    _format_completed_dm also filters before calling this).
+    """
+    sendable: list[str] = []
+    oversized: list[str] = []
+    for fp in paths:
+        try:
+            p = Path(fp)
+            if not p.is_file():
+                continue
+            size = p.stat().st_size
+        except OSError:
+            continue
+        if size <= _MAX_ATTACHMENT_BYTES:
+            sendable.append(fp)
+        else:
+            oversized.append(fp)
+    return sendable, oversized
+
+
 def _send_proactive_dm(text: str, files: list[str] | None = None) -> int | None:
     """DM the user. Returns Telegram message_id or None on failure."""
     try:
@@ -291,13 +320,18 @@ def _send_proactive_dm(text: str, files: list[str] | None = None) -> int | None:
         if files:
             fields = {"chat_id": chat_id}
             for fp in files:
-                path = Path(fp)
-                ext = path.suffix.lower()
-                if ext in _PHOTO_EXTS:
-                    r = _tg_post_multipart(f"{base}/sendPhoto", fields, fp)
-                else:
-                    r = _tg_post_multipart(f"{base}/sendDocument", fields, fp)
-                last_msg_id = r["result"]["message_id"]
+                try:
+                    path = Path(fp)
+                    ext = path.suffix.lower()
+                    if ext in _PHOTO_EXTS:
+                        r = _tg_post_multipart(f"{base}/sendPhoto", fields, fp)
+                    else:
+                        r = _tg_post_multipart(f"{base}/sendDocument", fields, fp)
+                    last_msg_id = r["result"]["message_id"]
+                except Exception as att_exc:
+                    _log_notify_error(f"attachment failed for {fp}: {att_exc}")
+                    # Continue with the next file — text already delivered;
+                    # partial attachment delivery is better than zero.
         return last_msg_id
     except Exception as exc:
         _log_notify_error(f"proactive DM failed: {exc}")
@@ -356,6 +390,9 @@ def _format_completed_dm(lead: str, payload: dict[str, Any]) -> tuple[str, list[
     paths = payload.get("paths", [])
     lead_e = html.escape(lead, quote=False)
     text = f"<b>Lead <code>{lead_e}</code> completed:</b>\n{summary}"
+
+    sendable, oversized = _classify_attachments(list(paths))
+
     if urls:
         # URL goes into both href (attribute → quote=True) and link body (text)
         links = "\n".join(
@@ -364,7 +401,24 @@ def _format_completed_dm(lead: str, payload: dict[str, Any]) -> tuple[str, list[
             for u in urls
         )
         text += f"\n\n{links}"
-    return text, [p for p in paths if Path(p).exists()]
+
+    if oversized:
+        placeholder_lines = []
+        for fp in oversized:
+            try:
+                mb = Path(fp).stat().st_size / (1024 * 1024)
+                placeholder_lines.append(
+                    f"<i>[file too large for DM ({mb:.1f} MB), "
+                    f"see {html.escape(fp, quote=False)}]</i>"
+                )
+            except OSError:
+                placeholder_lines.append(
+                    f"<i>[file too large for DM, "
+                    f"see {html.escape(fp, quote=False)}]</i>"
+                )
+        text += "\n\n" + "\n".join(placeholder_lines)
+
+    return text, sendable
 
 
 def _format_needs_input_dm(lead: str, payload: dict[str, Any]) -> str:
