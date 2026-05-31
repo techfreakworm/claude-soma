@@ -297,12 +297,31 @@ The bot already needs a channel restart to activate three commits that have land
   - **Out-of-band considerations**: the team-roster persistence and reaper-resume integrations
     (FI-TEAM, FI-REAPER) block on this landing; they cannot start until BUG-2 is shipped and stable.
 
-- **FI-PW: Playwright cookie store hardening** (P2, leverage 2, effort M)
-  - **Why now**: `~/.claude-pw/*` holds live session cookies (chmod 600/700 today). Encryption at rest
-    is the remaining gap after the pw-refresh and NEEDS_REAUTH improvements. Low urgency but fits Round
-    N+2 alongside the security-adjacent domain cleanup work.
-  - **Depends on**: none (independent)
-  - **Out-of-band considerations**: none.
+- **FI-PW: Playwright cookie store hardening** (P2, leverage 2, effort M → M-L) — **DEFERRED 2026-05-31**
+  - **STOP-AND-SURFACE finding from Wave 3 S15 attempt (2026-05-31)**: `.mcp.json` passes
+    `--storage-state /home/ubuntu/.claude-pw/state-<name>.json` directly to `/usr/bin/playwright-mcp`
+    for 4 platforms (`linkedin`, `x`, `x-article`, `medium`). Encrypting those paths in-place would
+    break all 4 MCP servers (they expect plaintext JSON `{cookies, origins}`). The `pw-refresh.js` /
+    `pw-login.js` scripts themselves never read state files back — they use `launchPersistentContext`
+    and only WRITE state via `context.storageState()` — so the original brief's "decrypt at use time,
+    re-encrypt on write" has no target inside those two scripts.
+  - **Widened scope required** (re-scope to M-L when un-deferred): add `scripts/pw-decrypt-to-shm.sh`
+    + `scripts/pw-encrypt-from-shm.sh` wrappers, update `.mcp.json` `--storage-state` values to
+    `/dev/shm/pw-state-<name>.json`, wire decrypt/re-encrypt around each playwright MCP server launch
+    (either systemd `ExecStartPre`/`ExecStopPost` hooks or a wrapper script around
+    `/usr/bin/playwright-mcp`). ~2x LOC, ~3x risk surface (systemd hook ordering + tmpfs lifecycle).
+  - **Alternate path** (not selected): fs-level `ecryptfs` on `~/.claude-pw/` — OS-transparent but
+    requires a kernel module + careful unmount handling on a remote-managed VPS.
+  - **Forward-compat already in place**: S17 FI-PLAT Bluesky (shipped 2026-05-31 inside `d721e33`)
+    stores credentials at `~/.claude-pw/bluesky.json` with an `encrypted` key sentinel; future
+    encrypt-existing script can detect unencrypted files and migrate them.
+  - **Mitigation today**: filesystem-level access control — `chmod 600` on each `state-*.json` and
+    `chmod 700` on `~/.claude-pw/`. Single-tenant VPS; threat model is "operator compromise" not
+    "co-tenant exfil".
+  - **Depends on**: none (independent — un-defer requires user pick of "widen scope" vs "fs-level"
+    vs "stay-deferred").
+  - **Out-of-band considerations**: STOP findings file at `/tmp/S15-FI-PW-INTEGRATION-STOP.md`
+    (subagent transcript) captures the full technical analysis if needed for the un-defer round.
 
 - **FI-LOG: Per-lead log viewer in admin** (P3, leverage 2, effort M)
   - **Why now**: Logrotate landed in `5a001b3`. The next step is surfacing the ANSI-stripped logs in
