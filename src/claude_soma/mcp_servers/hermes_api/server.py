@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import html
 import http.server
 import json
 import mimetypes
@@ -273,8 +274,11 @@ def _send_proactive_dm(text: str, files: list[str] | None = None) -> int | None:
         token = _load_tg_token()
         base = f"{_TG_API_BASE}/bot{token}"
         chat_id = _notify_chat_id()
-        html_text = gfm_to_html(text)
-        chunks = chunk_html_for_telegram(html_text)
+        # The _format_*_dm helpers already produce Telegram HTML (with user
+        # fields html-escaped); piping that through gfm_to_html would entity-
+        # escape the <b>/<code>/<a>/<pre> tags themselves and Telegram would
+        # render them as literal text. Chunk the pre-rendered HTML directly.
+        chunks = chunk_html_for_telegram(text)
         last_msg_id: int | None = None
         for chunk in chunks:
             result = _tg_post_json(f"{base}/sendMessage", {
@@ -311,30 +315,32 @@ def _log_notify_error(msg: str) -> None:
 
 
 def _format_started_dm(lead: str, payload: dict[str, Any]) -> str:
-    desc = payload.get("description", "")
-    eta = payload.get("eta", "")
-    text = f"<b>Lead <code>{lead}</code> started:</b> {desc}"
+    desc = html.escape(str(payload.get("description", "")), quote=False)
+    eta = html.escape(str(payload.get("eta", "")), quote=False)
+    lead_e = html.escape(lead, quote=False)
+    text = f"<b>Lead <code>{lead_e}</code> started:</b> {desc}"
     if eta:
         text += f"\nETA: {eta}"
     return text
 
 
 def _format_milestone_dm(lead: str, milestones: list[dict[str, Any]]) -> str:
+    lead_e = html.escape(lead, quote=False)
     if len(milestones) == 1:
         p = json.loads(milestones[0]["payload_json"])
-        prog = p.get("progress", "")
+        prog = html.escape(str(p.get("progress", "")), quote=False)
         pct = p.get("percent")
-        eta_rem = p.get("eta_remaining", "")
-        text = f"<b>Lead <code>{lead}</code> milestone:</b> {prog}"
+        eta_rem = html.escape(str(p.get("eta_remaining", "")), quote=False)
+        text = f"<b>Lead <code>{lead_e}</code> milestone:</b> {prog}"
         if pct is not None:
             text += f" ({pct}%)"
         if eta_rem:
             text += f"\nETA remaining: {eta_rem}"
     else:
-        lines = [f"<b>Lead <code>{lead}</code> milestones:</b>"]
+        lines = [f"<b>Lead <code>{lead_e}</code> milestones:</b>"]
         for ms in milestones:
             p = json.loads(ms["payload_json"])
-            prog = p.get("progress", "")
+            prog = html.escape(str(p.get("progress", "")), quote=False)
             pct = p.get("percent")
             line = f"• {prog}"
             if pct is not None:
@@ -345,40 +351,50 @@ def _format_milestone_dm(lead: str, milestones: list[dict[str, Any]]) -> str:
 
 
 def _format_completed_dm(lead: str, payload: dict[str, Any]) -> tuple[str, list[str]]:
-    summary = payload.get("summary", "")
+    summary = html.escape(str(payload.get("summary", "")), quote=False)
     urls = payload.get("urls", [])
     paths = payload.get("paths", [])
-    text = f"<b>Lead <code>{lead}</code> completed:</b>\n{summary}"
+    lead_e = html.escape(lead, quote=False)
+    text = f"<b>Lead <code>{lead_e}</code> completed:</b>\n{summary}"
     if urls:
-        links = "\n".join(f'<a href="{u}">{u}</a>' for u in urls)
+        # URL goes into both href (attribute → quote=True) and link body (text)
+        links = "\n".join(
+            f'<a href="{html.escape(str(u), quote=True)}">'
+            f'{html.escape(str(u), quote=False)}</a>'
+            for u in urls
+        )
         text += f"\n\n{links}"
     return text, [p for p in paths if Path(p).exists()]
 
 
 def _format_needs_input_dm(lead: str, payload: dict[str, Any]) -> str:
-    question = payload.get("question", "")
+    question = html.escape(str(payload.get("question", "")), quote=False)
     options = payload.get("options", [])
+    lead_e = html.escape(lead, quote=False)
     text = (
-        f"<b>Lead <code>{lead}</code> needs your input:</b>\n"
+        f"<b>Lead <code>{lead_e}</code> needs your input:</b>\n"
         f"{question}"
     )
     if options:
-        opts = "\n".join(f"  • {o}" for o in options)
+        opts = "\n".join(
+            f"  • {html.escape(str(o), quote=False)}" for o in options
+        )
         text += f"\n\nOptions:\n{opts}"
     return text
 
 
 def _format_error_dm(lead: str, payload: dict[str, Any]) -> str:
-    error = payload.get("error", "")
-    context = payload.get("context", "")
+    error = html.escape(str(payload.get("error", "")), quote=False)
+    context = html.escape(str(payload.get("context", "")), quote=False)
     traceback = payload.get("traceback", "")
     recoverable = payload.get("recoverable", True)
+    lead_e = html.escape(lead, quote=False)
     text = (
-        f"<b>[ERROR] Lead <code>{lead}</code>:</b> {error}\n"
+        f"<b>[ERROR] Lead <code>{lead_e}</code>:</b> {error}\n"
         f"Context: {context}"
     )
     if traceback:
-        tb_snippet = traceback[:500]
+        tb_snippet = html.escape(str(traceback)[:500], quote=False)
         text += f"\n<pre>{tb_snippet}</pre>"
     if not recoverable:
         text += "\n\n<i>Lead has stopped — manual intervention may be needed.</i>"

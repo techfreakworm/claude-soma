@@ -554,6 +554,48 @@ def test_get_recent_lead_events_mcp_tool(tmp_path: Path) -> None:
     assert l1_events[0]["lead"] == "l1"
 
 
+# ------------------------------------------------------------------ DM-pipeline regression
+
+# Regression for the 2026-05-31 bug: the _format_*_dm helpers produce Telegram
+# HTML, but _send_proactive_dm was piping that output through gfm_to_html (the
+# GFM-to-HTML converter intended for send_tg_reply's markdown inputs). gfm_to_html
+# entity-escapes raw HTML chars outside known markers, so <b>/<code>/<a>/<pre>
+# became &lt;b&gt;/&lt;code&gt;/&lt;a&gt;/&lt;pre&gt;, and Telegram (with
+# parse_mode=HTML) rendered the entities as literal tag text. Fix: skip the
+# converter, html-escape user fields in the formatters themselves.
+
+def test_started_dm_keeps_html_tags_after_chunking() -> None:
+    from claude_soma.mcp_servers.hermes_api.server import _format_started_dm
+    from claude_soma.mcp_servers.hermes_api.tg_html import chunk_html_for_telegram
+    text = _format_started_dm("hello-test", {"description": "hello world"})
+    joined = "".join(chunk_html_for_telegram(text))
+    assert "<b>" in joined and "</b>" in joined
+    assert "<code>hello-test</code>" in joined
+    assert "&lt;b&gt;" not in joined
+    assert "&lt;code&gt;" not in joined
+
+
+def test_completed_dm_escapes_user_html_but_keeps_template_tags() -> None:
+    from claude_soma.mcp_servers.hermes_api.server import _format_completed_dm
+    text, _ = _format_completed_dm("alpha", {"summary": "A <script>x</script> & B"})
+    # template-side tags remain intact
+    assert "<b>Lead <code>alpha</code> completed:</b>" in text
+    # user-side HTML is entity-escaped (no injection through the summary field)
+    assert "<script>" not in text
+    assert "&lt;script&gt;" in text and "&amp;" in text
+
+
+def test_completed_dm_escapes_url_in_both_href_and_body() -> None:
+    from claude_soma.mcp_servers.hermes_api.server import _format_completed_dm
+    text, _ = _format_completed_dm(
+        "alpha", {"summary": "s", "urls": ['https://x.test/?a=1&b="2"']},
+    )
+    # href attribute uses quote=True (escapes " → &quot;)
+    assert 'href="https://x.test/?a=1&amp;b=&quot;2&quot;"' in text
+    # body uses quote=False (& → &amp;, but " stays — also fine for body text)
+    assert ">https://x.test/?a=1&amp;b=" in text
+
+
 # ------------------------------------------------------------------ helpers
 
 def _find_free_port() -> int:
