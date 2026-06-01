@@ -30,7 +30,9 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
+import sys
 import time
 from pathlib import Path
 
@@ -49,6 +51,7 @@ TMUX_BIN = os.environ.get("HERMES_TMUX_BIN", "/usr/bin/tmux")
 
 BUSY_PATTERNS = ("Bloviating…", "Crunched", "Worked for", "Wandering…", "Baked for")
 IDLE_PROMPT = "❯ "
+_IDLE_RE = re.compile(r"^\s*❯\s*$")
 
 SEND_SLEEP = float(os.environ.get("HERMES_RC_REFRESH_SLEEP", "2"))
 
@@ -80,15 +83,20 @@ def _send_keys(session: str, socket: str, *args: str) -> None:
 
 def _is_busy(pane_text: str) -> bool:
     lines = [ln for ln in pane_text.splitlines() if ln.strip()]
+    if not lines:
+        print("rc-refresh: _is_busy: empty pane → treating as busy", file=sys.stderr)
+        return True
     tail = lines[-2:] if len(lines) >= 2 else lines
     tail_joined = "\n".join(tail)
     for pat in BUSY_PATTERNS:
         if pat in tail_joined:
+            print(f"rc-refresh: _is_busy: busy pattern {pat!r} → skip", file=sys.stderr)
             return True
-    last = lines[-1] if lines else ""
-    if IDLE_PROMPT in last:
+    last = lines[-1]
+    if _IDLE_RE.match(last):
         return False
-    return False
+    print(f"rc-refresh: _is_busy: ambiguous tail {repr(last)[:60]} → skip (conservative)", file=sys.stderr)
+    return True
 
 
 def _log(fh, data: dict) -> None:

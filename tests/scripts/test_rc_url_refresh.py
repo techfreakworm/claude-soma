@@ -215,6 +215,21 @@ def test_refresh_handles_unparseable_pane(tmp_path: Path, monkeypatch) -> None:
     assert "detail" in lead_line
 
 
+def test_is_busy_with_idle_prompt() -> None:
+    pane = "Working on task...\nSome output\n❯ \n"
+    assert rc_url_refresh._is_busy(pane) is False
+
+
+def test_is_busy_with_spinner() -> None:
+    pane = "Doing stuff\nBloviating…\n"
+    assert rc_url_refresh._is_busy(pane) is True
+
+
+def test_is_busy_ambiguous() -> None:
+    pane = "Running task...\nSome unrecognized output here\n"
+    assert rc_url_refresh._is_busy(pane) is True
+
+
 def test_refresh_summary_line_emitted(tmp_path: Path, monkeypatch) -> None:
     db = tmp_path / "reg.sqlite"
     log = tmp_path / "rc-refresh.log"
