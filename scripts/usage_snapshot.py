@@ -13,6 +13,7 @@ import subprocess
 import sys
 import time
 from datetime import date
+from typing import Any
 
 
 DB = os.environ.get("HERMES_USAGE_DB", "/opt/claude-soma/usage.sqlite")
@@ -42,7 +43,7 @@ def _query_usage() -> dict:
     return json.loads(last)
 
 
-def _to_f(val: any) -> float:
+def _to_f(val: Any) -> float:
     """Safely convert value to float, defaulting to 0.0."""
     try:
         return float(val) if val is not None else 0.0
