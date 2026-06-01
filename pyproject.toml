@@ -49,6 +49,7 @@ packages = ["src/claude_soma"]
 testpaths = ["tests"]
 asyncio_mode = "auto"
 addopts = "-q --strict-markers"
+pythonpath = ["src"]
 
 [tool.ruff]
 line-length = 100

@@ -447,7 +447,9 @@ def list_routines() -> list[dict[str, Any]]:
 
 @router.post("/{trigger_id}/run")
 def run_routine(trigger_id: str) -> dict[str, Any]:
+    lock_path = "/tmp/hermes-routines-run.lock"
     try:
-        return _call_claude_routines("run", trigger_id=trigger_id)
+        with FileLock(lock_path, timeout=60):
+            return _call_claude_routines("run", trigger_id=trigger_id, timeout=30)
     except Exception as e:
         raise HTTPException(status_code=502, detail=str(e))
