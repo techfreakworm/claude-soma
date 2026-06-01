@@ -42,13 +42,21 @@ def _query_usage() -> dict:
     return json.loads(last)
 
 
+def _to_f(val: any) -> float:
+    """Safely convert value to float, defaulting to 0.0."""
+    try:
+        return float(val) if val is not None else 0.0
+    except (ValueError, TypeError):
+        return 0.0
+
+
 def _extract(payload: dict) -> tuple[float, float, float, float]:
     """Pull bucket numbers out of /usage JSON. Tolerant to schema variation."""
-    interactive_used = float(payload.get("interactive_credits_used", 0) or 0)
-    interactive_max = float(payload.get("interactive_credits_ceiling", 0) or 0)
-    sdk_used = float(payload.get("agent_sdk_credits_used", 0) or 0)
-    sdk_max = float(payload.get("agent_sdk_credits_ceiling", 0) or 0)
-    return interactive_used, interactive_max, sdk_used, sdk_max
+    iu = _to_f(payload.get("interactive_credits_used"))
+    ic = _to_f(payload.get("interactive_credits_ceiling"))
+    su = _to_f(payload.get("agent_sdk_credits_used"))
+    sc = _to_f(payload.get("agent_sdk_credits_ceiling"))
+    return iu, ic, su, sc
 
 
 def main() -> int:
