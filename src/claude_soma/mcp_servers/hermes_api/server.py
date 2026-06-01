@@ -7,6 +7,7 @@ import json
 import mimetypes
 import os
 import re
+import socket
 import subprocess
 import threading
 import time
@@ -222,16 +223,35 @@ def schedule_reminder(when: str, message: str) -> dict:
 
 # ---- Routines cache prewarm -----------------------------------------------
 
+_PREWARM_MARKER = Path("/tmp/hermes-prewarm-last.ts")
+
+
 def _prewarm_routines_cache() -> None:
     """Populate the cloud-routines cache so the first dashboard load is fast.
 
     Imports the live cache function from the API routes layer and calls it.
+    Debounced by a marker file: skips the warm if fired within 300 seconds of
+    the last successful warm, preventing spawn storms during restart loops.
     No-ops silently if the import fails (e.g. the API package is not installed
     in this environment).
     """
     try:
+        marker = _PREWARM_MARKER
+        if marker.exists():
+            try:
+                last_ts = float(marker.read_text().strip())
+                elapsed = time.time() - last_ts
+                if elapsed < 300:
+                    _log_notify_error(f"prewarm debounced, last warm {elapsed:.0f}s ago")
+                    return
+            except (ValueError, OSError):
+                pass
         from claude_soma.api.routes.routines import _query_cloud_routines_cached
         _query_cloud_routines_cached()
+        try:
+            marker.write_text(str(time.time()))
+        except OSError:
+            pass
     except Exception:
         pass
 
@@ -848,7 +868,12 @@ class _NotifyHandler(http.server.BaseHTTPRequestHandler):
 def _start_notify_listener() -> None:
     port = int(os.environ.get("HERMES_NOTIFY_PORT", str(_NOTIFY_PORT_DEFAULT)))
     try:
-        server = http.server.ThreadingHTTPServer(("127.0.0.1", port), _NotifyHandler)
+        server = http.server.ThreadingHTTPServer(
+            ("127.0.0.1", port), _NotifyHandler, bind_and_activate=False
+        )
+        server.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        server.server_bind()
+        server.server_activate()
         server.serve_forever()
     except Exception as exc:
         _log_notify_error(f"notify listener failed to start: {exc}")
