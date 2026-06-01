@@ -1,8 +1,8 @@
 # systemd/claude-soma-usage-snapshot.timer
 [Unit]
-Description=Claude Soma usage snapshot every 15 minutes
+Description=Claude Soma usage snapshot daily at 23:55 IST
 [Timer]
-OnCalendar=*:0/15
+OnCalendar=*-*-* 23:55:00
 Persistent=true
 Unit=claude-soma-usage-snapshot.service
 [Install]

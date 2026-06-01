@@ -66,3 +66,22 @@ def test_extract_malformed_strings():
     iu, ic, su, sc = _extract(payload)
     assert iu == 0.0
     assert ic == 0.0
+
+
+def test_timer_is_daily():
+    """Confirm the systemd timer fires once daily, not every 15 minutes.
+
+    Rationale: CLAUDE_CODE_OAUTH_TOKEN authenticates against claude.ai, not
+    api.anthropic.com. A direct HTTP call to api.anthropic.com/v1/usage would
+    fail with 401 (wrong auth domain). The safe path is one daily subprocess
+    call to `claude -p /usage` which uses the OAuth token through the claude
+    CLI's own auth stack.
+    """
+    timer_file = Path(__file__).parent.parent.parent / "systemd" / "claude-soma-usage-snapshot.timer"
+    content = timer_file.read_text()
+    assert "OnCalendar=*-*-* 23:55:00" in content, (
+        f"Timer should fire once daily at 23:55; got:\n{content}"
+    )
+    assert "OnCalendar=*:0/15" not in content, (
+        "15-minute interval must not be present — it causes 96 claude spawns/day"
+    )
