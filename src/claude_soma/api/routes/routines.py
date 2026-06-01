@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
+from filelock import FileLock
 
 from claude_soma.api.auth import require_authed_user
 from claude_soma.mcp_servers.project_orchestrator.registry import Registry
@@ -195,13 +196,26 @@ def _query_cloud_routines() -> list[dict[str, Any]]:
 
 def _query_cloud_routines_cached() -> list[dict[str, Any]]:
     """Cloud query is the slow one (~12s, spawns claude). Serve a cached result
-    within the TTL window so repeated dashboard loads don't re-pay it."""
+    within the TTL window so repeated dashboard loads don't re-pay it.
+
+    Uses a file lock to prevent 'thundering herd' when multiple requests arrive
+    at a cold cache.
+    """
     now = time.monotonic()
     if _CLOUD_CACHE["valid"] and (now - _CLOUD_CACHE["ts"]) < _cloud_ttl():
         return list(_CLOUD_CACHE["rows"])
-    rows = _query_cloud_routines()
-    _CLOUD_CACHE.update(ts=now, rows=rows, valid=True)
-    return rows
+
+    lock_path = "/tmp/hermes-routines.lock"
+    with FileLock(lock_path, timeout=35):
+        # Re-check cache inside the lock: another thread/process might have
+        # populated it while we waited.
+        now = time.monotonic()
+        if _CLOUD_CACHE["valid"] and (now - _CLOUD_CACHE["ts"]) < _cloud_ttl():
+            return list(_CLOUD_CACHE["rows"])
+
+        rows = _query_cloud_routines()
+        _CLOUD_CACHE.update(ts=now, rows=rows, valid=True)
+        return rows
 
 
 def _parse_cron_line(line: str, *, system: bool, source: str) -> dict[str, Any] | None:
