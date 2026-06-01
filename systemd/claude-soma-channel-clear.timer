@@ -1,0 +1,16 @@
+# systemd/claude-soma-channel-clear.timer
+#
+# Fires claude-soma-channel-clear.service every Sunday at 03:00 UTC.
+# Persistent=true ensures a missed window (VPS down at 03:00) fires on
+# next boot rather than silently skipping the week.
+
+[Unit]
+Description=Weekly clear of Claude Soma channel transcript (Sunday 03:00 UTC)
+
+[Timer]
+OnCalendar=Sun 03:00:00 UTC
+Persistent=true
+Unit=claude-soma-channel-clear.service
+
+[Install]
+WantedBy=timers.target

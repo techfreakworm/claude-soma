@@ -1,0 +1,14 @@
+# systemd/claude-soma-channel-clear.service
+#
+# One-shot service that sends /clear to the hermes tmux pane, trimming the
+# claude --continue transcript. Activated weekly by claude-soma-channel-clear.timer.
+# Running as ubuntu so tmux commands reach the user's server without sudo.
+
+[Unit]
+Description=Clear Claude Soma channel transcript (weekly maintenance)
+
+[Service]
+Type=oneshot
+User=ubuntu
+EnvironmentFile=/etc/claude-soma/secrets.env
+ExecStart=/opt/claude-soma/scripts/channel_clear.sh

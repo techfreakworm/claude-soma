@@ -67,6 +67,9 @@ if [ -n "$BOT_PID" ]; then
     # restart (claude takes ~10-20s to come up, then spawns bun). Without
     # this we'd restart-loop every 10 min.
     ETIMES=$(ps -o etimes= -p "$BOT_PID" 2>/dev/null | tr -d ' ')
+    if [ -n "$ETIMES" ] && [ "$ETIMES" -ge 604800 ]; then
+        echo "[$TS] channel: WARNING bot pid=$BOT_PID up ${ETIMES}s (>7 days) — schedule channel-clear to trim transcript" >> "$LOG"
+    fi
     if [ -n "$ETIMES" ] && [ "$ETIMES" -ge 60 ]; then
         # Walk descendant tree of BOT_PID via pgrep -P recursion.
         descendants() {
