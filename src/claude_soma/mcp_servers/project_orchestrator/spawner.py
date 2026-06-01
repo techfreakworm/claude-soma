@@ -6,6 +6,7 @@ import os
 import re
 import shlex
 import shutil
+import sqlite3
 import subprocess
 import tempfile
 import time
@@ -389,6 +390,26 @@ def spawn_background_lead(
     }
 
 
+def _estimate_context_tokens(name: str) -> int:
+    """Estimate the cloud session's token count for a lead by summing payload_json
+    lengths in lead_events and dividing by 4 (chars-to-tokens approximation).
+    Returns 0 if the db or table is absent or on any sqlite error."""
+    db_path = os.environ.get("HERMES_ORCH_DB", "/opt/claude-soma/registry.sqlite")
+    if not os.path.exists(db_path):
+        return 0
+    try:
+        conn = sqlite3.connect(db_path)
+        row = conn.execute(
+            "SELECT SUM(LENGTH(payload_json)) FROM lead_events WHERE lead = ?",
+            (name,),
+        ).fetchone()
+        conn.close()
+        total = row[0] if row and row[0] is not None else 0
+        return int(total) // 4
+    except sqlite3.Error:
+        return 0
+
+
 def resume_background_lead(
     *,
     name: str,
@@ -397,6 +418,7 @@ def resume_background_lead(
     session_uuid: str,
     extra_args: list[str] | None = None,
     resume_prompt_suffix: str | None = None,
+    force: bool = False,
 ) -> dict:
     """Spawn a tmux+systemd lead using --resume <session_uuid> instead of --continue.
 
@@ -410,6 +432,13 @@ def resume_background_lead(
     if not NAME_RX.match(name):
         raise InvalidProjectName(
             f"project name must match {NAME_RX.pattern}, got {name!r}"
+        )
+    est_tokens = _estimate_context_tokens(name)
+    threshold = int(os.environ.get("HERMES_RESUME_CONTEXT_GUARD_TOKENS", "200000"))
+    if est_tokens > threshold and not force:
+        raise RuntimeError(
+            f"context guard: {name} estimated at {est_tokens} tokens > {threshold}; "
+            "kill + re-spawn fresh, or pass force=True to override"
         )
     cwd.mkdir(parents=True, exist_ok=True)
     _pretrust_cwd(cwd)

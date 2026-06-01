@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import sqlite3
 import subprocess as sp
 from pathlib import Path
 from unittest.mock import patch, MagicMock
@@ -33,6 +34,9 @@ def _isolate_spawner(tmp_path: Path, monkeypatch) -> None:
     # Point the lead MCP config at a NON-existent path by default so --mcp-config
     # is deterministically omitted (tests that exercise it set their own file).
     monkeypatch.setenv("HERMES_LEAD_MCP_CONFIG", str(tmp_path / "absent-lead-mcp.json"))
+    # Point the registry db at a NON-existent path so _estimate_context_tokens
+    # returns 0 for all existing tests (no context guard triggered).
+    monkeypatch.setenv("HERMES_ORCH_DB", str(tmp_path / "absent-orch.sqlite"))
 
 
 def _ok(stdout: str = "") -> MagicMock:
@@ -790,3 +794,49 @@ def test_resume_spawn_calls_kill_session_first(tmp_path: Path) -> None:
     assert new_session_calls, "must have called tmux new-session for the resume spawn"
     # systemctl stop must precede new-session
     assert commands.index(systemctl_calls[0]) < commands.index(new_session_calls[0])
+
+
+def _seed_lead_events_db(db_path: Path, name: str, payload_chars: int) -> None:
+    """Create a lead_events table in db_path and insert a single row with
+    payload_json of `payload_chars` length for `name`."""
+    conn = sqlite3.connect(str(db_path))
+    conn.execute("CREATE TABLE lead_events (lead TEXT, payload_json TEXT)")
+    conn.execute("INSERT INTO lead_events VALUES (?, ?)", (name, "a" * payload_chars))
+    conn.commit()
+    conn.close()
+
+
+def test_resume_context_guard_raises_above_threshold(tmp_path: Path, monkeypatch) -> None:
+    """resume_background_lead must raise RuntimeError with 'context guard' when
+    the lead's estimated token count exceeds HERMES_RESUME_CONTEXT_GUARD_TOKENS
+    (default 200_000) and force=False (default)."""
+    db_path = tmp_path / "guard-test.sqlite"
+    _seed_lead_events_db(db_path, "guard-lead", 810_000)
+    monkeypatch.setenv("HERMES_ORCH_DB", str(db_path))
+    monkeypatch.setenv("HERMES_RESUME_CONTEXT_GUARD_TOKENS", "200000")
+    cwd = tmp_path / "guard-lead"
+    with pytest.raises(RuntimeError, match="context guard"):
+        resume_background_lead(
+            name="guard-lead", cwd=cwd, permission_mode="acceptEdits",
+            session_uuid="aaaabbbb-0000-4000-8000-000000000001",
+        )
+
+
+def test_resume_context_guard_force_overrides(tmp_path: Path, monkeypatch) -> None:
+    """When force=True the context guard is bypassed and the resume proceeds."""
+    db_path = tmp_path / "force-test.sqlite"
+    _seed_lead_events_db(db_path, "force-lead", 810_000)
+    monkeypatch.setenv("HERMES_ORCH_DB", str(db_path))
+    monkeypatch.setenv("HERMES_RESUME_CONTEXT_GUARD_TOKENS", "200000")
+    cwd = tmp_path / "force-lead"
+    # kill_session: 2 calls (systemctl stop + tmux kill-session)
+    # new-session:  1 call (systemd-run wrapping tmux new-session)
+    # capture_rc:   1 call (tmux capture-pane)
+    with patch("subprocess.run", side_effect=[_ok(), _ok(), _ok(), _ok("")]) as run:
+        result = resume_background_lead(
+            name="force-lead", cwd=cwd, permission_mode="acceptEdits",
+            session_uuid="bbbbcccc-0000-4000-8000-000000000002",
+            force=True,
+        )
+    assert run.call_count >= 1
+    assert result["session_uuid"] == "bbbbcccc-0000-4000-8000-000000000002"

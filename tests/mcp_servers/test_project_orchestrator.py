@@ -20,6 +20,8 @@ def _isolate_registry(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("HERMES_LEAD_LOG_DIR", str(tmp_path / "leadlogs"))
     # Lead MCP config absent by default so --mcp-config is omitted deterministically.
     monkeypatch.setenv("HERMES_LEAD_MCP_CONFIG", str(tmp_path / "absent-lead-mcp.json"))
+    # Point usage db at absent file so _check_safety_gate fails-open for all tests.
+    monkeypatch.setenv("HERMES_USAGE_DB", str(tmp_path / "absent-usage.sqlite"))
     orch._reset_singletons_for_tests()
 
 
@@ -659,3 +661,21 @@ def test_kill_project_archive_logs_when_no_memory(monkeypatch, caplog) -> None:
     assert result["name"] == "no-mem"
     assert any("nothing to archive" in record.message and "no-mem" in record.message
                for record in caplog.records)
+
+
+def test_resume_project_quota_gate_raises() -> None:
+    """resume_project_impl must propagate a RuntimeError from _check_safety_gate
+    (quota exhausted) before any project lookup or spawn attempt."""
+    with patch.object(orch, "_check_safety_gate",
+                      side_effect=RuntimeError("SUBSCRIPTION EXHAUSTED")):
+        with pytest.raises(RuntimeError, match="SUBSCRIPTION EXHAUSTED"):
+            orch.resume_project_impl(name="any-name")
+
+
+def test_resume_project_concurrency_cap_raises() -> None:
+    """resume_project_impl must raise with 'concurrency cap' when _reconcile_active
+    returns MAX_CONCURRENT live leads, mirroring the guard in spawn_project_impl."""
+    fake_active = [{"name": f"lead-{i}"} for i in range(orch.MAX_CONCURRENT)]
+    with patch.object(orch, "_reconcile_active", return_value=fake_active):
+        with pytest.raises(RuntimeError, match="concurrency cap"):
+            orch.resume_project_impl(name="any-name")

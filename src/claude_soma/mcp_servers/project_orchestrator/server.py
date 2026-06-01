@@ -204,12 +204,18 @@ def kill_project_impl(*, name: str, archive: bool = True) -> dict:
     return {"name": name, "killed_at": time.time()}
 
 
-def resume_project_impl(*, name: str) -> dict:
+def resume_project_impl(*, name: str, force: bool = False) -> dict:
     """Resume a dead/killed project lead from its cloud session (--resume <uuid>).
 
     Requires that the project was originally spawned after session_uuid tracking
     was added. If the lead is still alive, raises to prevent a duplicate spawn.
     """
+    _check_safety_gate()
+    active = _reconcile_active()
+    if len(active) >= MAX_CONCURRENT:
+        raise RuntimeError(
+            f"concurrency cap ({MAX_CONCURRENT}) reached; kill a lead first"
+        )
     p = _reg().get(name)
     if not p:
         raise RuntimeError(f"no project named {name!r}")
@@ -246,6 +252,7 @@ def resume_project_impl(*, name: str) -> dict:
         permission_mode=p["permission_mode"],
         session_uuid=session_uuid,
         resume_prompt_suffix=resume_prompt_suffix,
+        force=force,
     )
     # Refresh agent_id and rc_url in registry (new tmux session, same uuid).
     # register() upsert does not touch session_uuid, so it is preserved.
@@ -353,7 +360,7 @@ def kill_project(name: str, archive: bool = True) -> dict:
 
 
 @mcp.tool()
-def resume_project(name: str) -> dict:
+def resume_project(name: str, force: bool = False) -> dict:
     """Resume a dead or killed project lead from its cloud session.
 
     Uses --resume <session_uuid> to pull the session from the Claude cloud so
@@ -362,7 +369,7 @@ def resume_project(name: str) -> dict:
     spawned (projects spawned before session tracking require a fresh spawn_project
     instead). The lead must not be currently alive; kill it first if needed.
     """
-    return resume_project_impl(name=name)
+    return resume_project_impl(name=name, force=force)
 
 
 @mcp.tool()
