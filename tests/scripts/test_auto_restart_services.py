@@ -57,6 +57,7 @@ def _run_script(
     env = os.environ.copy()
     env["PATH"] = f"{tmp_path}:{env.get('PATH', '/usr/bin:/bin')}"
     env["HERMES_AUTO_RESTART_WINDOW_UTC"] = window
+    env["SOMA_AUTO_RESTART_LOCKFILE"] = str(tmp_path / "auto-restart.lock")
     if env_extra:
         env.update(env_extra)
 
@@ -119,6 +120,7 @@ def test_no_window_env_var_skips_restart(tmp_path: Path) -> None:
 
     env = os.environ.copy()
     env["PATH"] = f"{tmp_path}:{env.get('PATH', '/usr/bin:/bin')}"
+    env["SOMA_AUTO_RESTART_LOCKFILE"] = str(tmp_path / "auto-restart.lock")
     env.pop("HERMES_AUTO_RESTART_WINDOW_UTC", None)
 
     result = subprocess.run(
@@ -160,6 +162,42 @@ def test_mixed_valid_invalid_only_valid_restarted(tmp_path: Path) -> None:
     assert "restart bad-name" not in calls
 
 
+def test_first_invocation_creates_window_marker(tmp_path: Path) -> None:
+    """First invocation restarts services and creates the once-per-window marker."""
+    window = str(int(time.time()) + 3600)
+    lockfile = tmp_path / "auto-restart.lock"
+    marker = Path(f"{lockfile}.fired-{window}")
+    log = tmp_path / "calls.log"
+    result = _run_script(
+        tmp_path,
+        "claude-soma-channel.service",
+        call_log=log,
+        env_extra={"HERMES_AUTO_RESTART_WINDOW_UTC": window},
+    )
+    assert result.returncode == 0, result.stderr
+    assert marker.exists(), f"Expected marker {marker} to be created"
+    calls = log.read_text()
+    assert "restart claude-soma-channel.service" in calls
+
+
+def test_second_invocation_same_window_is_skipped(tmp_path: Path) -> None:
+    """Second invocation within the same window exits 0 without calling systemctl."""
+    window = str(int(time.time()) + 3600)
+    lockfile = tmp_path / "auto-restart.lock"
+    marker = Path(f"{lockfile}.fired-{window}")
+    log = tmp_path / "calls.log"
+    marker.touch()
+    result = _run_script(
+        tmp_path,
+        "claude-soma-channel.service",
+        call_log=log,
+        env_extra={"HERMES_AUTO_RESTART_WINDOW_UTC": window},
+    )
+    assert result.returncode == 0
+    assert "already fired this window" in result.stdout
+    assert not log.exists() or "restart" not in log.read_text()
+
+
 def test_empty_services_arg_exits_nonzero(tmp_path: Path) -> None:
     """Calling the script with no services argument exits with code 1."""
     log = tmp_path / "calls.log"
@@ -170,6 +208,7 @@ def test_empty_services_arg_exits_nonzero(tmp_path: Path) -> None:
     env = os.environ.copy()
     env["PATH"] = f"{tmp_path}:{env.get('PATH', '/usr/bin:/bin')}"
     env["HERMES_AUTO_RESTART_WINDOW_UTC"] = window
+    env["SOMA_AUTO_RESTART_LOCKFILE"] = str(tmp_path / "auto-restart.lock")
 
     result = subprocess.run(
         ["bash", str(_SCRIPT), ""],

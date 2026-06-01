@@ -24,7 +24,7 @@ set -uo pipefail
 
 SERVICES_RAW="${1:-}"
 LOG_TS="$(date -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || echo unknown)"
-LOCKFILE="/tmp/claude-soma-auto-restart.lock"
+LOCKFILE="${SOMA_AUTO_RESTART_LOCKFILE:-/tmp/claude-soma-auto-restart.lock}"
 
 _log() {
     echo "${LOG_TS} auto-restart-services.sh: $1"
@@ -39,6 +39,13 @@ fi
 exec 9>"$LOCKFILE"
 if ! flock -n 9; then
     _log "Another restart is already in progress; exiting"
+    exit 0
+fi
+
+# Once-per-window guard: prevent sequential double-fire within the same window.
+window_marker="${LOCKFILE}.fired-${HERMES_AUTO_RESTART_WINDOW_UTC:-noenv}"
+if [[ -f "$window_marker" ]]; then
+    _log "already fired this window: $window_marker"
     exit 0
 fi
 
@@ -83,5 +90,6 @@ for RAW_SVC in "${SERVICE_ARRAY[@]}"; do
     fi
 done
 
+touch "$window_marker"
 _log "Done"
 exit 0

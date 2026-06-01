@@ -121,6 +121,8 @@ if [[ "$TOOL" == "Bash" ]]; then
             deny "Build command in Bash${REASON_TAIL}" ;;
         pytest)
             deny "Test command in Bash${REASON_TAIL}" ;;
+        claude)
+            deny "Direct claude subprocess in Bash${REASON_TAIL}" ;;
         codex)
             deny "Heavy compute in Bash${REASON_TAIL}" ;;
         ffmpeg)
