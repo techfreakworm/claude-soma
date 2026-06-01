@@ -4,7 +4,9 @@ from __future__ import annotations
 import json
 import logging
 import os
+import sqlite3
 import time
+from datetime import date
 from pathlib import Path
 
 from mcp.server.fastmcp import FastMCP
@@ -70,11 +72,36 @@ def _reconcile_active() -> list[dict]:
     return live
 
 
+def _check_safety_gate() -> None:
+    """Check if the agent SDK quota is exhausted and raise an error if so."""
+    usage_db = os.environ.get("HERMES_USAGE_DB", "/opt/claude-soma/usage.sqlite")
+    if not os.path.exists(usage_db):
+        return
+    try:
+        conn = sqlite3.connect(usage_db)
+        conn.row_factory = sqlite3.Row
+        today = date.today().isoformat()
+        row = conn.execute(
+            "SELECT agent_sdk_credits_used, agent_sdk_ceiling FROM daily_snapshots WHERE date = ?",
+            (today,)
+        ).fetchone()
+        conn.close()
+        if row:
+            used = float(row["agent_sdk_credits_used"])
+            ceiling = float(row["agent_sdk_ceiling"])
+            if ceiling > 0 and used >= ceiling:
+                raise RuntimeError("SUBSCRIPTION EXHAUSTED: Agent SDK quota reached 0%")
+    except (sqlite3.Error, ValueError, KeyError):
+        # Fail open if DB is inaccessible or malformed
+        pass
+
+
 def spawn_project_impl(
     *, name: str, type_: str, brief: str, permission_mode: str = "acceptEdits"
 ) -> dict:
     # Reconcile first so ghost leads (dead but still 'active' in the registry)
     # don't wrongly count against the concurrency cap and block a real spawn.
+    _check_safety_gate()
     active = _reconcile_active()
     if len(active) >= MAX_CONCURRENT:
         raise RuntimeError(
@@ -118,6 +145,7 @@ def list_projects_impl() -> list[dict]:
             "cwd": r["cwd"], "rc_url": r["rc_url"], "status": r["status"],
             "spawned_at": r["spawned_at"],
             "idle_for_seconds": max(0.0, now - float(r["last_activity"])),
+            "estimated_next_turn_cost": 1.50,  # Heuristic: $15/MT @ 100k tokens
         }
         for r in rows
     ]
@@ -254,6 +282,7 @@ def get_status_impl(name: str) -> dict:
         "cwd": p["cwd"], "rc_url": p["rc_url"], "status": status,
         "spawned_at": p["spawned_at"],
         "idle_for_seconds": _reg().idle_for(name),
+        "estimated_next_turn_cost": 1.50,  # Heuristic: $15/MT @ 100k tokens
     }
 
 
