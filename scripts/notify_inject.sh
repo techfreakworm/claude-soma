@@ -110,8 +110,25 @@ if [[ "$BLOCK_LEN" -gt "$MAX_CHARS" ]]; then
     BLOCK="${BLOCK}... (truncated — additional events in registry.sqlite)"
 fi
 
+# Mark events as hook-injected via the HTTP listener.
+# This must run before any service restart is spawned: if a restarted service
+# terminates this process via SIGTERM, the event must already be durably marked
+# injected so the same MILESTONE cannot re-fire the restart loop.
+if [[ "$(jq 'length' <<<"$EVENT_IDS" 2>/dev/null)" -gt 0 ]]; then
+    MARK_BODY="$(jq -c '{event_ids: .}' <<<"$EVENT_IDS" 2>/dev/null)"
+    curl -sf --max-time 3 \
+        -X POST \
+        -H "Content-Type: application/json" \
+        -d "$MARK_BODY" \
+        "${ENDPOINT}/mark_read" >/dev/null 2>&1 || {
+        _log_error "mark_read failed (non-fatal)"
+    }
+fi
+
 # Auto-trigger restart if any unread MILESTONE contains "RESTART REQUIRED".
 # Only fires when HERMES_AUTO_RESTART_WINDOW_UTC is set and not yet expired.
+# mark_read is posted above before this spawn so a SIGTERM from the restarted
+# service cannot cause the same MILESTONE to re-fire on the next prompt.
 # The helper is spawned as a detached subprocess (setsid) so that restarting
 # claude-soma-channel.service does not kill it mid-flight.
 AUTO_RESTART_WINDOW="${HERMES_AUTO_RESTART_WINDOW_UTC:-}"
@@ -137,18 +154,6 @@ if [[ -n "$AUTO_RESTART_WINDOW" && "$EVENT_COUNT" -gt 0 ]]; then
                 >>/tmp/auto-restart-services.log 2>&1 &
         fi
     fi
-fi
-
-# Mark events as hook-injected via the HTTP listener
-if [[ "$(jq 'length' <<<"$EVENT_IDS" 2>/dev/null)" -gt 0 ]]; then
-    MARK_BODY="$(jq -c '{event_ids: .}' <<<"$EVENT_IDS" 2>/dev/null)"
-    curl -sf --max-time 3 \
-        -X POST \
-        -H "Content-Type: application/json" \
-        -d "$MARK_BODY" \
-        "${ENDPOINT}/mark_read" >/dev/null 2>&1 || {
-        _log_error "mark_read failed (non-fatal)"
-    }
 fi
 
 # Emit the hook output
