@@ -623,7 +623,7 @@ def _build_services(paths: Paths) -> list[Service]:
 _TIMERS: list[tuple[str, str]] = [
     ("claude-soma-healthcheck",   "*:0/10"),             # every 10 min
     ("claude-soma-cache-refresh", "*:0/5"),              # every 5 min
-    ("claude-soma-usage-snapshot", "*-*-* 23:55:00"),    # daily 23:55 UTC
+    ("claude-soma-usage-snapshot", "*:0/15"),            # every 15 min
     ("claude-soma-idle-reaper",   "0/6:00:00"),          # every 6h
     ("claude-soma-rc-url-refresh", "*-*-* 04:00:00 UTC"), # daily 04:00 UTC
     ("claude-soma-relay-cleanup",  "*-*-* 04:15:00 UTC"), # daily 04:15 UTC

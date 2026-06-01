@@ -18,7 +18,7 @@ post-tag on `main`.
 - [x] `git clone` to `/opt/claude-soma`, venv, `pip install -e .[dev]` (43 tests pass on VPS)
 - [x] Next.js standalone build (with `.next/static` + `public` copied next to `server.js` — see `scripts/build_frontend.sh`)
 - [x] systemd: `claude-soma-api.service` + `claude-soma-frontend.service` enabled + running
-- [x] systemd timers: healthcheck (10m), cache-refresh (5m), idle-reaper (6h), usage-snapshot (daily 23:55 UTC) — all active
+- [x] systemd timers: healthcheck (10m), cache-refresh (5m), idle-reaper (6h), usage-snapshot (every 15m) — all active
 - [x] Max OAuth token at `/etc/claude-soma/secrets.env` (mode 600, owner ubuntu)
 - [x] `claude auth login` (saves persistent credentials for interactive mode)
 - [x] Telegram bot created via @BotFather, plugin installed, token wired
@@ -32,7 +32,7 @@ post-tag on `main`.
 - [x] Codex CLI installed + `codex login` complete (ChatGPT auth, `~/.codex/auth.json`)
 - [x] plugin.json + marketplace.json: `author` as object (was string, failed Zod validation)
 - [x] **Item B — GitHub OAuth + DNS + Caddy** done. DNS A record `soma` → `soma.mayankgupta.in` at GoDaddy. OAuth app `<oauth-client-id>` callback `https://soma.mayankgupta.in/api/auth/callback/github`. Caddyfile installed; Let's Encrypt cert auto-acquired. Real `AUTH_SECRET` (44-byte base64) replaces the placeholder. Both `https://soma.mayankgupta.in/` (landing) and `/admin` (Next-auth) work end-to-end.
-- [x] **Item C — usage-snapshot timer enabled** (fires daily 23:55 UTC).
+- [x] **Item C — usage-snapshot timer enabled** (fires every 15 min).
 - [x] **Item F — secrets.env backed up** to `~/Backups/claude-soma/secrets-<timestamp>.env` on M5 Max (encrypt before storing off-site).
 - [x] **GitHub deploy key for claude-soma** (push-only, scoped to one repo) — bot can self-update its own repo via SSH.
 - [x] **GitHub fine-grained PAT + `gh` CLI** — bot can `gh repo create` new repos and push to them (used to autonomously create projects). Token also exported as `GITHUB_TOKEN` in secrets.env.
@@ -123,12 +123,12 @@ post-tag on `main`.
   - DM: *"Draw me a diagram of the Claude Soma system architecture."*
   - Expect: bot delegates to `codex-image-gen` skill → Codex CLI synthesizes via your ChatGPT subscription → image returned as a Telegram photo
 
-- [ ] **T10 — Memory consolidation**
+- [x] **T10 — Memory consolidation**
   - DM: *"Remember that I prefer JSON over YAML for config files."*
   - Expect: auto-memory captures
   - Verify: `cat ~/.claude/projects/<encoded-slug>/memory/MEMORY.md` shows the new entry
 
-- [x] **T11 — Usage-snapshot timer first fire (after 23:55 UTC)** — verified 2026-05-31.
+- [x] **T11 — Usage-snapshot timer first fire (every 15 min)** — verified 2026-05-31.
   Last fire: Sun 2026-05-31 05:25:10 IST (23:55:10 UTC 2026-05-30); next fire: Mon 2026-06-01 05:25:00 IST (23:55 UTC).
   Service exited cleanly (8.938 s CPU). `daily_snapshots` has 1 row dated 2026-05-31 written at that run.
 

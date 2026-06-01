@@ -15,7 +15,7 @@ from claude_soma.mcp_servers.project_orchestrator.registry import Registry
 DEFAULTS = [
     ("healthcheck",        "system", "every 10 min",                 "healthcheck",        "Restart api/frontend/channel if any is down"),  # noqa: E501
     ("cache-refresh",      "system", "every 5 min",                  "cache-refresh",      "Prime hot dashboard API paths"),  # noqa: E501
-    ("usage-snapshot",     "system", "daily 23:55 UTC",              "usage-snapshot",     "Daily Max-credit usage snapshot"),  # noqa: E501
+    ("usage-snapshot",     "system", "every 15 min",                 "usage-snapshot",     "Every-15-min Max-credit usage snapshot"),  # noqa: E501
     ("idle-reaper",        "system", "every 6h",                     "idle-reaper",        "Hibernate idle project-leads >24h"),  # noqa: E501
     ("portfolio-oneliner", "bot",    "Mon..Fri *-*-* 03:30:00",      "portfolio-oneliner", "Weekday 09:00 IST portfolio brief"),  # noqa: E501
 ]

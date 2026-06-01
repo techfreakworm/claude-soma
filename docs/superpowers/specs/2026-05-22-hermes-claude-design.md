@@ -347,7 +347,7 @@ systemd
 │
 ├─ hermes-healthcheck.timer            every 10 min
 ├─ hermes-cache-refresh.timer          every 5 min
-├─ hermes-usage-snapshot.timer         daily at 23:55
+├─ hermes-usage-snapshot.timer         every 15 minutes
 └─ hermes-idle-reaper.timer            every 6 hours
 ```
 
