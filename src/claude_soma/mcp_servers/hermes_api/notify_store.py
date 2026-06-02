@@ -12,16 +12,17 @@ _DB_DEFAULT = "/opt/claude-soma/registry.sqlite"
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS lead_events (
-    id               INTEGER PRIMARY KEY AUTOINCREMENT,
-    lead             TEXT    NOT NULL,
-    type             TEXT    NOT NULL
-                             CHECK (type IN ('STARTED','MILESTONE','COMPLETED','NEEDS_INPUT','ERROR')),
-    ts               REAL    NOT NULL,
-    payload_json     TEXT    NOT NULL,
-    created_at       REAL    NOT NULL,
-    delivered_at     REAL,
-    delivery_error   TEXT,
-    hook_injected_at REAL
+    id                    INTEGER PRIMARY KEY AUTOINCREMENT,
+    lead                  TEXT    NOT NULL,
+    type                  TEXT    NOT NULL
+                                  CHECK (type IN ('STARTED','MILESTONE','COMPLETED','NEEDS_INPUT','ERROR')),
+    ts                    REAL    NOT NULL,
+    payload_json          TEXT    NOT NULL,
+    created_at            REAL    NOT NULL,
+    delivered_at          REAL,
+    delivery_error        TEXT,
+    hook_injected_at      REAL,
+    auto_restart_fired_at REAL
 );
 
 CREATE INDEX IF NOT EXISTS idx_le_lead
@@ -82,6 +83,12 @@ class EventStore:
         self._conn.row_factory = sqlite3.Row
         with self._lock:
             self._conn.executescript(_SCHEMA)
+            try:
+                self._conn.execute(
+                    "ALTER TABLE lead_events ADD COLUMN auto_restart_fired_at REAL"
+                )
+            except sqlite3.OperationalError:
+                pass
 
     # ------------------------------------------------------------------ writes
 
@@ -351,6 +358,20 @@ class EventStore:
                 (lead,),
             ).fetchall()
         return [dict(r) for r in rows]
+
+    def claim_auto_restart(self, event_id: int) -> bool:
+        """Atomically set auto_restart_fired_at for an event that hasn't been claimed yet.
+
+        Returns True if this call claimed the row (first caller wins), False if
+        another caller already set auto_restart_fired_at.
+        """
+        with self._lock:
+            cur = self._conn.execute(
+                "UPDATE lead_events SET auto_restart_fired_at = ? "
+                "WHERE id = ? AND auto_restart_fired_at IS NULL",
+                (time.time(), event_id),
+            )
+        return (cur.rowcount or 0) > 0
 
     def close(self) -> None:
         with self._lock:

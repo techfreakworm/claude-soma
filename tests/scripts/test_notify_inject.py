@@ -37,6 +37,16 @@ _EVENTS_JSON_NO_RESTART = (
     '],"open_pending_inputs":[]}'
 )
 
+# Canned events response with a RESTART REQUIRED MILESTONE that has
+# auto_restart_fired_at already set (Python-side trigger already fired).
+_EVENTS_JSON_ALREADY_FIRED = (
+    '{"events":['
+    '{"id":42,"type":"MILESTONE","lead":"test-lead",'
+    '"auto_restart_fired_at":1748000000.0,'
+    '"payload_json":"{\\"progress\\":\\"RESTART REQUIRED (services: claude-soma-channel.service)\\",\\"percent\\":null}"}'
+    '],"open_pending_inputs":[]}'
+)
+
 
 def _make_fake_bin(tmp_path: Path, name: str, body: str) -> Path:
     p = tmp_path / name
@@ -241,4 +251,20 @@ def test_expired_window_skips_auto_restart(tmp_path: Path) -> None:
         lines = [ln.strip() for ln in order_log.read_text().splitlines() if ln.strip()]
         assert "auto-restart" not in lines, (
             f"auto-restart should not fire with expired window, got: {lines}"
+        )
+
+
+def test_auto_restart_skipped_when_already_fired(tmp_path: Path) -> None:
+    """When auto_restart_fired_at is non-null on a MILESTONE row, the jq filter
+    excludes it so setsid is never spawned (dedup with Python-side trigger)."""
+    _, order_log = _run_with_restart_milestone(
+        tmp_path,
+        events_json=_EVENTS_JSON_ALREADY_FIRED,
+        with_window=True,
+        inject_fake_jq=False,
+    )
+    if order_log.exists():
+        lines = [ln.strip() for ln in order_log.read_text().splitlines() if ln.strip()]
+        assert "auto-restart" not in lines, (
+            f"auto-restart should not fire for row with auto_restart_fired_at set, got: {lines}"
         )

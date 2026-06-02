@@ -630,6 +630,59 @@ def _format_error_dm(lead: str, payload: dict[str, Any]) -> str:
     return text
 
 
+_RESTART_REQUIRED_RE = re.compile(r"RESTART REQUIRED")
+_SERVICES_RE = re.compile(r"services:\s*([^)\n]+)")
+_AUTO_RESTART_SCRIPT = "/opt/claude-soma/scripts/auto-restart-services.sh"
+_AUTO_RESTART_LOG_PATH = "/tmp/auto-restart-services.log"
+
+
+def _auto_restart_window_remaining_secs() -> int:
+    raw = os.environ.get("HERMES_AUTO_RESTART_WINDOW_UTC", "")
+    if not raw:
+        return 0
+    try:
+        window_epoch = int(raw)
+        remaining = window_epoch - int(time.time())
+        return max(0, remaining)
+    except (ValueError, TypeError):
+        return 0
+
+
+def _maybe_trigger_auto_restart(
+    event_id: int, lead: str, type_: str, payload_json: str
+) -> None:
+    if type_ != "MILESTONE":
+        return
+    if _auto_restart_window_remaining_secs() <= 0:
+        return
+    try:
+        payload = json.loads(payload_json)
+    except (json.JSONDecodeError, ValueError):
+        return
+    progress = payload.get("progress", "") or ""
+    if not _RESTART_REQUIRED_RE.search(progress):
+        return
+    m = _SERVICES_RE.search(progress)
+    if not m:
+        _log_notify_error(
+            f"_maybe_trigger_auto_restart: no 'services:' clause in progress: {progress[:200]}"
+        )
+        return
+    services_str = re.sub(r"\s+", "", m.group(1))
+    if not _store.claim_auto_restart(int(event_id)):
+        return
+    try:
+        subprocess.Popen(
+            ["setsid", "nohup", "sudo", "bash", _AUTO_RESTART_SCRIPT, services_str],
+            stdin=subprocess.DEVNULL,
+            stdout=open(_AUTO_RESTART_LOG_PATH, "a"),
+            stderr=subprocess.STDOUT,
+            start_new_session=True,
+        )
+    except Exception as exc:
+        _log_notify_error(f"_maybe_trigger_auto_restart: Popen failed: {exc}")
+
+
 def _deliver_event(event_id: int, lead: str, type_: str, payload_json: str) -> None:
     """Trigger DM delivery for a single event. Updates delivered_at or delivery_error."""
     try:
@@ -812,6 +865,7 @@ class _NotifyHandler(http.server.BaseHTTPRequestHandler):
             self._respond(400, {"error": f"unknown type {type_!r}"})
             return
 
+        _maybe_trigger_auto_restart(event_id, lead, type_, payload_json)
         # Deliver in a background thread so the POST returns quickly
         t = threading.Thread(
             target=_deliver_event,
@@ -940,10 +994,6 @@ def main() -> None:
     # Monitor for NEEDS_INPUT rows whose timeout has expired.
     t_timeout = threading.Thread(target=_timeout_monitor_loop, daemon=True)
     t_timeout.start()
-
-    # Prewarm the routines cloud cache so the first dashboard hit is fast.
-    t_prewarm = threading.Thread(target=_prewarm_routines_cache, daemon=True)
-    t_prewarm.start()
 
     # Alarm worker: polls active leads every 10 min, DMs the operator if
     # estimated context exceeds HERMES_ALARM_CONTEXT_THRESHOLD_TOKENS (default 150k).

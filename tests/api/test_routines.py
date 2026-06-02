@@ -93,6 +93,7 @@ def test_list_routines_merges_registry_and_systemd(
 ) -> None:
     db = tmp_path / "reg.sqlite"
     monkeypatch.setenv("HERMES_ORCH_DB", str(db))
+    monkeypatch.setenv("HERMES_ROUTINES_CLOUD", "on")
 
     from claude_soma.mcp_servers.project_orchestrator.registry import Registry
 
@@ -370,6 +371,7 @@ def test_cloud_query_is_cached_across_requests(
     request within the TTL must not re-invoke it."""
     db = tmp_path / "reg.sqlite"
     monkeypatch.setenv("HERMES_ORCH_DB", str(db))
+    monkeypatch.setenv("HERMES_ROUTINES_CLOUD", "on")
     monkeypatch.setattr(routines_route.subprocess, "run", _fake_subprocess_run())
 
     calls = {"n": 0}
@@ -385,3 +387,56 @@ def test_cloud_query_is_cached_across_requests(
     assert client.get("/api/routines", headers=HEADERS).status_code == 200
     assert client.get("/api/routines", headers=HEADERS).status_code == 200
     assert calls["n"] == 1  # second request served from the cloud cache
+
+
+def test_list_routines_no_cloud_call_default(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Cloud query must NOT fire when HERMES_ROUTINES_CLOUD is unset (default OFF).
+
+    Monkeypatches _call_claude_routines to raise RuntimeError so that any
+    accidental cloud call causes the test to fail.
+    """
+    db = tmp_path / "reg.sqlite"
+    monkeypatch.setenv("HERMES_ORCH_DB", str(db))
+    monkeypatch.delenv("HERMES_ROUTINES_CLOUD", raising=False)
+    monkeypatch.setattr(routines_route.subprocess, "run", _fake_subprocess_run())
+
+    cloud_called: dict[str, int] = {"n": 0}
+
+    def must_not_be_called(*args: Any, **kwargs: Any) -> Any:
+        cloud_called["n"] += 1
+        raise RuntimeError("cloud must not be called when HERMES_ROUTINES_CLOUD is unset")
+
+    monkeypatch.setattr(routines_route, "_call_claude_routines", must_not_be_called)
+
+    app = create_app()
+    client = TestClient(app)
+    r = client.get("/api/routines", headers=HEADERS)
+    assert r.status_code == 200
+    assert isinstance(r.json(), list)
+    assert cloud_called["n"] == 0
+
+
+def test_list_routines_cloud_opt_in(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """When HERMES_ROUTINES_CLOUD=on, the cloud query function must be invoked."""
+    db = tmp_path / "reg.sqlite"
+    monkeypatch.setenv("HERMES_ORCH_DB", str(db))
+    monkeypatch.setenv("HERMES_ROUTINES_CLOUD", "on")
+    monkeypatch.setattr(routines_route.subprocess, "run", _fake_subprocess_run())
+
+    cloud_called: dict[str, int] = {"n": 0}
+
+    def tracking_cloud() -> list[dict[str, Any]]:
+        cloud_called["n"] += 1
+        return []
+
+    monkeypatch.setattr(routines_route, "_query_cloud_routines", tracking_cloud)
+
+    app = create_app()
+    client = TestClient(app)
+    r = client.get("/api/routines", headers=HEADERS)
+    assert r.status_code == 200
+    assert cloud_called["n"] >= 1

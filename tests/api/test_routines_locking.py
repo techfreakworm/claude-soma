@@ -20,6 +20,8 @@ def _isolate_routines(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     # Clear cache and set short TTL for testing
     routines_route._clear_routines_cache()
     monkeypatch.setenv("HERMES_ROUTINES_CLOUD_TTL", "300")
+    # Enable cloud query so locking tests can exercise it
+    monkeypatch.setenv("HERMES_ROUTINES_CLOUD", "on")
     # Mock other dependencies to be fast
     monkeypatch.setattr(routines_route, "_query_registry_routines", lambda: [])
     monkeypatch.setattr(routines_route, "_query_local_timers", lambda: [])

@@ -429,19 +429,28 @@ def _merge_routines(
 
 @router.get("")
 def list_routines() -> list[dict[str, Any]]:
-    # Run the four sources concurrently: registry (sqlite) and the systemctl /
-    # crontab shell-outs are fast, but the cloud query spawns claude (~12s when
-    # cold). Parallelizing means the cron shell-outs added here don't stack onto
-    # the latency, and a cold cloud query overlaps the rest instead of summing.
-    with ThreadPoolExecutor(max_workers=4) as pool:
+    """Return all known routines merged from registry, systemd timers, cron, and
+    (optionally) the cloud scheduler.
+
+    Cloud query is opt-in via the HERMES_ROUTINES_CLOUD env knob:
+      HERMES_ROUTINES_CLOUD=on   — include the cloud query (spawns `claude -p`)
+      (unset or any other value) — skip cloud entirely (default)
+
+    The cloud query spawns `claude -p` (~12 s cold), which dominated
+    /api/routines page-load latency and burned Max OAuth tokens on every admin
+    page view. Default is OFF to eliminate the token leak.
+    """
+    cloud_enabled = os.environ.get("HERMES_ROUTINES_CLOUD", "").lower() == "on"
+    max_workers = 4 if cloud_enabled else 3
+    with ThreadPoolExecutor(max_workers=max_workers) as pool:
         f_registry = pool.submit(_query_registry_routines)
         f_local = pool.submit(_query_local_timers)
         f_cron = pool.submit(_query_cron_routines)
-        f_cloud = pool.submit(_query_cloud_routines_cached)
+        f_cloud = pool.submit(_query_cloud_routines_cached) if cloud_enabled else None
         registry_rows = f_registry.result()
         local_rows = f_local.result()
         cron_rows = f_cron.result()
-        cloud_rows = f_cloud.result()
+        cloud_rows = f_cloud.result() if f_cloud is not None else []
     return _merge_routines(registry_rows, local_rows, cloud_rows, cron_rows)
 
 
