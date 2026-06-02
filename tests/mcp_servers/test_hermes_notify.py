@@ -12,6 +12,7 @@ from claude_soma.mcp_servers.hermes_api.notify_store import (
     VALID_TYPES,
     URGENT_TYPES,
 )
+from claude_soma.mcp_servers.hermes_api.server import _should_proactive_dm_milestone
 
 
 # ------------------------------------------------------------------ fixtures
@@ -955,6 +956,162 @@ def test_maybe_trigger_dual_writes_auto_restart_compat(
     row = es.get_event(eid)
     assert row["action_fired_at"] is not None
     assert row["auto_restart_fired_at"] is not None
+
+
+# ------------------------------------------------------------------ cluster B: claim_proactive_dm
+
+def test_claim_proactive_dm_first_wins(store: EventStore) -> None:
+    eid = store.insert_event(
+        lead="l", type_="MILESTONE", ts=time.time(), payload_json='{"progress":"x"}'
+    )
+    result = store.claim_proactive_dm(eid, "l")
+    assert result is True
+    row = store.get_event(eid)
+    assert row["proactive_dm_sent_at"] is not None
+
+
+def test_claim_proactive_dm_rate_limited_within_window(store: EventStore) -> None:
+    eid1 = store.insert_event(
+        lead="l", type_="MILESTONE", ts=time.time(), payload_json='{"progress":"first"}'
+    )
+    prior_ts = time.time() - 30
+    with store._lock:
+        store._conn.execute(
+            "UPDATE lead_events SET proactive_dm_sent_at = ? WHERE id = ?",
+            (prior_ts, eid1),
+        )
+    eid2 = store.insert_event(
+        lead="l", type_="MILESTONE", ts=time.time(), payload_json='{"progress":"second"}'
+    )
+    result = store.claim_proactive_dm(eid2, "l")
+    assert result is False
+
+
+def test_claim_proactive_dm_unblocked_after_window(store: EventStore) -> None:
+    eid1 = store.insert_event(
+        lead="l", type_="MILESTONE", ts=time.time(), payload_json='{"progress":"old"}'
+    )
+    prior_ts = time.time() - 61
+    with store._lock:
+        store._conn.execute(
+            "UPDATE lead_events SET proactive_dm_sent_at = ? WHERE id = ?",
+            (prior_ts, eid1),
+        )
+    eid2 = store.insert_event(
+        lead="l", type_="MILESTONE", ts=time.time(), payload_json='{"progress":"new"}'
+    )
+    result = store.claim_proactive_dm(eid2, "l")
+    assert result is True
+
+
+@pytest.mark.parametrize("payload,expected", [
+    ({"services": ["claude-soma-api.service"]}, True),
+    ({"requires_user_attention": True}, True),
+    ({"progress": "RESTART REQUIRED deploy done"}, True),
+    ({"progress": "FIX SHIPPED all patches applied"}, True),
+    ({"progress": "50% done, continuing work"}, False),
+])
+def test_should_proactive_dm_milestone_branches(payload: dict, expected: bool) -> None:
+    assert _should_proactive_dm_milestone(payload) is expected
+
+
+def test_handle_notify_milestone_with_services_triggers_proactive_dm(
+    tmp_path: Path,
+) -> None:
+    import http.server
+    import threading
+    import urllib.request
+
+    from claude_soma.mcp_servers.hermes_api import server as ha_server
+
+    es = EventStore(db_path=tmp_path / "r.sqlite")
+    ha_server._store = es
+    ha_server._milestone_last_dmed = {}
+
+    payload_json = '{"progress": "RESTART REQUIRED now", "services": ["claude-soma-api.service"]}'
+    eid = es.insert_event(
+        lead="svc-lead",
+        type_="MILESTONE",
+        ts=time.time(),
+        payload_json=payload_json,
+    )
+
+    port = _find_free_port()
+    srv = http.server.ThreadingHTTPServer(("127.0.0.1", port), ha_server._NotifyHandler)
+    t = threading.Thread(target=srv.serve_forever, daemon=True)
+    t.start()
+
+    dm_calls: list = []
+    try:
+        with patch.object(ha_server, "_send_proactive_dm", side_effect=lambda *a, **kw: dm_calls.append(a) or None):
+            with patch.object(ha_server, "_deliver_event"):
+                body = json.dumps({
+                    "event_id": eid, "lead": "svc-lead", "type": "MILESTONE",
+                    "payload_json": payload_json,
+                }).encode()
+                req = urllib.request.Request(
+                    f"http://127.0.0.1:{port}/notify",
+                    data=body,
+                    headers={"Content-Type": "application/json"},
+                    method="POST",
+                )
+                with urllib.request.urlopen(req, timeout=5) as resp:
+                    result = json.loads(resp.read())
+                assert resp.status == 202
+                assert result["event_id"] == eid
+                time.sleep(0.3)
+    finally:
+        srv.shutdown()
+
+    assert len(dm_calls) == 1
+
+
+def test_handle_notify_milestone_chatty_lead_rate_limited(
+    tmp_path: Path,
+) -> None:
+    import http.server
+    import threading
+    import urllib.request
+
+    from claude_soma.mcp_servers.hermes_api import server as ha_server
+
+    es = EventStore(db_path=tmp_path / "r.sqlite")
+    ha_server._store = es
+    ha_server._milestone_last_dmed = {}
+
+    port = _find_free_port()
+    srv = http.server.ThreadingHTTPServer(("127.0.0.1", port), ha_server._NotifyHandler)
+    t = threading.Thread(target=srv.serve_forever, daemon=True)
+    t.start()
+
+    dm_calls: list = []
+    try:
+        with patch.object(ha_server, "_send_proactive_dm", side_effect=lambda *a, **kw: dm_calls.append(a) or None):
+            with patch.object(ha_server, "_deliver_event"):
+                for _ in range(5):
+                    eid = es.insert_event(
+                        lead="chatty-lead",
+                        type_="MILESTONE",
+                        ts=time.time(),
+                        payload_json='{"progress": "FIX SHIPPED ok"}',
+                    )
+                    body = json.dumps({
+                        "event_id": eid, "lead": "chatty-lead", "type": "MILESTONE",
+                        "payload_json": '{"progress": "FIX SHIPPED ok"}',
+                    }).encode()
+                    req = urllib.request.Request(
+                        f"http://127.0.0.1:{port}/notify",
+                        data=body,
+                        headers={"Content-Type": "application/json"},
+                        method="POST",
+                    )
+                    with urllib.request.urlopen(req, timeout=5):
+                        pass
+                time.sleep(0.3)
+    finally:
+        srv.shutdown()
+
+    assert len(dm_calls) == 1, f"Expected exactly 1 DM call, got {len(dm_calls)}"
 
 
 # ------------------------------------------------------------------ helpers

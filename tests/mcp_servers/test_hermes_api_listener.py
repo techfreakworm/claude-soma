@@ -272,3 +272,55 @@ def test_duplicate_restart_milestones_each_fire_only_once(
         )
     finally:
         srv.shutdown()
+
+
+def test_milestone_without_attention_criteria_no_proactive_dm(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A plain MILESTONE with no user-attention criteria must not trigger a proactive DM
+    via the new branch; the existing COMPLETED proactive-DM path is unaffected."""
+    import http.server
+    import json
+    import threading
+    import urllib.request
+
+    es = _make_store(tmp_path)
+    ha_server._milestone_last_dmed = {}
+
+    eid = es.insert_event(
+        lead="l", type_="MILESTONE", ts=time.time(),
+        payload_json='{"progress": "50% done, continuing"}',
+    )
+    monkeypatch.delenv("HERMES_AUTO_RESTART_WINDOW_UTC", raising=False)
+
+    port = _find_free_port()
+    srv = http.server.ThreadingHTTPServer(("127.0.0.1", port), ha_server._NotifyHandler)
+    t = threading.Thread(target=srv.serve_forever, daemon=True)
+    t.start()
+
+    proactive_calls: list = []
+    try:
+        with patch.object(
+            ha_server, "_send_proactive_dm",
+            side_effect=lambda *a, **kw: proactive_calls.append(a) or None,
+        ):
+            with patch.object(ha_server, "_deliver_event"):
+                body = json.dumps({
+                    "event_id": eid, "lead": "l", "type": "MILESTONE",
+                    "payload_json": '{"progress": "50% done, continuing"}',
+                }).encode()
+                req = urllib.request.Request(
+                    f"http://127.0.0.1:{port}/notify",
+                    data=body,
+                    headers={"Content-Type": "application/json"},
+                    method="POST",
+                )
+                with urllib.request.urlopen(req, timeout=5) as resp:
+                    assert resp.status == 202
+                time.sleep(0.2)
+    finally:
+        srv.shutdown()
+
+    assert len(proactive_calls) == 0, (
+        f"Expected no proactive DM calls for plain MILESTONE, got {len(proactive_calls)}"
+    )

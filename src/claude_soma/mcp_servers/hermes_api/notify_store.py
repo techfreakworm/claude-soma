@@ -24,7 +24,8 @@ CREATE TABLE IF NOT EXISTS lead_events (
     hook_injected_at      REAL,
     auto_restart_fired_at REAL,
     action_fired_at       REAL,
-    action_key            TEXT
+    action_key            TEXT,
+    proactive_dm_sent_at  REAL
 );
 
 CREATE INDEX IF NOT EXISTS idx_le_lead
@@ -100,6 +101,12 @@ class EventStore:
             try:
                 self._conn.execute(
                     "ALTER TABLE lead_events ADD COLUMN action_key TEXT"
+                )
+            except sqlite3.OperationalError:
+                pass
+            try:
+                self._conn.execute(
+                    "ALTER TABLE lead_events ADD COLUMN proactive_dm_sent_at REAL"
                 )
             except sqlite3.OperationalError:
                 pass
@@ -400,6 +407,29 @@ class EventStore:
                 (time.time(), key, event_id),
             )
         return (cur.rowcount or 0) > 0
+
+    def claim_proactive_dm(self, event_id: int, lead: str, debounce_secs: int = 60) -> bool:
+        """Atomic claim with per-lead rate limit (MILESTONE type only).
+        True if THIS call won the claim AND no prior MILESTONE proactive DM
+        for the same lead fired within debounce_secs."""
+        with self._lock:
+            now = time.time()
+            cutoff = now - debounce_secs
+            row = self._conn.execute(
+                "SELECT MAX(proactive_dm_sent_at) FROM lead_events "
+                "WHERE lead = ? AND type = 'MILESTONE' "
+                "AND proactive_dm_sent_at IS NOT NULL "
+                "AND proactive_dm_sent_at >= ?",
+                (lead, cutoff),
+            ).fetchone()
+            if row and row[0] is not None:
+                return False
+            cur = self._conn.execute(
+                "UPDATE lead_events SET proactive_dm_sent_at = ? "
+                "WHERE id = ? AND proactive_dm_sent_at IS NULL",
+                (now, event_id),
+            )
+            return (cur.rowcount or 0) > 0
 
     def close(self) -> None:
         with self._lock:

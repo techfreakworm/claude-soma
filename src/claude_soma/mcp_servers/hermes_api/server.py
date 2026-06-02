@@ -632,6 +632,24 @@ def _format_error_dm(lead: str, payload: dict[str, Any]) -> str:
 
 _RESTART_REQUIRED_RE = re.compile(r"RESTART REQUIRED")
 _SERVICES_RE = re.compile(r"services:\s*([^)\n]+)")
+_USER_ATTENTION_MILESTONE_RE = re.compile(
+    r"^(RESTART REQUIRED|FIX SHIPPED|READY FOR REVIEW)", re.MULTILINE
+)
+_PROACTIVE_DM_DEBOUNCE_SECS = 60
+
+
+def _should_proactive_dm_milestone(payload: dict) -> bool:
+    services = payload.get("services")
+    if isinstance(services, list) and services:
+        return True
+    if payload.get("requires_user_attention") is True:
+        return True
+    progress = payload.get("progress", "") or ""
+    if _USER_ATTENTION_MILESTONE_RE.search(progress):
+        return True
+    return False
+
+
 _AUTO_RESTART_SCRIPT = "/opt/claude-soma/scripts/auto-restart-services.sh"
 _AUTO_RESTART_LOG_PATH = "/tmp/auto-restart-services.log"
 
@@ -914,6 +932,23 @@ class _NotifyHandler(http.server.BaseHTTPRequestHandler):
             return
 
         _maybe_trigger_automation(event_id, lead, type_, payload_json)
+
+        if type_ == "MILESTONE":
+            try:
+                payload = json.loads(payload_json)
+            except (json.JSONDecodeError, ValueError):
+                payload = {}
+            if _should_proactive_dm_milestone(payload):
+                if _store.claim_proactive_dm(int(event_id), lead, _PROACTIVE_DM_DEBOUNCE_SECS):
+                    event_row = _store.get_event(int(event_id))
+                    if event_row:
+                        text = _format_milestone_dm(lead, [event_row])
+                        threading.Thread(
+                            target=_send_proactive_dm,
+                            args=(text,),
+                            daemon=True,
+                        ).start()
+
         # Deliver in a background thread so the POST returns quickly
         t = threading.Thread(
             target=_deliver_event,
