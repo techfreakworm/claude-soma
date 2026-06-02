@@ -36,6 +36,21 @@ def _safe(name: str, label: str) -> str:
     return name
 
 
+def _sanitize_filename(raw: str) -> str:
+    """Produce a filesystem-safe filename from user-supplied raw name.
+
+    Replaces spaces with underscores, strips characters outside
+    [A-Za-z0-9_-.], strips leading dots, and caps length at 255.
+    Raises 400 if nothing survives sanitization.
+    """
+    name = raw.replace(" ", "_")
+    name = re.sub(r"[^A-Za-z0-9_\-.]", "", name)
+    name = name.lstrip(".")
+    if not name:
+        raise HTTPException(status_code=400, detail=f"filename produces empty name after sanitization: {raw!r}")
+    return name[:255]
+
+
 async def _stream_to_file(upload: UploadFile, dest: Path) -> tuple[int, str]:
     hasher = hashlib.sha256()
     size = 0
@@ -87,7 +102,7 @@ async def upload_file(
     file: UploadFile,
 ) -> dict:
     lead = _safe(lead_name, "lead_name")
-    filename = _safe(file.filename or "upload", "filename")
+    filename = _sanitize_filename(file.filename or "upload")
 
     inbox = _inbox(lead)
     inbox.mkdir(parents=True, exist_ok=True)

@@ -146,6 +146,36 @@ class TestInputValidation:
         )
         assert r.status_code in (400, 422)
 
+    def test_filename_with_spaces_sanitized(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        staging = tmp_path / "staging"
+        monkeypatch.setenv("HERMES_STAGING_ROOT", str(staging))
+        monkeypatch.setenv("HERMES_NOTIFY_PORT", "19100")
+        client = TestClient(create_app())
+
+        payload = b"ppt content"
+        r = client.post(
+            "/api/admin/upload/ppt-manager",
+            files={"file": ("My Presentation Final.pptx", io.BytesIO(payload), "application/octet-stream")},
+            headers=HEADERS,
+        )
+        assert r.status_code == 200
+        body = r.json()
+        assert body["name"] == "My_Presentation_Final.pptx"
+        dest = staging / "ppt-manager" / "inbox" / "My_Presentation_Final.pptx"
+        assert dest.exists()
+        assert dest.read_bytes() == payload
+
+    def test_filename_with_special_chars_sanitized(self, client: TestClient) -> None:
+        r = _upload(client, "test-lead", "file (v2) [draft].pdf", b"data")
+        assert r.status_code == 200
+        assert r.json()["name"] == "file_v2_draft.pdf"
+
+    def test_filename_all_stripped_returns_400(self, client: TestClient) -> None:
+        r = _upload(client, "test-lead", "!!!###$$$", b"data")
+        assert r.status_code == 400
+
 
 def test_admin_upload_post_requires_auth(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
