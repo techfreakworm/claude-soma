@@ -396,11 +396,10 @@ def test_brief_is_guarded_by_dashdash_without_mcp_config(tmp_path: Path, monkeyp
     assert args[args.index(brief) - 1] == "--"
 
 
-def test_spawn_includes_continue_and_session_id_before_remote_control(tmp_path: Path) -> None:
-    """spawn_background_lead must pass --continue AND --session-id <uuid> before
-    --remote-control. --continue resumes local transcript on unit restart;
-    --session-id names the cloud session for future --resume retrieval.
-    Ordering: --continue, --session-id, <uuid>, --remote-control."""
+def test_spawn_includes_session_id_before_remote_control(tmp_path: Path) -> None:
+    """spawn_background_lead must pass --session-id <uuid> before --remote-control.
+    --continue must NOT be present (it causes a CLI error with --session-id unless
+    --fork-session is also given). Ordering: --session-id, <uuid>, --remote-control."""
     cwd = tmp_path / "cont"
     cwd.mkdir()
     with patch("subprocess.run", side_effect=[_ok(), _ok("")]) as run:
@@ -408,16 +407,13 @@ def test_spawn_includes_continue_and_session_id_before_remote_control(tmp_path: 
             name="cont", brief="x", cwd=cwd, permission_mode="acceptEdits",
         )
     args = run.call_args_list[0][0][0]
-    assert "--continue" in args
+    assert "--continue" not in args
     assert "--session-id" in args
     assert "--remote-control" in args
-    cont_idx = args.index("--continue")
     sid_idx = args.index("--session-id")
     rc_idx = args.index("--remote-control")
-    # --continue comes first, then --session-id <uuid>, then --remote-control
-    assert cont_idx < sid_idx < rc_idx, (
-        f"expected --continue ({cont_idx}) < --session-id ({sid_idx}) "
-        f"< --remote-control ({rc_idx})"
+    assert sid_idx < rc_idx, (
+        f"expected --session-id ({sid_idx}) < --remote-control ({rc_idx})"
     )
     # --session-id is immediately followed by the UUID value
     assert sid_idx + 1 < rc_idx
@@ -840,3 +836,61 @@ def test_resume_context_guard_force_overrides(tmp_path: Path, monkeypatch) -> No
         )
     assert run.call_count >= 1
     assert result["session_uuid"] == "bbbbcccc-0000-4000-8000-000000000002"
+
+
+# --- FI-SPAWN-FIX regression tests ---
+
+def test_spawn_argv_does_not_contain_continue_flag(tmp_path: Path) -> None:
+    """Fresh spawns must NOT pass --continue. Combining --continue with
+    --session-id without --fork-session causes claude-code to error out:
+    '--session-id can only be used with --continue or --resume if
+    --fork-session is also specified'. --session-id alone is sufficient to
+    anchor the new session for later cloud retrieval via --resume."""
+    cwd = tmp_path / "no-cont"
+    cwd.mkdir()
+    with patch("subprocess.run", side_effect=[_ok(), _ok("")]) as run:
+        spawn_background_lead(
+            name="no-cont", brief="x", cwd=cwd, permission_mode="acceptEdits",
+        )
+    args = run.call_args_list[0][0][0]
+    assert "--continue" not in args
+    assert "--session-id" in args
+    sid_value = args[args.index("--session-id") + 1]
+    import re as _re
+    uuid4_rx = _re.compile(
+        r"^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    )
+    assert uuid4_rx.match(sid_value), f"expected uuid4 after --session-id, got {sid_value!r}"
+
+
+def test_resume_argv_contains_resume_flag(tmp_path: Path) -> None:
+    """resume_background_lead must pass --resume <uuid> and must NOT pass
+    --continue (which would collide with --session-id) or --session-id
+    (which is first-spawn only). The spawn call is the third subprocess.run
+    call (after kill_session's systemctl stop + tmux kill-session)."""
+    cwd = tmp_path / "res-flag"
+    cwd.mkdir()
+    fixed_uuid = "ccccdddd-eeee-4fff-aaaa-bbbbccccdddd"
+    with patch("subprocess.run", side_effect=[_ok(), _ok(), _ok(), _ok("")]) as run:
+        resume_background_lead(
+            name="res-flag", cwd=cwd, permission_mode="acceptEdits",
+            session_uuid=fixed_uuid,
+        )
+    spawn_call = run.call_args_list[2][0][0]
+    assert "--resume" in spawn_call
+    assert spawn_call[spawn_call.index("--resume") + 1] == fixed_uuid
+    assert "--continue" not in spawn_call
+
+
+def test_spawn_argv_no_fork_session(tmp_path: Path) -> None:
+    """Fresh spawns must NOT pass --fork-session. The correct fix for the
+    '--session-id + --continue' CLI error is to drop --continue, not to add
+    --fork-session as a workaround."""
+    cwd = tmp_path / "no-fork"
+    cwd.mkdir()
+    with patch("subprocess.run", side_effect=[_ok(), _ok("")]) as run:
+        spawn_background_lead(
+            name="no-fork", brief="x", cwd=cwd, permission_mode="acceptEdits",
+        )
+    args = run.call_args_list[0][0][0]
+    assert "--fork-session" not in args

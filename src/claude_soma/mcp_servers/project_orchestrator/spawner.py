@@ -288,17 +288,13 @@ def spawn_background_lead(
     socket = _lead_socket(name)
     claude_argv: list[str] = [
         _claude(),
-        # --continue resumes the lead's most recent transcript from
-        # ~/.claude/projects/<cwd-slug>/, so a unit restart preserves
-        # conversation state + in-memory MCP context. On first spawn (no
-        # prior transcript yet), claude falls back to a fresh session.
-        # Mirrors the channel-claude wrapper's pattern (scripts/channel-claude.sh).
-        "--continue",
-        # --session-id <uuid>: pins a stable cloud session ID so the operator
-        # can later pull this exact session back via --resume <uuid> after a
-        # kill/OOM/crash. On first spawn --continue has no prior transcript to
-        # resume, so it degrades to a fresh session; --session-id then names
-        # that fresh session for future cloud retrieval.
+        # --session-id <uuid>: pins a stable cloud session ID for this fresh
+        # spawn so the operator can later retrieve it via --resume <uuid> after
+        # a kill/OOM/crash. --continue is intentionally absent: combining
+        # --continue with --session-id without --fork-session is rejected by
+        # claude-code ("--session-id can only be used with --continue or
+        # --resume if --fork-session is also specified"). For resumes use
+        # resume_background_lead, which passes --resume <uuid> instead.
         "--session-id", session_uuid,
         # --remote-control <name>: project leads stay alive after their first
         # task completes (otherwise claude exits) AND get an rc.claude.com URL
