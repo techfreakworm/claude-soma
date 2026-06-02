@@ -498,3 +498,9 @@ These commits closed items that are intentionally absent from the queue above:
   Closed the channel-restart-kills-leads problem.
 - **`4082e3b`** — poller-hijack hardening merged to main (manual-shell + lead vectors covered;
   subagent vector verification is the remaining BUG-7 task above).
+
+---
+
+## New bug (2026-06-02)
+
+- **BUG-RELAY-MARKSERV-NO-SYSTEMD** (P1, S effort) — files.mayankgupta.in markserv backend has no systemd unit. Currently launched via `setsid nohup markserv . --port 18081` from an ad-hoc shell session, so it dies on VPS reboot (and arguably on any unrelated process cleanup). Need a `claude-soma-markserv.service` (Type=simple, ExecStart=`/usr/bin/markserv . --port 18081 --silent`, WorkingDirectory=`/var/lib/claude-soma/relay`, Restart=on-failure, After=network-online.target). This was flagged as a follow-up after FI-DOMAIN shipped but never queued; this user-visible breakage proves it's overdue.
