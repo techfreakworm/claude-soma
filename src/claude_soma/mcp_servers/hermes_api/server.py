@@ -19,7 +19,7 @@ from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
-from . import claude_state
+from . import alarm_worker, claude_state
 from .notify_store import EventStore, VALID_TYPES, URGENT_TYPES
 from .socket import serve_blocking
 from .tg_html import chunk_html_for_telegram, gfm_to_html
@@ -944,6 +944,11 @@ def main() -> None:
     # Prewarm the routines cloud cache so the first dashboard hit is fast.
     t_prewarm = threading.Thread(target=_prewarm_routines_cache, daemon=True)
     t_prewarm.start()
+
+    # Alarm worker: polls active leads every 10 min, DMs the operator if
+    # estimated context exceeds HERMES_ALARM_CONTEXT_THRESHOLD_TOKENS (default 150k).
+    t_alarm = threading.Thread(target=alarm_worker.run_alarm_loop, daemon=True, name="alarm_worker")
+    t_alarm.start()
 
     mcp.run()
 
