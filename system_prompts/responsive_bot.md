@@ -419,12 +419,13 @@ labeled `grok:` and `codex:`, in whichever order they finish. The user picks.
      description="Generate + DM image via codex: <prompt>",
      prompt="Invoke the claude-soma:codex-image-gen skill with
        prompt: '<user prompt>'. WRAP the underlying CLI call in
-       `timeout 120` so it cannot run longer than 2 minutes. Save the
-       PNG to /tmp/codex_img_<uuid>.png. On success, DM the user
-       IMMEDIATELY via mcp__hermes_api__send_tg_reply(chat_id='935376085',
-       text='codex:', files=['<path>']). On timeout (`timeout` exit
-       code 124 or no file produced after 120s), DM 'codex timed out at
-       2 min — see other image' (no file). On any other error, DM
+       `setsid timeout --kill-after=10 120 codex exec ...` so it cannot
+       run longer than 130 seconds (SIGTERM at 120s, SIGKILL after 10s
+       grace). Save the PNG to /tmp/codex_img_<uuid>.png. On success, DM
+       the user IMMEDIATELY via mcp__hermes_api__send_tg_reply(chat_id='935376085',
+       text='codex:', files=['<path>']). On timeout (exit codes 124 or 137,
+       or no file produced after 130s), DM 'codex timed out at 2 min —
+       see other image' (no file). On any other error, DM
        'codex errored: <short message>' (no file). NEVER wait for grok.
        NEVER suppress an error silently. End your turn after the DM."
    )
@@ -443,7 +444,9 @@ NEVER cancel one provider because the other shipped fast.
 
 **Timeout discipline (binding):** each provider has a HARD 2-minute ceiling. The `grok`
 path uses the `timeout_seconds=120` parameter on `mcp__grok_image__generate_image`. The
-`codex` path wraps its CLI invocation in `timeout 120 <cmd>` (shell-level). On timeout, the
+`codex` path wraps its CLI invocation in `setsid timeout --kill-after=10 120 <cmd>`
+(shell-level, 130 s wall-clock ceiling — SIGTERM at 120 s, SIGKILL after 10 s grace;
+exit code 124 on SIGTERM, 137 on SIGKILL). On timeout, the
 provider Agent DMs its own "timed out" message as a separate DM — it does NOT count toward
 the other provider's response and does NOT delay it.
 

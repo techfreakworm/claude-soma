@@ -33,10 +33,18 @@ ChatGPT subscription path).
    actually save the file:
 
    ```bash
-   codex exec --skip-git-repo-check --sandbox workspace-write --cd /tmp \
+   setsid timeout --kill-after=10 120 codex exec --skip-git-repo-check --sandbox workspace-write --cd /tmp \
      "Generate an image: <THE USER'S PROMPT, single line>.
      Save the PNG to $OUT and reply with only the absolute file path."
    ```
+
+   **Why the wrapper:** GNU `timeout` alone sends SIGTERM at the deadline but never
+   escalates — a Node CLI that traps SIGTERM can run indefinitely in cleanup, and any
+   setsid'd child helpers escape a killpg. `setsid` places timeout + codex + all initial
+   descendants into a new session so the outer process group contains everything launched
+   before codex itself calls setsid. The `--kill-after=10` flag fires SIGKILL 10 seconds
+   after SIGTERM if the process is still alive, giving a hard wall-clock ceiling of 130 s.
+   Exit code 124 signals the SIGTERM path; exit code 137 signals the SIGKILL path.
 
    Notes on the flags:
    - `--skip-git-repo-check` lets codex run outside a git repo (the bot
