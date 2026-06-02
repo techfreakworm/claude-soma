@@ -1,5 +1,8 @@
+import json
+import subprocess
 import sys
 import os
+from datetime import date, timedelta
 from pathlib import Path
 import pytest
 
@@ -7,7 +10,9 @@ import pytest
 scripts_dir = Path(__file__).parent.parent.parent / "scripts"
 sys.path.append(str(scripts_dir))
 
+import usage_snapshot
 from usage_snapshot import _extract
+
 
 def test_extract_valid_payload():
     payload = {
@@ -85,3 +90,105 @@ def test_timer_is_daily():
     assert "OnCalendar=*:0/15" not in content, (
         "15-minute interval must not be present — it causes 96 claude spawns/day"
     )
+
+
+def test_scan_excludes_other_days(tmp_path, monkeypatch):
+    today = date.today().isoformat()
+    yesterday = (date.today() - timedelta(days=1)).isoformat()
+
+    proj_dir = tmp_path / ".claude" / "projects" / "proj"
+    proj_dir.mkdir(parents=True)
+
+    line_yesterday = json.dumps({
+        "type": "assistant",
+        "timestamp": f"{yesterday}T10:00:00.000Z",
+        "message": {
+            "role": "assistant",
+            "usage": {
+                "input_tokens": 100,
+                "output_tokens": 50,
+                "cache_creation_input_tokens": 0,
+                "service_tier": "standard",
+            },
+        },
+    })
+    line_today = json.dumps({
+        "type": "assistant",
+        "timestamp": f"{today}T10:00:00.000Z",
+        "message": {
+            "role": "assistant",
+            "usage": {
+                "input_tokens": 200,
+                "output_tokens": 75,
+                "cache_creation_input_tokens": 25,
+                "service_tier": "standard",
+            },
+        },
+    })
+
+    (proj_dir / "session.jsonl").write_text(line_yesterday + "\n" + line_today + "\n")
+
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+
+    result = usage_snapshot._query_usage()
+
+    # Only today's tokens: 200 + 75 + 25 = 300; yesterday's 150 excluded
+    assert result["interactive_credits_used"] == 300.0
+    assert result["agent_sdk_credits_used"] == 0.0
+
+
+def test_scan_tier_split(tmp_path, monkeypatch):
+    today = date.today().isoformat()
+
+    proj_dir = tmp_path / ".claude" / "projects" / "proj"
+    proj_dir.mkdir(parents=True)
+
+    line_batch = json.dumps({
+        "type": "assistant",
+        "timestamp": f"{today}T11:00:00.000Z",
+        "message": {
+            "role": "assistant",
+            "usage": {
+                "input_tokens": 300,
+                "output_tokens": 100,
+                "cache_creation_input_tokens": 50,
+                "service_tier": "batch",
+            },
+        },
+    })
+    line_standard = json.dumps({
+        "type": "assistant",
+        "timestamp": f"{today}T12:00:00.000Z",
+        "message": {
+            "role": "assistant",
+            "usage": {
+                "input_tokens": 400,
+                "output_tokens": 150,
+                "cache_creation_input_tokens": 0,
+                "service_tier": "standard",
+            },
+        },
+    })
+
+    (proj_dir / "session.jsonl").write_text(line_batch + "\n" + line_standard + "\n")
+
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+
+    result = usage_snapshot._query_usage()
+
+    # batch: 300 + 100 + 50 = 450
+    assert result["agent_sdk_credits_used"] == 450.0
+    # standard: 400 + 150 + 0 = 550
+    assert result["interactive_credits_used"] == 550.0
+
+
+def test_no_subprocess_called(tmp_path, monkeypatch):
+    def fail_if_called(*args, **kwargs):
+        raise AssertionError("subprocess.run must not be called in usage_snapshot")
+
+    monkeypatch.setattr(subprocess, "run", fail_if_called)
+    monkeypatch.setattr(usage_snapshot, "DB", str(tmp_path / "usage.sqlite"))
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+
+    result = usage_snapshot.main()
+    assert result == 0

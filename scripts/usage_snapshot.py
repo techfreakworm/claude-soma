@@ -1,23 +1,26 @@
 #!/usr/bin/env python3
 """Record a daily usage snapshot to /opt/claude-soma/usage.sqlite.
 
-Runs at 23:55 IST via systemd timer. Calls `claude -p '/usage'` once.
-Parses the JSON output and writes a row.
+Runs at 23:55 IST via systemd timer. Scans local JSONL transcripts under
+~/.claude/projects/*/*.jsonl; no claude subprocess is spawned.
+
+For each assistant message recorded today (UTC), sums
+input_tokens + output_tokens + cache_creation_input_tokens and buckets
+by service_tier: "batch"/"priority" → agent_sdk; everything else → interactive.
 """
 from __future__ import annotations
 
 import json
 import os
 import sqlite3
-import subprocess
 import sys
 import time
 from datetime import date
+from pathlib import Path
 from typing import Any
 
 
 DB = os.environ.get("HERMES_USAGE_DB", "/opt/claude-soma/usage.sqlite")
-CLAUDE = os.environ.get("HERMES_CLAUDE_BIN", "claude")
 
 
 SCHEMA = """
@@ -32,17 +35,6 @@ CREATE TABLE IF NOT EXISTS daily_snapshots(
 """
 
 
-def _query_usage() -> dict:
-    r = subprocess.run(
-        [CLAUDE, "-p", "/usage", "--output-format", "json"],
-        capture_output=True, text=True, timeout=60,
-    )
-    if r.returncode != 0:
-        raise RuntimeError(f"claude -p /usage failed: {r.stderr[:500]}")
-    last = r.stdout.strip().splitlines()[-1]
-    return json.loads(last)
-
-
 def _to_f(val: Any) -> float:
     """Safely convert value to float, defaulting to 0.0."""
     try:
@@ -51,8 +43,63 @@ def _to_f(val: Any) -> float:
         return 0.0
 
 
+def _query_usage() -> dict:
+    today = date.today().isoformat()
+    projects_root = Path.home() / ".claude" / "projects"
+    iu = 0.0
+    au = 0.0
+
+    if not projects_root.exists():
+        pass
+    else:
+        for jsonl_path in projects_root.glob("*/*.jsonl"):
+            try:
+                with jsonl_path.open(encoding="utf-8", errors="replace") as fh:
+                    for raw in fh:
+                        raw = raw.strip()
+                        if not raw:
+                            continue
+                        try:
+                            obj = json.loads(raw)
+                        except json.JSONDecodeError:
+                            continue
+
+                        ts = obj.get("timestamp", "")
+                        if not isinstance(ts, str) or not ts.startswith(today):
+                            continue
+
+                        msg = obj.get("message")
+                        if not isinstance(msg, dict):
+                            continue
+
+                        usage = msg.get("usage")
+                        if not isinstance(usage, dict):
+                            continue
+
+                        tokens = (
+                            _to_f(usage.get("input_tokens"))
+                            + _to_f(usage.get("output_tokens"))
+                            + _to_f(usage.get("cache_creation_input_tokens"))
+                        )
+
+                        tier = usage.get("service_tier", "")
+                        if tier in ("batch", "priority"):
+                            au += tokens
+                        else:
+                            iu += tokens
+            except OSError:
+                continue
+
+    return {
+        "interactive_credits_used": iu,
+        "interactive_credits_ceiling": _to_f(os.environ.get("HERMES_INTERACTIVE_CEILING")),
+        "agent_sdk_credits_used": au,
+        "agent_sdk_credits_ceiling": _to_f(os.environ.get("HERMES_AGENT_SDK_CEILING")),
+    }
+
+
 def _extract(payload: dict) -> tuple[float, float, float, float]:
-    """Pull bucket numbers out of /usage JSON. Tolerant to schema variation."""
+    """Pull bucket numbers out of usage dict. Tolerant to schema variation."""
     iu = _to_f(payload.get("interactive_credits_used"))
     ic = _to_f(payload.get("interactive_credits_ceiling"))
     su = _to_f(payload.get("agent_sdk_credits_used"))
