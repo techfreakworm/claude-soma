@@ -5,6 +5,7 @@ import os
 import re
 import shutil
 import subprocess
+import urllib.request
 import uuid
 from pathlib import Path
 
@@ -13,7 +14,26 @@ from mcp.server.fastmcp import FastMCP
 
 _GROK_BIN_FALLBACK = "/usr/local/bin/grok"
 
-_IMAGE_LINK_RE = re.compile(r"\(([^)]+\.(?:jpg|png))\)")
+_PATTERNS = [
+    # 1. Markdown image: ![alt](/abs/path.jpg)
+    re.compile(r"!\[[^\]]*\]\((?P<p>[^)\s]+\.(?:jpg|jpeg|png|webp))\)"),
+    # 2. Markdown link (no bang): [text](/abs/path.jpg)
+    re.compile(r"(?<!\!)\[[^\]]*\]\((?P<p>[^)\s]+\.(?:jpg|jpeg|png|webp))\)"),
+    # 3. Backtick-quoted absolute path: `/abs/path.jpg`
+    re.compile(r"`(?P<p>/[^`\s]+\.(?:jpg|jpeg|png|webp))`"),
+    # 4. Plain http(s) URL — must precede bare-path so the // in :// does not confuse pattern 5
+    re.compile(r"(?P<p>https?://[^\s)`\]<>]+\.(?:jpg|jpeg|png|webp))"),
+    # 5. Bare absolute path with image extension (negative lookarounds exclude backtick/bracket/paren context)
+    re.compile(r"(?<![`\(\[])(?P<p>/[^\s`)\]<>]+\.(?:jpg|jpeg|png|webp))(?![`\)\]])"),
+]
+
+
+def _extract_image_target(text: str) -> str | None:
+    for pat in _PATTERNS:
+        m = pat.search(text)
+        if m:
+            return m.group("p")
+    return None
 
 
 def _resolve_grok_bin() -> str:
@@ -68,19 +88,22 @@ def generate_image_impl(
         raise RuntimeError(f"grok returned non-JSON output: {result.stdout[:200]}") from e
 
     text_field = envelope.get("text", "")
-    match = _IMAGE_LINK_RE.search(text_field)
-    if match is None:
-        raise RuntimeError(
-            f"no image link found in grok text field: {text_field[:200]}"
-        )
+    target = _extract_image_target(text_field)
+    if target is None:
+        raise RuntimeError("grok returned no image reference: " + text_field[:300])
 
-    src = Path(match.group(1))
-    if not src.exists():
-        raise FileNotFoundError(f"grok image file not found: {src}")
+    session_id = envelope.get("sessionId") or envelope.get("session_id") or str(uuid.uuid4())
 
-    session_id = envelope.get("session_id") or str(uuid.uuid4())
-    dest = out_path / f"grok_{session_id}{src.suffix}"
-    shutil.copy2(str(src), str(dest))
+    if target.startswith(("http://", "https://")):
+        suffix = Path(target).suffix
+        dest = out_path / f"grok_{session_id}{suffix}"
+        urllib.request.urlretrieve(target, str(dest))
+    else:
+        src = Path(target)
+        if not src.exists():
+            raise FileNotFoundError(f"grok image file not found: {src}")
+        dest = out_path / f"grok_{session_id}{src.suffix}"
+        shutil.copy2(str(src), str(dest))
 
     return {"path": str(dest), "session_id": session_id}
 

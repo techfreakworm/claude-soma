@@ -132,7 +132,7 @@ def test_generate_image_no_image_link_in_text_raises(tmp_path: Path) -> None:
     mock_result.stderr = ""
 
     with patch("subprocess.run", return_value=mock_result):
-        with pytest.raises(RuntimeError, match="no image link found"):
+        with pytest.raises(RuntimeError, match="grok returned no image reference"):
             generate_image_impl("anything", output_dir=str(tmp_path))
 
 
