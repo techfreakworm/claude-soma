@@ -88,6 +88,78 @@ def test_rate_limit_via_state_file(tmp_path: Path) -> None:
     assert len(telegram_calls) == 1, f"Expected 1 telegram call, got {len(telegram_calls)}: {telegram_calls}"
 
 
+def test_success_path_with_whitespaced_json_response(tmp_path: Path) -> None:
+    """Listener healthy: curl returns whitespace-padded JSON; script exits 0, no state file, no alert."""
+    state_file = tmp_path / "healthcheck.state"
+    curl_log = tmp_path / "curl.log"
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+
+    mock_curl = bin_dir / "curl"
+    mock_curl.write_text(
+        "#!/usr/bin/env bash\n"
+        f"printf '%s\\n' \"$@\" >> {curl_log}\n"
+        "if printf '%s\\n' \"$@\" | grep -q '9100/health'; then\n"
+        "    echo '{\"status\": \"ok\", \"listener\": \"running\"}'\n"
+        "    exit 0\n"
+        "fi\n"
+        "exit 0\n"
+    )
+    mock_curl.chmod(0o755)
+
+    env = os.environ.copy()
+    env["PATH"] = str(bin_dir) + ":" + env["PATH"]
+    env["LISTENER_HEALTHCHECK_STATE"] = str(state_file)
+
+    result = subprocess.run(
+        ["bash", str(SCRIPT)],
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert not state_file.exists(), "state file must not be created when listener is healthy"
+    log_content = curl_log.read_text() if curl_log.exists() else ""
+    assert "sendMessage" not in log_content, f"sendMessage must not be called on success: {log_content!r}"
+
+
+def test_success_path_with_no_whitespace_json_response(tmp_path: Path) -> None:
+    """Listener healthy: curl returns compact JSON (no spaces); patched grep handles both shapes."""
+    state_file = tmp_path / "healthcheck.state"
+    curl_log = tmp_path / "curl.log"
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+
+    mock_curl = bin_dir / "curl"
+    mock_curl.write_text(
+        "#!/usr/bin/env bash\n"
+        f"printf '%s\\n' \"$@\" >> {curl_log}\n"
+        "if printf '%s\\n' \"$@\" | grep -q '9100/health'; then\n"
+        "    echo '{\"status\":\"ok\",\"listener\":\"running\"}'\n"
+        "    exit 0\n"
+        "fi\n"
+        "exit 0\n"
+    )
+    mock_curl.chmod(0o755)
+
+    env = os.environ.copy()
+    env["PATH"] = str(bin_dir) + ":" + env["PATH"]
+    env["LISTENER_HEALTHCHECK_STATE"] = str(state_file)
+
+    result = subprocess.run(
+        ["bash", str(SCRIPT)],
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert not state_file.exists(), "state file must not be created when listener is healthy"
+    log_content = curl_log.read_text() if curl_log.exists() else ""
+    assert "sendMessage" not in log_content, f"sendMessage must not be called on success: {log_content!r}"
+
+
 def test_systemd_unit_workingdir_or_exec_path() -> None:
     content = SERVICE_FILE.read_text()
     assert "ExecStart=/opt/claude-soma/scripts/listener-healthcheck.sh" in content
