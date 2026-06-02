@@ -145,3 +145,30 @@ class TestInputValidation:
             headers=HEADERS,
         )
         assert r.status_code in (400, 422)
+
+
+def test_admin_upload_post_requires_auth(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("HERMES_STAGING_ROOT", str(tmp_path / "staging"))
+    monkeypatch.setenv("HERMES_NOTIFY_PORT", "19100")
+    client = TestClient(create_app())
+    r = client.post(
+        "/api/admin/upload/any-lead",
+        files={"file": ("x.bin", io.BytesIO(b"hi"), "application/octet-stream")},
+    )
+    assert r.status_code == 403
+
+
+def test_admin_upload_post_with_auth_succeeds(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("HERMES_STAGING_ROOT", str(tmp_path / "staging"))
+    monkeypatch.setenv("HERMES_NOTIFY_PORT", "19100")
+    client = TestClient(create_app())
+    r = client.post(
+        "/api/admin/upload/my-lead",
+        files={"file": ("hello.txt", io.BytesIO(b"hello world"), "text/plain")},
+        headers={"X-GitHub-Handle": "techfreakworm"},
+    )
+    assert r.status_code == 200

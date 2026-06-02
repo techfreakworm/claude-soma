@@ -11,6 +11,15 @@ soma.mayankgupta.in {
         reverse_proxy localhost:3000
     }
 
+    # /api/admin/upload/* → Next.js (port 3000). The Next.js route handler at
+    # app/api/admin/upload/[lead]/route.ts verifies the NextAuth session and
+    # injects X-GitHub-Handle before proxying to FastAPI. Sending this path
+    # directly to FastAPI (port 9000) would bypass that session check because
+    # the browser never sets X-GitHub-Handle — only the server-side proxy does.
+    handle /api/admin/upload/* {
+        reverse_proxy localhost:3000
+    }
+
     # /api/* → FastAPI (port 9000). Use `handle` (not `handle_path`) so the
     # full /api/<path> URL is forwarded as-is — FastAPI's routers all mount
     # under the /api prefix, so stripping it here would 404.
