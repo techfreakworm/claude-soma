@@ -92,6 +92,14 @@ bandwidth. See `PLAN-FI-DOMAIN.md` for the full re-evaluation, Caddyfile snippet
 
 ---
 
+## User-deferred items (queued — do NOT auto-pick up)
+
+User has triaged + chosen to queue. Do NOT execute until user explicitly greenlights. Surface via NEEDS_INPUT if any of these become urgent.
+
+- **MCP-NOT-IN-REGISTRY-RESPAWN** — 3 leads (`social-manager`, `second-brain`, `mayank-portfolio`) were spawned before the 2026-05-26 18:38 UTC spawner fix that added `--mcp-config /opt/claude-soma/config/claude/lead-mcp.json` (and `--setting-sources user,project,local`). Every re-spawn since copy-pastes the old invocation verbatim → no `--mcp-config` → `hermes-notify` MCP never loads → those leads cannot call `notify_orchestrator`. Cohort: 4 leads spawned after the fix work fine (`chattermanager`, `wan-manager`, `ppt-manager`, `content-creator`); soma-improver works via direct EventStore bypass + the S3 env-backfill. Authoritative diagnosis: `/tmp/mcp-not-in-registry-investigation.md`. Proposed fix: operator kills + re-spawns the 3 affected leads via the updated `spawn_project` MCP tool (effort S, no code change). Trade-off pending user decision: kill+respawn loses accumulated context unless we resume via `session_uuid`, but the proper `resume_project` path requires `HERMES_LEAD_NAME` env (chicken-and-egg with the MCP-not-loaded bug). User wants to think about it.
+
+---
+
 ## Sequenced roadmap
 
 ### Round N (next round — start here)
