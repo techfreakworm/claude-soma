@@ -400,11 +400,19 @@ With post-build `ls` assertions. Confirmed live at `/opt/claude-soma/frontend/.n
 
 ### I-GROK-BIN — grok binary path
 
-**Status:** ALREADY SHIPPED. `src/claude_soma/mcp_servers/grok_image/server.py:19-32` `_resolve_grok_bin()` (commit `eb31cc9`) honors `GROK_BIN` env > `shutil.which("grok")` > `/usr/local/bin/grok` fallback. Sole call site is line 46 (confirmed by repo-wide grep). No hardcoded references elsewhere in `src/`, `scripts/`, `.mcp.json`, `system_prompts/`, or `wizard/`.
+**Status:** FULLY CLOSED (2026-06-02). Code-side at `src/claude_soma/mcp_servers/grok_image/server.py:19-32` `_resolve_grok_bin()` (commit `eb31cc9`) honors `GROK_BIN` env > `shutil.which("grok")` > `/usr/local/bin/grok` fallback. Sole call site is line 46 (confirmed by repo-wide grep).
 
-**Verification:** `GROK_BIN=/path/to/grok python3 -c "from claude_soma.mcp_servers.grok_image.server import _resolve_grok_bin; print(_resolve_grok_bin())"`.
+**Deployment-side closure (operator action 2026-06-02):** symlink chain installed:
+```
+/usr/local/bin/grok → /home/ubuntu/.local/bin/grok → /home/ubuntu/.grok/bin/grok → ../downloads/grok-linux-aarch64
+```
+The fallback path `/usr/local/bin/grok` now resolves correctly. No api/channel restart needed (symlink in default systemd PATH).
 
-If the user has a recent failing log with hardcoded path, request the log; absent that, this is a no-op.
+**Live verification (2026-06-02):**
+- `which grok` → `/home/ubuntu/.local/bin/grok`
+- `shutil.which('grok')` → `/usr/local/bin/grok`
+- `grok --version` → `grok 0.2.11 (3247ce8f8) [stable]`
+- `_resolve_grok_bin()` → `/usr/local/bin/grok` (env unset → shutil.which finds symlink → returns it).
 
 ---
 
