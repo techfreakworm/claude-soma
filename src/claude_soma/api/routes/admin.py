@@ -3,6 +3,9 @@ from __future__ import annotations
 import json
 import os
 import time
+import urllib.error
+import urllib.parse
+import urllib.request
 from pathlib import Path
 
 from fastapi import APIRouter, Depends
@@ -22,17 +25,40 @@ class BroadcastBody(BaseModel):
     message: str
 
 
+def _send_telegram(message: str) -> tuple[bool, str | None]:
+    token = os.environ.get("TELEGRAM_BOT_TOKEN")
+    chat_id = (
+        os.environ.get("TELEGRAM_CHAT_ID")
+        or os.environ.get("HERMES_NOTIFY_CHAT_ID")
+        or os.environ.get("TELEGRAM_OPERATOR_CHAT_ID")
+    )
+    if not token or not chat_id:
+        return False, "missing TELEGRAM_BOT_TOKEN or chat_id env"
+    url = f"https://api.telegram.org/bot{token}/sendMessage"
+    data = urllib.parse.urlencode({
+        "chat_id": chat_id,
+        "text": message,
+        "disable_web_page_preview": "true",
+    }).encode()
+    req = urllib.request.Request(url, data=data, method="POST")
+    try:
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            return 200 <= resp.status < 300, None
+    except Exception as exc:  # noqa: BLE001
+        return False, str(exc)[:200]
+
+
 @router.post("/broadcast")
 def broadcast(body: BroadcastBody) -> dict:
-    # The channel session picks up broadcast requests by polling
-    # the broadcast queue (set up in Task 36).
     queue = Path(os.environ.get(
         "HERMES_BROADCAST_QUEUE", "/opt/claude-soma/broadcast.jsonl"
     ))
     queue.parent.mkdir(parents=True, exist_ok=True)
+    ts = time.time()
     with queue.open("a") as f:
-        f.write(json.dumps({"ts": time.time(), "message": body.message}) + "\n")
-    return {"queued_at": time.time()}
+        f.write(json.dumps({"ts": ts, "message": body.message}) + "\n")
+    delivered, error = _send_telegram(body.message)
+    return {"queued_at": ts, "delivered": delivered, "error": error}
 
 
 @router.post("/pause-all")
