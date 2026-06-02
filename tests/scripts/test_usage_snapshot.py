@@ -2,8 +2,9 @@ import json
 import subprocess
 import sys
 import os
-from datetime import date, timedelta
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
+from unittest.mock import MagicMock
 import pytest
 
 # Add the scripts directory to sys.path so we can import usage_snapshot
@@ -93,8 +94,8 @@ def test_timer_is_daily():
 
 
 def test_scan_excludes_other_days(tmp_path, monkeypatch):
-    today = date.today().isoformat()
-    yesterday = (date.today() - timedelta(days=1)).isoformat()
+    today = datetime.now(timezone.utc).date().isoformat()
+    yesterday = (datetime.now(timezone.utc).date() - timedelta(days=1)).isoformat()
 
     proj_dir = tmp_path / ".claude" / "projects" / "proj"
     proj_dir.mkdir(parents=True)
@@ -138,7 +139,7 @@ def test_scan_excludes_other_days(tmp_path, monkeypatch):
 
 
 def test_scan_tier_split(tmp_path, monkeypatch):
-    today = date.today().isoformat()
+    today = datetime.now(timezone.utc).date().isoformat()
 
     proj_dir = tmp_path / ".claude" / "projects" / "proj"
     proj_dir.mkdir(parents=True)
@@ -192,3 +193,78 @@ def test_no_subprocess_called(tmp_path, monkeypatch):
 
     result = usage_snapshot.main()
     assert result == 0
+
+
+def test_today_filter_uses_utc_not_local(tmp_path, monkeypatch):
+    """Parser counts only entries whose timestamp prefix matches the UTC date.
+
+    Simulates a moment where IST local date is "2026-06-02" (03:30 IST) but UTC
+    date is still "2026-06-01" (22:00 UTC). An IST-based filter would count the
+    wrong day; a UTC-based filter counts the correct day.
+    """
+    # UTC 2026-06-01T22:00:00Z = IST 2026-06-02T03:30:00+05:30
+    utc_time = datetime(2026, 6, 1, 22, 0, 0, tzinfo=timezone.utc)
+    mock_dt = MagicMock()
+    mock_dt.now.return_value = utc_time
+    monkeypatch.setattr(usage_snapshot, "datetime", mock_dt)
+
+    proj_dir = tmp_path / ".claude" / "projects" / "proj"
+    proj_dir.mkdir(parents=True)
+
+    # UTC June 1 entry — should be counted (matches UTC today "2026-06-01")
+    line_utc_today = json.dumps({
+        "type": "assistant",
+        "timestamp": "2026-06-01T21:00:00Z",
+        "message": {
+            "usage": {
+                "input_tokens": 200,
+                "output_tokens": 75,
+                "cache_creation_input_tokens": 25,
+                "service_tier": "standard",
+            }
+        },
+    })
+    # UTC June 2 entry — should NOT be counted (different UTC day)
+    line_utc_next = json.dumps({
+        "type": "assistant",
+        "timestamp": "2026-06-02T00:30:00Z",
+        "message": {
+            "usage": {
+                "input_tokens": 100,
+                "output_tokens": 50,
+                "cache_creation_input_tokens": 0,
+                "service_tier": "standard",
+            }
+        },
+    })
+
+    (proj_dir / "session.jsonl").write_text(line_utc_today + "\n" + line_utc_next + "\n")
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+
+    result = usage_snapshot._query_usage()
+
+    # Only UTC-June-1 entry: 200 + 75 + 25 = 300 tokens
+    assert result["interactive_credits_used"] == 300.0
+    assert result["agent_sdk_credits_used"] == 0.0
+
+
+def test_ceiling_env_unset_returns_zero_ceiling(tmp_path, monkeypatch):
+    monkeypatch.delenv("HERMES_INTERACTIVE_CEILING", raising=False)
+    monkeypatch.delenv("HERMES_AGENT_SDK_CEILING", raising=False)
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+
+    result = usage_snapshot._query_usage()
+
+    assert result["interactive_credits_ceiling"] == 0.0
+    assert result["agent_sdk_credits_ceiling"] == 0.0
+
+
+def test_ceiling_env_set_returns_correct_value(tmp_path, monkeypatch):
+    monkeypatch.setenv("HERMES_INTERACTIVE_CEILING", "10000")
+    monkeypatch.setenv("HERMES_AGENT_SDK_CEILING", "20000")
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+
+    result = usage_snapshot._query_usage()
+
+    assert result["interactive_credits_ceiling"] == 10000.0
+    assert result["agent_sdk_credits_ceiling"] == 20000.0

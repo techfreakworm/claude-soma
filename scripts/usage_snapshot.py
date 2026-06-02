@@ -15,7 +15,7 @@ import os
 import sqlite3
 import sys
 import time
-from datetime import date
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -44,7 +44,9 @@ def _to_f(val: Any) -> float:
 
 
 def _query_usage() -> dict:
-    today = date.today().isoformat()
+    # UTC date matches the "Z"-suffixed timestamps in JSONL files; local-timezone
+    # date would be wrong on machines where system time != UTC (e.g. IST UTC+5:30).
+    today = datetime.now(timezone.utc).date().isoformat()
     projects_root = Path.home() / ".claude" / "projects"
     iu = 0.0
     au = 0.0
@@ -130,7 +132,7 @@ def main() -> int:
             agent_sdk_ceiling=excluded.agent_sdk_ceiling,
             recorded_at=excluded.recorded_at
         """,
-        (date.today().isoformat(), iu, ic, su, sc, time.time()),
+        (datetime.now(timezone.utc).date().isoformat(), iu, ic, su, sc, time.time()),
     )
     conn.close()
     return 0
