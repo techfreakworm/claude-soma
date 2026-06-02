@@ -86,6 +86,12 @@ bandwidth. See `PLAN-FI-DOMAIN.md` for the full re-evaluation, Caddyfile snippet
 
 ---
 
+## Forward-compat groundwork (open, ship as workflow demands)
+
+- **AUTOMATION-HANDLERS** — the `_AUTOMATION_DISPATCH` table in `src/claude_soma/mcp_servers/hermes_api/server.py` (shipped by PAN-W1B `ccc3aec`) generalizes W1E's listener-direct script-fire pattern. Future scriptable handlers (deploy, file-push, cleanup) add as one tuple `(event_type, predicate, key, handler_script)` plus a corresponding `scripts/automation-handlers/<key>.sh`. No further refactor needed; each new handler ships when a real workflow demands it. NEEDS_INPUT/ERROR continue to flow through DM + user-reply per the zero-LLM-tokens constraint.
+
+---
+
 ## Sequenced roadmap
 
 ### Round N (next round — start here)
