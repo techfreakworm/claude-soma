@@ -15,6 +15,7 @@ import {
   Brain,
   ScrollText,
   Home,
+  Upload,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -26,6 +27,7 @@ const NAV = [
   { href: "/admin/usage", label: "Usage", icon: Gauge },
   { href: "/admin/memory", label: "Memory", icon: Brain },
   { href: "/admin/logs", label: "Logs", icon: ScrollText },
+  { href: "/admin/upload", label: "Upload File", icon: Upload },
 ];
 
 function isActive(pathname: string, href: string): boolean {
