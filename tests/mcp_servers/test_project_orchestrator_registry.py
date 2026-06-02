@@ -230,3 +230,27 @@ def test_get_team_members_multiple(tmp_path: Path) -> None:
     members_b = r.get_team_members("lead-b")
     assert len(members_b) == 1
     assert members_b[0]["teammate_handle"] == "teammate-1"
+
+
+# --- turn_count tests ---
+
+def test_registry_turn_count_migration_idempotent(tmp_path: Path) -> None:
+    """Opening a Registry on the same db twice must not raise a schema error."""
+    db = tmp_path / "reg.sqlite"
+    r1 = Registry(db)
+    r1.close()
+    r2 = Registry(db)
+    r2.close()
+
+
+def test_registry_increment_get_reset(tmp_path: Path) -> None:
+    """increment_turn_count bumps the count atomically; get_turn_count reads it;
+    reset_turn_count sets it back to 0."""
+    r = Registry(tmp_path / "reg.sqlite")
+    r.register("tc-lead", agent_id="a-1", type_="custom", cwd="/x", rc_url=None)
+    assert r.increment_turn_count("tc-lead") == 1
+    assert r.increment_turn_count("tc-lead") == 2
+    assert r.increment_turn_count("tc-lead") == 3
+    assert r.get_turn_count("tc-lead") == 3
+    r.reset_turn_count("tc-lead")
+    assert r.get_turn_count("tc-lead") == 0

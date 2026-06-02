@@ -25,7 +25,8 @@ CREATE TABLE IF NOT EXISTS projects (
     spawned_at     REAL NOT NULL,
     last_activity  REAL NOT NULL,
     brief          TEXT,
-    session_uuid   TEXT DEFAULT NULL
+    session_uuid   TEXT DEFAULT NULL,
+    turn_count     INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE INDEX IF NOT EXISTS idx_projects_status ON projects(status);
@@ -87,6 +88,13 @@ class Registry:
             try:
                 self._conn.execute(
                     "ALTER TABLE projects ADD COLUMN session_uuid TEXT DEFAULT NULL"
+                )
+            except sqlite3.OperationalError:
+                pass
+            # Backward-compat migration: add turn_count column to existing DBs.
+            try:
+                self._conn.execute(
+                    "ALTER TABLE projects ADD COLUMN turn_count INTEGER NOT NULL DEFAULT 0"
                 )
             except sqlite3.OperationalError:
                 pass
@@ -185,6 +193,33 @@ class Registry:
             self._conn.execute(
                 "UPDATE projects SET session_uuid = ? WHERE name = ?",
                 (session_uuid, name),
+            )
+
+    def increment_turn_count(self, name: str) -> int:
+        """Atomically increment turn_count for a lead; return the new value."""
+        with self._lock:
+            row = self._conn.execute(
+                "UPDATE projects SET turn_count = turn_count + 1 "
+                "WHERE name = ? RETURNING turn_count",
+                (name,),
+            ).fetchone()
+        return row["turn_count"] if row else 0
+
+    def get_turn_count(self, name: str) -> int:
+        """Return the turn_count for a lead, or 0 if the lead does not exist."""
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT turn_count FROM projects WHERE name = ?",
+                (name,),
+            ).fetchone()
+        return row["turn_count"] if row else 0
+
+    def reset_turn_count(self, name: str) -> None:
+        """Reset turn_count to 0 for a lead."""
+        with self._lock:
+            self._conn.execute(
+                "UPDATE projects SET turn_count = 0 WHERE name = ?",
+                (name,),
             )
 
     def delete(self, name: str) -> None:
