@@ -27,6 +27,10 @@ def _activity_log() -> Path:
     ))
 
 
+def _encode_cwd(cwd: str) -> str:
+    return cwd.replace("/", "-")
+
+
 def list_sessions() -> list[dict[str, Any]]:
     root = _jobs_root()
     if not root.exists():
@@ -62,14 +66,47 @@ def read_activity_log(limit: int = 200) -> list[dict[str, Any]]:
     return out
 
 
-def read_memory(project_slug: str) -> str:
+def read_memory(project_slug: str, cwd: str | None = None) -> dict[str, Any]:
     root = _projects_root().resolve()
-    path = (root / project_slug / "memory" / "MEMORY.md").resolve()
-    if not path.is_relative_to(root):
-        return ""
-    if not path.exists():
-        return ""
-    return path.read_text()
+    _empty_stats: dict[str, Any] = {
+        "bytes": 0,
+        "lines": 0,
+        "chars": 0,
+        "sections": 0,
+        "headings": 0,
+        "last_modified": 0.0,
+        "path": "",
+    }
+
+    candidates: list[Path] = []
+    if cwd:
+        candidates.append(root / _encode_cwd(cwd) / "memory" / "MEMORY.md")
+    candidates.append(root / project_slug / "memory" / "MEMORY.md")
+    if not project_slug.startswith("-"):
+        candidates.append(root / f"-home-ubuntu-projects-{project_slug}" / "memory" / "MEMORY.md")
+    if project_slug == "default":
+        candidates.append(root / "-home-ubuntu" / "memory" / "MEMORY.md")
+
+    for candidate in candidates:
+        path = candidate.resolve()
+        if not path.is_relative_to(root):
+            continue
+        if not path.exists():
+            continue
+        text = path.read_text()
+        stat = path.stat()
+        stats: dict[str, Any] = {
+            "bytes": stat.st_size,
+            "lines": text.count("\n"),
+            "chars": len(text),
+            "sections": text.count("\n## ") + (1 if text.startswith("## ") else 0),
+            "headings": text.count("\n# ") + (1 if text.startswith("# ") else 0),
+            "last_modified": stat.st_mtime,
+            "path": str(path),
+        }
+        return {"project": project_slug, "text": text, "stats": stats}
+
+    return {"project": project_slug, "text": "", "stats": _empty_stats}
 
 
 def list_transcript_threads(limit: int = 50) -> list[dict[str, Any]]:
@@ -79,15 +116,15 @@ def list_transcript_threads(limit: int = 50) -> list[dict[str, Any]]:
         return []
     candidates: list[tuple[float, Path]] = []
     for proj_dir in root.iterdir():
-        tdir = proj_dir / "transcripts"
-        if tdir.exists():
-            for f in tdir.glob("*.jsonl"):
-                candidates.append((f.stat().st_mtime, f))
+        if not proj_dir.is_dir():
+            continue
+        for f in proj_dir.glob("*.jsonl"):
+            candidates.append((f.stat().st_mtime, f))
     candidates.sort(reverse=True)
     return [
         {
             "thread_id": f.stem,
-            "project": f.parent.parent.name,
+            "project": f.parent.name,
             "modified_at": mtime,
             "size_bytes": f.stat().st_size,
         }
@@ -97,7 +134,7 @@ def list_transcript_threads(limit: int = 50) -> list[dict[str, Any]]:
 
 def read_transcript(thread_id: str, project: str) -> list[dict[str, Any]]:
     root = _projects_root().resolve()
-    path = (root / project / "transcripts" / f"{thread_id}.jsonl").resolve()
+    path = (root / project / f"{thread_id}.jsonl").resolve()
     if not path.is_relative_to(root):
         return []
     if not path.exists():
