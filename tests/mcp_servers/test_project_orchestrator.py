@@ -1,6 +1,7 @@
 # tests/mcp_servers/test_project_orchestrator.py
 from __future__ import annotations
 
+import subprocess
 import time
 from pathlib import Path
 from unittest.mock import patch, MagicMock
@@ -679,3 +680,46 @@ def test_resume_project_concurrency_cap_raises() -> None:
     with patch.object(orch, "_reconcile_active", return_value=fake_active):
         with pytest.raises(RuntimeError, match="concurrency cap"):
             orch.resume_project_impl(name="any-name")
+
+
+def test_send_to_project_lead_alive_delivers(monkeypatch) -> None:
+    _no_url_poll(monkeypatch)
+    with patch("subprocess.run", side_effect=_tmux_side_effect("")):
+        orch.spawn_project_impl(name="x", type_="custom",
+                                brief="t", permission_mode="default")
+    with patch.object(orch, "is_lead_alive", return_value=True):
+        with patch("subprocess.run", return_value=_ok()) as run_mock:
+            result = orch.send_to_project_impl(name="x", message="hello")
+    assert result["delivered"] is True
+    assert run_mock.call_count == 2
+    cmd1 = run_mock.call_args_list[0].args[0]
+    cmd2 = run_mock.call_args_list[1].args[0]
+    assert "-L" in cmd1 and "soma-lead-x" in cmd1
+    assert "send-keys" in cmd1
+    assert "-t" in cmd1 and "soma-proj-x" in cmd1
+    assert "-l" in cmd1 and "hello" in cmd1
+    assert "Enter" in cmd2
+
+
+def test_send_to_project_dead_lead_raises(monkeypatch) -> None:
+    _no_url_poll(monkeypatch)
+    with patch("subprocess.run", side_effect=_tmux_side_effect("")):
+        orch.spawn_project_impl(name="dead-x", type_="custom",
+                                brief="t", permission_mode="default")
+    with patch.object(orch, "is_lead_alive", return_value=False):
+        with patch("subprocess.run") as run_mock:
+            with pytest.raises(RuntimeError, match="is not running"):
+                orch.send_to_project_impl(name="dead-x", message="hello")
+            run_mock.assert_not_called()
+
+
+def test_send_to_project_tmux_error(monkeypatch) -> None:
+    _no_url_poll(monkeypatch)
+    with patch("subprocess.run", side_effect=_tmux_side_effect("")):
+        orch.spawn_project_impl(name="err-x", type_="custom",
+                                brief="t", permission_mode="default")
+    err = subprocess.CalledProcessError(1, "tmux", stderr="send-keys failed: no session")
+    with patch.object(orch, "is_lead_alive", return_value=True):
+        with patch("subprocess.run", side_effect=err):
+            with pytest.raises(RuntimeError):
+                orch.send_to_project_impl(name="err-x", message="hello")

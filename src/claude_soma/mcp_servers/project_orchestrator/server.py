@@ -5,6 +5,7 @@ import json
 import logging
 import os
 import sqlite3
+import subprocess
 import time
 from datetime import date
 from pathlib import Path
@@ -15,6 +16,7 @@ from .registry import Registry
 from .spawner import (
     spawn_background_lead, resume_background_lead, kill_session,
     is_lead_alive, discover_team,
+    LEAD_SOCKET_PREFIX, TMUX_SESSION_PREFIX,
 )
 from .templates import load_template, list_template_names, TemplateNotFound
 
@@ -155,8 +157,25 @@ def send_to_project_impl(*, name: str, message: str) -> dict:
     p = _reg().get(name)
     if not p:
         raise RuntimeError(f"no project named {name!r}")
+    if not is_lead_alive(name):
+        raise RuntimeError(f"lead {name!r} is not running")
+    tmux = os.environ.get("HERMES_TMUX_BIN", "/usr/bin/tmux")
+    socket = f"{LEAD_SOCKET_PREFIX}{name}"
+    session = f"{TMUX_SESSION_PREFIX}{name}"
+    try:
+        subprocess.run(
+            [tmux, "-L", socket, "send-keys", "-t", session, "-l", message],
+            check=True, timeout=10, capture_output=True, text=True,
+        )
+        subprocess.run(
+            [tmux, "-L", socket, "send-keys", "-t", session, "Enter"],
+            check=True, timeout=10, capture_output=True, text=True,
+        )
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
+        stderr = (getattr(e, "stderr", None) or "")[-500:]
+        raise RuntimeError(f"{tmux}: {stderr}") from e
     _reg().touch(name)
-    return {"name": name, "agent_id": p["agent_id"], "sent_at": time.time()}
+    return {"name": name, "agent_id": p["agent_id"], "sent_at": time.time(), "delivered": True}
 
 
 def touch_project_impl(*, name: str) -> dict:
