@@ -1,0 +1,9 @@
+[Unit]
+Description=Run listener healthcheck every 5 minutes
+[Timer]
+OnBootSec=3min
+OnUnitActiveSec=5min
+Persistent=true
+Unit=claude-soma-listener-healthcheck.service
+[Install]
+WantedBy=timers.target

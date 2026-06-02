@@ -1,0 +1,9 @@
+[Unit]
+Description=Claude Soma listener healthcheck (port 9100 hermes_api /health)
+After=network.target
+
+[Service]
+Type=oneshot
+User=ubuntu
+EnvironmentFile=-/etc/claude-soma/secrets.env
+ExecStart=/opt/claude-soma/scripts/listener-healthcheck.sh
