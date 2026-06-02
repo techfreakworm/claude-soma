@@ -683,6 +683,54 @@ def _maybe_trigger_auto_restart(
         _log_notify_error(f"_maybe_trigger_auto_restart: Popen failed: {exc}")
 
 
+_AUTOMATION_DISPATCH = [
+    # (event_type, predicate(payload) -> bool, key, handler_script)
+    ("MILESTONE",
+     lambda p: bool(_RESTART_REQUIRED_RE.search(p.get("progress", "") or "")),
+     "restart",
+     "/opt/claude-soma/scripts/automation-handlers/restart.sh"),
+]
+
+
+def _maybe_trigger_automation(
+    event_id: int, lead: str, type_: str, payload_json: str
+) -> None:
+    if _auto_restart_window_remaining_secs() <= 0:
+        return
+    try:
+        payload = json.loads(payload_json)
+    except (json.JSONDecodeError, ValueError):
+        return
+    for entry_type, predicate, key, script in _AUTOMATION_DISPATCH:
+        if type_ != entry_type:
+            continue
+        if not predicate(payload):
+            continue
+        if not _store.claim_action(int(event_id), key):
+            return
+        _store.claim_auto_restart(int(event_id))
+        progress = payload.get("progress", "") or ""
+        m = _SERVICES_RE.search(progress)
+        if not m:
+            _log_notify_error(
+                f"_maybe_trigger_automation: no 'services:' clause in progress: {progress[:200]}"
+            )
+            return
+        services_str = re.sub(r"\s+", "", m.group(1))
+        Path("/var/log/claude-soma").mkdir(parents=True, exist_ok=True)
+        try:
+            subprocess.Popen(
+                ["setsid", "nohup", "sudo", "bash", script, services_str],
+                stdin=subprocess.DEVNULL,
+                stdout=open(f"/var/log/claude-soma/automation-{key}.log", "a"),
+                stderr=subprocess.STDOUT,
+                start_new_session=True,
+            )
+        except Exception as exc:
+            _log_notify_error(f"_maybe_trigger_automation: Popen failed: {exc}")
+        break
+
+
 def _deliver_event(event_id: int, lead: str, type_: str, payload_json: str) -> None:
     """Trigger DM delivery for a single event. Updates delivered_at or delivery_error."""
     try:
@@ -865,7 +913,7 @@ class _NotifyHandler(http.server.BaseHTTPRequestHandler):
             self._respond(400, {"error": f"unknown type {type_!r}"})
             return
 
-        _maybe_trigger_auto_restart(event_id, lead, type_, payload_json)
+        _maybe_trigger_automation(event_id, lead, type_, payload_json)
         # Deliver in a background thread so the POST returns quickly
         t = threading.Thread(
             target=_deliver_event,

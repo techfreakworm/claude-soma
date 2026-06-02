@@ -22,7 +22,9 @@ CREATE TABLE IF NOT EXISTS lead_events (
     delivered_at          REAL,
     delivery_error        TEXT,
     hook_injected_at      REAL,
-    auto_restart_fired_at REAL
+    auto_restart_fired_at REAL,
+    action_fired_at       REAL,
+    action_key            TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_le_lead
@@ -86,6 +88,18 @@ class EventStore:
             try:
                 self._conn.execute(
                     "ALTER TABLE lead_events ADD COLUMN auto_restart_fired_at REAL"
+                )
+            except sqlite3.OperationalError:
+                pass
+            try:
+                self._conn.execute(
+                    "ALTER TABLE lead_events ADD COLUMN action_fired_at REAL"
+                )
+            except sqlite3.OperationalError:
+                pass
+            try:
+                self._conn.execute(
+                    "ALTER TABLE lead_events ADD COLUMN action_key TEXT"
                 )
             except sqlite3.OperationalError:
                 pass
@@ -370,6 +384,20 @@ class EventStore:
                 "UPDATE lead_events SET auto_restart_fired_at = ? "
                 "WHERE id = ? AND auto_restart_fired_at IS NULL",
                 (time.time(), event_id),
+            )
+        return (cur.rowcount or 0) > 0
+
+    def claim_action(self, event_id: int, key: str) -> bool:
+        """Atomically claim an automation action for an event (first caller wins).
+
+        Sets action_fired_at and action_key. Returns True if this call claimed
+        the row, False if action_fired_at was already set by a prior caller.
+        """
+        with self._lock:
+            cur = self._conn.execute(
+                "UPDATE lead_events SET action_fired_at = ?, action_key = ? "
+                "WHERE id = ? AND action_fired_at IS NULL",
+                (time.time(), key, event_id),
             )
         return (cur.rowcount or 0) > 0
 

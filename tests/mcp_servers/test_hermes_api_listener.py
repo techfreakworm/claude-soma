@@ -158,3 +158,117 @@ def test_maybe_trigger_skips_when_claim_false(
         ha_server._maybe_trigger_auto_restart(eid, "l", "MILESTONE", _VALID_RESTART_PAYLOAD)
 
     mock_popen.assert_not_called()
+
+
+# ---- cluster C: _maybe_trigger_automation listener end-to-end tests ---------
+
+def _find_free_port() -> int:
+    import socket
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind(("127.0.0.1", 0))
+        return s.getsockname()[1]
+
+
+def test_handle_notify_restart_milestone_fires_dispatch_e2e(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """POST /notify with RESTART REQUIRED MILESTONE: 202 + action_fired_at set + Popen called."""
+    import http.server
+    import json
+    import threading
+    import urllib.request
+    from unittest.mock import MagicMock
+
+    es = _make_store(tmp_path)
+    ha_server._milestone_last_dmed = {}
+
+    eid = es.insert_event(
+        lead="l", type_="MILESTONE", ts=time.time(),
+        payload_json=_VALID_RESTART_PAYLOAD,
+    )
+    monkeypatch.setenv("HERMES_AUTO_RESTART_WINDOW_UTC", str(int(time.time()) + 300))
+
+    port = _find_free_port()
+    srv = http.server.ThreadingHTTPServer(("127.0.0.1", port), ha_server._NotifyHandler)
+    t = threading.Thread(target=srv.serve_forever, daemon=True)
+    t.start()
+
+    try:
+        with patch.object(ha_server.subprocess, "Popen") as mock_popen:
+            mock_popen.return_value = MagicMock()
+            with patch.object(ha_server, "_deliver_event"):
+                body = json.dumps({
+                    "event_id": eid, "lead": "l", "type": "MILESTONE",
+                    "payload_json": _VALID_RESTART_PAYLOAD,
+                }).encode()
+                req = urllib.request.Request(
+                    f"http://127.0.0.1:{port}/notify",
+                    data=body,
+                    headers={"Content-Type": "application/json"},
+                    method="POST",
+                )
+                with urllib.request.urlopen(req, timeout=5) as resp:
+                    result = json.loads(resp.read())
+                assert resp.status == 202
+                assert result["event_id"] == eid
+
+        row = es.get_event(eid)
+        assert row["action_fired_at"] is not None
+        assert row["action_key"] == "restart"
+        mock_popen.assert_called_once()
+    finally:
+        srv.shutdown()
+
+
+def test_duplicate_restart_milestones_each_fire_only_once(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Two POSTs for same event_id: claim wins on first only → Popen called exactly once."""
+    import http.server
+    import json
+    import threading
+    import urllib.request
+    from unittest.mock import MagicMock
+
+    es = _make_store(tmp_path)
+    ha_server._milestone_last_dmed = {}
+
+    eid = es.insert_event(
+        lead="l", type_="MILESTONE", ts=time.time(),
+        payload_json=_VALID_RESTART_PAYLOAD,
+    )
+    monkeypatch.setenv("HERMES_AUTO_RESTART_WINDOW_UTC", str(int(time.time()) + 300))
+
+    port = _find_free_port()
+    srv = http.server.ThreadingHTTPServer(("127.0.0.1", port), ha_server._NotifyHandler)
+    t = threading.Thread(target=srv.serve_forever, daemon=True)
+    t.start()
+
+    popen_calls: list[list[str]] = []
+
+    def fake_popen(argv, **kwargs):
+        popen_calls.append(argv)
+        return MagicMock()
+
+    try:
+        with patch.object(ha_server.subprocess, "Popen", side_effect=fake_popen):
+            with patch.object(ha_server, "_deliver_event"):
+                body = json.dumps({
+                    "event_id": eid, "lead": "l", "type": "MILESTONE",
+                    "payload_json": _VALID_RESTART_PAYLOAD,
+                }).encode()
+                for _ in range(2):
+                    req = urllib.request.Request(
+                        f"http://127.0.0.1:{port}/notify",
+                        data=body,
+                        headers={"Content-Type": "application/json"},
+                        method="POST",
+                    )
+                    with urllib.request.urlopen(req, timeout=5):
+                        pass
+
+        assert len(popen_calls) == 1, (
+            f"Expected exactly one Popen call, got {len(popen_calls)}"
+        )
+    finally:
+        srv.shutdown()

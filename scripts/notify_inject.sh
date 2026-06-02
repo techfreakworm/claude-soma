@@ -138,7 +138,7 @@ if [[ -n "$AUTO_RESTART_WINDOW" && "$EVENT_COUNT" -gt 0 ]]; then
     RESTART_SERVICES="$(jq -r '
         .[] |
         select(.type == "MILESTONE") |
-        select((.auto_restart_fired_at // null) == null) |
+        select((.auto_restart_fired_at // null) == null and (.action_fired_at // null) == null) |
         .payload_json | fromjson | .progress // "" |
         select(test("RESTART REQUIRED")) |
         capture("services:\\s*(?P<svcs>[^)]+)") |

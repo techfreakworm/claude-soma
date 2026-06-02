@@ -47,6 +47,17 @@ _EVENTS_JSON_ALREADY_FIRED = (
     '],"open_pending_inputs":[]}'
 )
 
+# Canned events response with a RESTART REQUIRED MILESTONE that has
+# action_fired_at already set (new dispatch-table trigger already fired).
+_EVENTS_JSON_ACTION_FIRED = (
+    '{"events":['
+    '{"id":43,"type":"MILESTONE","lead":"test-lead",'
+    '"auto_restart_fired_at":null,'
+    '"action_fired_at":1748000001.0,'
+    '"payload_json":"{\\"progress\\":\\"RESTART REQUIRED (services: claude-soma-channel.service)\\",\\"percent\\":null}"}'
+    '],"open_pending_inputs":[]}'
+)
+
 
 def _make_fake_bin(tmp_path: Path, name: str, body: str) -> Path:
     p = tmp_path / name
@@ -257,6 +268,38 @@ def test_expired_window_skips_auto_restart(tmp_path: Path) -> None:
 def test_auto_restart_skipped_when_already_fired(tmp_path: Path) -> None:
     """When auto_restart_fired_at is non-null on a MILESTONE row, the jq filter
     excludes it so setsid is never spawned (dedup with Python-side trigger)."""
+    _, order_log = _run_with_restart_milestone(
+        tmp_path,
+        events_json=_EVENTS_JSON_ALREADY_FIRED,
+        with_window=True,
+        inject_fake_jq=False,
+    )
+    if order_log.exists():
+        lines = [ln.strip() for ln in order_log.read_text().splitlines() if ln.strip()]
+        assert "auto-restart" not in lines, (
+            f"auto-restart should not fire for row with auto_restart_fired_at set, got: {lines}"
+        )
+
+
+def test_jq_filter_skips_fired_via_action_column(tmp_path: Path) -> None:
+    """When action_fired_at is non-null on a MILESTONE row, the jq filter
+    excludes it so setsid is never spawned (dedup via new dispatch-table column)."""
+    _, order_log = _run_with_restart_milestone(
+        tmp_path,
+        events_json=_EVENTS_JSON_ACTION_FIRED,
+        with_window=True,
+        inject_fake_jq=False,
+    )
+    if order_log.exists():
+        lines = [ln.strip() for ln in order_log.read_text().splitlines() if ln.strip()]
+        assert "auto-restart" not in lines, (
+            f"auto-restart should not fire for row with action_fired_at set, got: {lines}"
+        )
+
+
+def test_jq_filter_skips_fired_via_auto_restart_column(tmp_path: Path) -> None:
+    """Backward-compat: auto_restart_fired_at non-null still blocks setsid with the
+    updated filter (which adds the action_fired_at check)."""
     _, order_log = _run_with_restart_milestone(
         tmp_path,
         events_json=_EVENTS_JSON_ALREADY_FIRED,

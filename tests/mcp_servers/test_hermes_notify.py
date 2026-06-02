@@ -807,6 +807,156 @@ def test_per_attachment_isolation_continues_after_failure(
     assert result == 42
 
 
+# ------------------------------------------------------------------ cluster A: claim_action + _maybe_trigger_automation
+
+_RESTART_PAYLOAD_A = '{"progress": "RESTART REQUIRED deploy done (services: claude-soma-api.service)"}'
+
+
+def test_claim_action_first_wins(store: EventStore) -> None:
+    eid = store.insert_event(
+        lead="l", type_="MILESTONE", ts=time.time(), payload_json='{"progress":"x"}'
+    )
+    result1 = store.claim_action(eid, "restart")
+    assert result1 is True
+    row = store.get_event(eid)
+    assert row["action_fired_at"] is not None
+    assert row["action_key"] == "restart"
+    result2 = store.claim_action(eid, "restart")
+    assert result2 is False
+
+
+def test_claim_auto_restart_still_works_independently(store: EventStore) -> None:
+    eid = store.insert_event(
+        lead="l", type_="MILESTONE", ts=time.time(), payload_json='{"progress":"y"}'
+    )
+    assert store.claim_auto_restart(eid) is True
+    assert store.claim_auto_restart(eid) is False
+
+
+def test_maybe_trigger_skips_non_milestone(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from claude_soma.mcp_servers.hermes_api import server as ha_server
+    from unittest.mock import patch
+
+    es = EventStore(db_path=tmp_path / "r.sqlite")
+    ha_server._store = es
+    monkeypatch.setenv("HERMES_AUTO_RESTART_WINDOW_UTC", str(int(time.time()) + 300))
+
+    with patch.object(ha_server.subprocess, "Popen") as mock_popen:
+        ha_server._maybe_trigger_automation(1, "l", "STARTED", '{"description":"x"}')
+
+    mock_popen.assert_not_called()
+
+
+def test_maybe_trigger_skips_no_restart_required(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from claude_soma.mcp_servers.hermes_api import server as ha_server
+    from unittest.mock import patch
+
+    es = EventStore(db_path=tmp_path / "r.sqlite")
+    ha_server._store = es
+    eid = es.insert_event(
+        lead="l", type_="MILESTONE", ts=time.time(), payload_json='{"progress":"50% done"}'
+    )
+    monkeypatch.setenv("HERMES_AUTO_RESTART_WINDOW_UTC", str(int(time.time()) + 300))
+
+    with patch.object(ha_server.subprocess, "Popen") as mock_popen:
+        ha_server._maybe_trigger_automation(eid, "l", "MILESTONE", '{"progress":"50% done"}')
+
+    mock_popen.assert_not_called()
+
+
+def test_maybe_trigger_window_expired(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from claude_soma.mcp_servers.hermes_api import server as ha_server
+    from unittest.mock import patch
+
+    es = EventStore(db_path=tmp_path / "r.sqlite")
+    ha_server._store = es
+    monkeypatch.delenv("HERMES_AUTO_RESTART_WINDOW_UTC", raising=False)
+
+    with patch.object(ha_server.subprocess, "Popen") as mock_popen:
+        ha_server._maybe_trigger_automation(
+            1, "l", "MILESTONE",
+            '{"progress":"RESTART REQUIRED (services: svc1)"}'
+        )
+
+    mock_popen.assert_not_called()
+
+
+def test_maybe_trigger_fires_when_valid(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from claude_soma.mcp_servers.hermes_api import server as ha_server
+    from unittest.mock import MagicMock, patch
+
+    es = EventStore(db_path=tmp_path / "r.sqlite")
+    ha_server._store = es
+    eid = es.insert_event(
+        lead="l", type_="MILESTONE", ts=time.time(), payload_json=_RESTART_PAYLOAD_A
+    )
+    monkeypatch.setenv("HERMES_AUTO_RESTART_WINDOW_UTC", str(int(time.time()) + 300))
+
+    with patch.object(ha_server.subprocess, "Popen") as mock_popen:
+        mock_popen.return_value = MagicMock()
+        ha_server._maybe_trigger_automation(eid, "l", "MILESTONE", _RESTART_PAYLOAD_A)
+
+    mock_popen.assert_called_once()
+    call_args = mock_popen.call_args
+    argv = call_args[0][0]
+    assert argv == [
+        "setsid", "nohup", "sudo", "bash",
+        "/opt/claude-soma/scripts/automation-handlers/restart.sh",
+        "claude-soma-api.service",
+    ]
+    assert call_args.kwargs.get("start_new_session") is True
+
+
+def test_maybe_trigger_no_fire_when_claim_lost(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from claude_soma.mcp_servers.hermes_api import server as ha_server
+    from unittest.mock import patch
+
+    es = EventStore(db_path=tmp_path / "r.sqlite")
+    ha_server._store = es
+    eid = es.insert_event(
+        lead="l", type_="MILESTONE", ts=time.time(), payload_json=_RESTART_PAYLOAD_A
+    )
+    es.claim_action(eid, "restart")
+    monkeypatch.setenv("HERMES_AUTO_RESTART_WINDOW_UTC", str(int(time.time()) + 300))
+
+    with patch.object(ha_server.subprocess, "Popen") as mock_popen:
+        ha_server._maybe_trigger_automation(eid, "l", "MILESTONE", _RESTART_PAYLOAD_A)
+
+    mock_popen.assert_not_called()
+
+
+def test_maybe_trigger_dual_writes_auto_restart_compat(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from claude_soma.mcp_servers.hermes_api import server as ha_server
+    from unittest.mock import MagicMock, patch
+
+    es = EventStore(db_path=tmp_path / "r.sqlite")
+    ha_server._store = es
+    eid = es.insert_event(
+        lead="l", type_="MILESTONE", ts=time.time(), payload_json=_RESTART_PAYLOAD_A
+    )
+    monkeypatch.setenv("HERMES_AUTO_RESTART_WINDOW_UTC", str(int(time.time()) + 300))
+
+    with patch.object(ha_server.subprocess, "Popen") as mock_popen:
+        mock_popen.return_value = MagicMock()
+        ha_server._maybe_trigger_automation(eid, "l", "MILESTONE", _RESTART_PAYLOAD_A)
+
+    row = es.get_event(eid)
+    assert row["action_fired_at"] is not None
+    assert row["auto_restart_fired_at"] is not None
+
+
 # ------------------------------------------------------------------ helpers
 
 def _find_free_port() -> int:
