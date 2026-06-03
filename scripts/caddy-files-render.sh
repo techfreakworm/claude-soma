@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# DEPRECATED 2026-06-03 — the canonical config is now caddy/files.caddyfile (committed verbatim).
+# This file/script is retained for reference only. Do not run.
+#
 # scripts/caddy-files-render.sh
 #
 # Renders caddy/files.caddyfile.in into /etc/caddy/conf.d/files.caddyfile

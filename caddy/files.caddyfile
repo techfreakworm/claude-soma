@@ -1,0 +1,41 @@
+# Renders to /etc/caddy/conf.d/files.caddyfile via scripts/caddy-files-render.sh.
+# Regenerate after rotating HERMES_FILES_PASSWORD in /etc/claude-soma/secrets.env.
+#
+# NOTE (2026-06-03, ppt-manager): binary deliverables are served by Caddy file_server (RAW bytes),
+# NOT markserv. markserv (a Markdown renderer) reads binaries as UTF-8 text when the client sends
+# `Accept: text/html` (every browser, incl. Chrome), replacing each non-UTF-8 byte with U+FFFD and
+# corrupting the ZIP — a 12 MB .pptx ballooned to 22 MB of garbage in Chrome. file_server guarantees
+# byte-exact downloads. Real copies (not symlinks) must live in /var/lib/claude-soma/relay because the
+# `caddy` user cannot traverse /home/ubuntu (0750). The template caddy/files.caddyfile.in has drifted
+# (file_server backend, no per-type routing) — reconcile before any re-render.
+
+files.mayankgupta.in {
+	basicauth /* {
+		soma $2a$14$jx1V2BU5l8IsRXRL1WWbH.uFcgN9jy8eYyPekDWSbIquvHjmk6fD.
+	}
+	encode gzip zstd
+
+	# Binary office/zip/pdf deliverables: serve RAW via file_server + force download. Bypasses markserv.
+	@binary path *.pptx *.ppt *.pptm *.potx *.odp *.otp *.ods *.odt *.docx *.doc *.xlsx *.xls *.key *.pdf *.zip
+	handle @binary {
+		header Content-Disposition attachment
+		file_server {
+			root /var/lib/claude-soma/relay
+		}
+	}
+
+	# Everything else (markdown previews, text, directory listings) → markserv.
+	handle {
+		reverse_proxy 127.0.0.1:18081
+	}
+
+	log {
+		output file /var/log/caddy/files-access.log
+		format json
+	}
+	header {
+		X-Robots-Tag "noindex, nofollow, noarchive, nosnippet"
+		Cache-Control "private, max-age=300"
+		-Server
+	}
+}

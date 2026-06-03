@@ -44,3 +44,5 @@ soma.mayankgupta.in {
         }
     }
 }
+
+import /etc/caddy/conf.d/*.caddyfile
