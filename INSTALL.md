@@ -116,6 +116,7 @@ What it does (see `scripts/bootstrap.sh` for the full source):
 - Installs `scripts/claude-safe.sh` to `/usr/local/bin/claude-safe` (the wrapper that strips the Telegram plugin before invoking claude in lead sessions — prevents leads from hijacking the channel)
 - Installs `bun` runtime via `curl https://bun.sh/install | bash` for the `ubuntu` user; symlinks `~/.bun/bin/bun` to `/usr/local/bin/bun` (required by the Telegram plugin's MCP server, which runs `bun server.ts` as a child of `claude --channels`)
 - Installs operator CLI helpers to `/usr/local/bin/`: `somux` (list/attach/peek project-lead tmux sessions), `soma-relay` (publish files to the Caddy file relay), `soma-publish` (alias for `soma-relay publish`)
+- Installs `/etc/sudoers.d/99-claude-soma-spawner` — the sudoers grant that lets the `ubuntu` user run `sudo -n systemd-run` and `sudo -n systemctl stop/reset-failed/kill claude-soma-lead-*` without a password (required for multi-agent lead orchestration — see "Notes on special components" below). The source file is validated with `visudo -cf` before install; the installed file is validated after. A syntax error aborts with a friendly error; the file is never left in a broken state.
 - Installs the base Caddyfile to `/etc/caddy/Caddyfile` (with `import /etc/caddy/conf.d/*.caddyfile` at the bottom); the site-specific configs (`soma.<domain>`, `files.<domain>`) are rendered later by `finalize-caddy.sh` after secrets are set
 - (OCI only) Applies the iptables ACCEPT rules for ports 80/443 before Oracle's default REJECT rule, then saves with `netfilter-persistent`
 
@@ -346,6 +347,44 @@ Tests: `tests/test_claude_safe_wrapper.py`.
 The `hermes-notify` MCP server (`src/claude_soma/mcp_servers/hermes_notify/server.py`) provides the `notify_orchestrator` and `set_teammate_handle` tools that let leads send structured lifecycle events (STARTED, MILESTONE, COMPLETED, NEEDS_INPUT, ERROR) back to the orchestrator's Telegram channel.
 
 It is wired into `config/claude/lead-mcp.json` — the MCP config file that every spawned lead inherits. No separate install step is needed beyond ensuring `/opt/claude-soma/.venv` is populated (Step 3 covers this). The server listens on `HERMES_NOTIFY_PORT` (default 9100) and relays events to the orchestrator via the Telegram bot token.
+
+### sudoers grants for lead orchestration (cgroup isolation)
+
+Claude Soma's multi-agent orchestration layer spawns each project lead inside its own **transient systemd service** — `claude-soma-lead-<name>.service` — so it gets a dedicated cgroup. This enables clean teardown: when the channel service restarts (`KillMode=control-group`), it cannot reach leads running in sibling cgroups. Each lead's tmux server is also born inside its own cgroup.
+
+The spawner (`src/claude_soma/mcp_servers/project_orchestrator/spawner.py`) issues these privileged calls:
+
+| Command | Where | Why |
+|---|---|---|
+| `sudo -n systemd-run --collect --quiet --unit=claude-soma-lead-<name> ...` | `_wrap_in_transient_unit()` (spawner.py:160) | Spawn the transient unit as root so systemd creates a system-level cgroup |
+| `sudo -n systemctl stop claude-soma-lead-<name>.service` | `kill_session()` (spawner.py:609) | Tear down the lead's cgroup cleanly on kill |
+
+The bootstrap installs `/etc/sudoers.d/99-claude-soma-spawner` (tracked in the repo at `systemd/sudoers.d/99-claude-soma-spawner`) to grant these operations passwordlessly to the `ubuntu` user. Without this grant, `sudo -n` fails immediately and **all lead spawning is dead on a fresh install**.
+
+The companion file `/etc/sudoers.d/99-claude-soma-restart` (also installed by bootstrap) covers `systemctl restart claude-soma-*.service` for the auto-restart path — a separate concern.
+
+**Security scope:** `systemd-run *` is broad (the spawner passes dozens of `--property=` and `--setenv=` argv), but the transient unit names are always `claude-soma-lead-*` (enforced in spawner code), and the `stop`/`kill`/`reset-failed` grants are tightly scoped to that prefix. This matches the security posture of the existing restart grant.
+
+**Verification:**
+```bash
+# File installed with strict 0440 root:root permissions:
+stat /etc/sudoers.d/99-claude-soma-spawner
+# Should print: 0440  root  root  ...
+
+# visudo validates the live file (run as root):
+sudo visudo -c -f /etc/sudoers.d/99-claude-soma-spawner
+# Should print: /etc/sudoers.d/99-claude-soma-spawner: parsed OK
+
+# Smoke verifier checks the file automatically:
+sudo bash scripts/smoke_install.sh
+```
+
+**Is cgroup isolation set up automatically?** Yes. On every fresh install, the bootstrap (step 8c/17):
+1. Validates the sudoers source file with `visudo -cf` (never installs a broken file).
+2. Installs it to `/etc/sudoers.d/99-claude-soma-spawner` with mode 0440 root:root.
+3. Re-validates the installed file with `visudo -c -f`.
+
+From that point on, every `spawn_project` call creates a per-lead transient systemd unit via `systemd-run`, which by default uses `KillMode=control-group`. Leads run in their own cgroups, isolated from the channel service.
 
 ### relay-cleanup timer
 

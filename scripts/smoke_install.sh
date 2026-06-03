@@ -95,6 +95,11 @@ check "native claude binary at /home/ubuntu/.local/bin/claude" "test -x /home/ub
 check "tmux session 'hermes' running" "sudo -u ubuntu tmux -L hermes ls >/dev/null 2>&1 || sudo -u ubuntu tmux ls 2>/dev/null | grep -q hermes"
 check_optional "ufw active OR not installed (on-box firewall OK)" "ufw status 2>/dev/null | grep -q 'Status: active' || ! command -v ufw"
 
+# Section 6c: sudoers grants for lead spawn
+check "sudoers grant 99-claude-soma-spawner installed" "test -f /etc/sudoers.d/99-claude-soma-spawner"
+check "sudoers grant file mode 0440 root:root" "test \"\$(stat -c '%a %U:%G' /etc/sudoers.d/99-claude-soma-spawner)\" = '440 root:root'"
+check_optional "ubuntu can sudo -n systemd-run --version" "sudo -n -u ubuntu sudo -n systemd-run --version"
+
 # Section 7: Python venv
 check "venv exists" "test -x /opt/claude-soma/.venv/bin/python"
 check "claude_soma package importable" "/opt/claude-soma/.venv/bin/python -c 'import claude_soma' 2>/dev/null"

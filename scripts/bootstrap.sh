@@ -400,6 +400,29 @@ for _helper in somux soma-relay soma-publish; do
 done
 
 # ---------------------------------------------------------------------------
+step "8c/17  Install sudoers grant for lead spawn (systemd-run + lead-unit lifecycle)"
+# ---------------------------------------------------------------------------
+# Validate the file BEFORE installing — bad sudoers can lock root out!
+if visudo -cf "$REPO_ROOT/systemd/sudoers.d/99-claude-soma-spawner" 2>&1; then
+    install -m 0440 -o root -g root \
+        "$REPO_ROOT/systemd/sudoers.d/99-claude-soma-spawner" \
+        /etc/sudoers.d/99-claude-soma-spawner
+    # Re-validate the live file:
+    if visudo -c -f /etc/sudoers.d/99-claude-soma-spawner; then
+        echo "  installed and validated"
+    else
+        # Should be impossible since we validated the source, but defensive:
+        rm -f /etc/sudoers.d/99-claude-soma-spawner
+        friendly_halt "Installed sudoers file failed validation — removed to avoid locking out root" \
+"This should never happen if the source file is valid. Re-clone the repo and re-run bootstrap."
+    fi
+else
+    friendly_halt "sudoers file source failed visudo -cf validation" \
+"systemd/sudoers.d/99-claude-soma-spawner has a syntax error.
+Inspect with: visudo -cf systemd/sudoers.d/99-claude-soma-spawner"
+fi
+
+# ---------------------------------------------------------------------------
 step "9/15  systemctl daemon-reload"
 # ---------------------------------------------------------------------------
 sudo systemctl daemon-reload

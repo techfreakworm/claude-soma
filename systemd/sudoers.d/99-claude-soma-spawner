@@ -1,0 +1,33 @@
+# Claude Soma — sudoers grant for the channel user (ubuntu) to spawn + manage
+# transient lead units via systemd-run.
+#
+# WHY: project_orchestrator/spawner.py creates a transient SYSTEM-level systemd
+# unit per project-lead (claude-soma-lead-<name>.service) so each lead gets its
+# own cgroup (KillMode=control-group — clean teardown). The spawner runs:
+#
+#   sudo -n systemd-run --collect --quiet --unit=claude-soma-lead-<name> \
+#     --property=Type=oneshot --property=User=ubuntu --setenv=... -- <tmux ...>
+#
+# Without this grant, `sudo -n` returns non-zero — spawn_project fails —
+# the multi-agent orchestration layer is dead.
+#
+# SCOPE: limited to the specific binaries + unit-name patterns the orchestrator
+# actually uses. NEVER grant blanket sudo.
+#
+# Companion file: /etc/sudoers.d/99-claude-soma-restart (auto-restart path).
+
+# Spawn — systemd-run for transient lead units
+ubuntu ALL=(root) NOPASSWD: /usr/bin/systemd-run *
+
+# Kill / cleanup — per-lead unit lifecycle
+ubuntu ALL=(root) NOPASSWD: /bin/systemctl stop claude-soma-lead-*
+ubuntu ALL=(root) NOPASSWD: /usr/bin/systemctl stop claude-soma-lead-*
+ubuntu ALL=(root) NOPASSWD: /bin/systemctl reset-failed claude-soma-lead-*
+ubuntu ALL=(root) NOPASSWD: /usr/bin/systemctl reset-failed claude-soma-lead-*
+ubuntu ALL=(root) NOPASSWD: /bin/systemctl kill claude-soma-lead-*
+ubuntu ALL=(root) NOPASSWD: /usr/bin/systemctl kill claude-soma-lead-*
+
+# Note: systemd-run uses arbitrary argv (--property=..., --setenv=..., -- tmux ...).
+# Wildcard "systemd-run *" is the only practical scoping — restricting to specific
+# argv patterns is brittle. The transient units are created with --unit=claude-soma-lead-*
+# so kills/cleanups are still tightly scoped.
