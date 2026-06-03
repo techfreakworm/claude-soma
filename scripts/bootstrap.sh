@@ -254,7 +254,7 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-step "15/16  DONE — next steps"
+step "15/17  DONE — next steps"
 # ---------------------------------------------------------------------------
 cat <<'NEXT'
 
@@ -290,10 +290,58 @@ Bootstrap complete. Required next steps:
 NEXT
 
 # ---------------------------------------------------------------------------
-step "16/16  DNS guidance — A records the operator must add"
+step "16/17  DNS guidance — A records the operator must add"
 # ---------------------------------------------------------------------------
 if [[ -x "${REPO_ROOT}/scripts/show-dns-setup.sh" ]]; then
     bash "${REPO_ROOT}/scripts/show-dns-setup.sh"
 fi
+
+# ---------------------------------------------------------------------------
+step "17/17  Configure secrets (Option A: nano · Option B: claude copilot)"
+# ---------------------------------------------------------------------------
+cat <<'EOF'
+
+==============================================================
+FINAL STEP — configure your secrets
+==============================================================
+
+You still need to fill in /etc/claude-soma/secrets.env with your real
+credentials before the dashboard + bot can fully start. Two ways:
+
+  OPTION A — do it yourself
+  --------------------------
+  1.  sudo cp /opt/claude-soma/secrets.env.example /etc/claude-soma/secrets.env
+  2.  sudo chmod 600 /etc/claude-soma/secrets.env
+  3.  sudo chown ubuntu:ubuntu /etc/claude-soma/secrets.env
+  4.  sudo nano /etc/claude-soma/secrets.env   # fill in every required key
+  5.  sudo systemctl restart claude-soma-channel.service \
+         claude-soma-api.service claude-soma-frontend.service
+  6.  sudo bash /opt/claude-soma/scripts/smoke_install.sh
+
+  See INSTALL.md "Secrets" section for what each key means and where
+  to obtain it.
+
+  OPTION B — let Claude copilot it for you
+  -----------------------------------------
+  If 'claude --version' works on this box (Claude Code CLI installed
+  + authenticated), run:
+
+    claude
+
+  Then paste the contents of:
+
+    /opt/claude-soma/scripts/env-copilot-prompt.txt
+
+  (You can preview it first with:  cat /opt/claude-soma/scripts/env-copilot-prompt.txt)
+
+  Claude will then walk you through each secret one at a time,
+  explain what it is + where to obtain it, write your values to
+  /etc/claude-soma/secrets.env with the right permissions, validate
+  nothing is missing, and offer to restart the services + run the
+  smoke verifier — all in a single hand-held conversation.
+
+==============================================================
+
+EOF
 
 echo "Log written to: ${LOG}"

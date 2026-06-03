@@ -97,6 +97,44 @@ Without these records, Caddy cannot obtain TLS certificates and the dashboard + 
 
 ---
 
+### Step 3c — Configure your secrets
+
+Bootstrap step 17/17 prints a **FINAL STEP** block at the end of its output reminding you to fill in `/etc/claude-soma/secrets.env`. Two paths:
+
+#### Option A — manual (nano)
+
+```bash
+sudo cp /opt/claude-soma/secrets.env.example /etc/claude-soma/secrets.env
+sudo chmod 600 /etc/claude-soma/secrets.env
+sudo chown ubuntu:ubuntu /etc/claude-soma/secrets.env
+sudo nano /etc/claude-soma/secrets.env   # fill in every required key
+sudo systemctl restart claude-soma-channel.service \
+    claude-soma-api.service claude-soma-frontend.service
+sudo bash /opt/claude-soma/scripts/smoke_install.sh
+```
+
+See the `secrets.env.example` in the repo root for the full key list with inline comments. The required keys are documented in Step 5 of this guide.
+
+#### Option B — Claude copilot (recommended for new installers)
+
+If `claude --version` works on this box (Claude Code CLI installed and authenticated), start a new session and paste the copilot prompt:
+
+```bash
+claude
+# Once inside the session, paste the contents of:
+cat /opt/claude-soma/scripts/env-copilot-prompt.txt
+```
+
+The env-copilot-prompt.txt file contains a detailed instruction prompt you paste into a fresh `claude` session. Claude then acts as an interactive secrets-setup copilot: it reads the template, checks what is already filled in, and walks you through each required secret one at a time — explaining what it is, where to obtain it, and writing the value to the file with the right permissions. At the end it validates nothing is missing and offers to restart the services and run the smoke verifier.
+
+To preview the prompt before pasting:
+
+```bash
+cat /opt/claude-soma/scripts/env-copilot-prompt.txt
+```
+
+---
+
 ## Step 4 — Install external CLI binaries (interactive auth)
 
 Each of the following requires a one-time interactive login. The bot needs these on disk to function:
