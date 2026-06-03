@@ -1,0 +1,14 @@
+# systemd/claude-soma-daily-status.service
+[Unit]
+Description=Claude Soma daily all-leads status (reconnect signal to Telegram)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=ubuntu
+WorkingDirectory=/opt/claude-soma
+ExecStart=/opt/claude-soma/scripts/daily_status.sh
+# Bound the run so a stalled claude -p enrichment can never wedge the unit;
+# the script itself also hard-timeboxes the enrichment to 90s.
+TimeoutStartSec=180

@@ -1,5 +1,19 @@
 #!/usr/bin/env bash
-# scripts/deploy.sh — sync claude-soma repo to OCI VPS and install Python deps.
+# scripts/deploy.sh — DEV-MACHINE -> REMOTE VPS rsync deploy.
+#
+# !!!! DO NOT RUN ON THE VPS ITSELF !!!!
+# !!!! If you are sitting at a fresh VPS, run scripts/bootstrap.sh INSTEAD !!!!
+#
+# This script rsyncs the current working tree from a development laptop
+# to a remote VPS specified by environment vars / ssh-config alias.
+# Running it on the VPS itself either fails (unknown host) or destructively
+# rsyncs the directory over itself.
+#
+# For a fresh-VPS install: see scripts/bootstrap.sh + INSTALL.md.
+#
+# Usage (from your dev machine):
+#   CLAUDE_SOMA_HOST=soma-vps ./scripts/deploy.sh
+#   (soma-vps must be a valid ssh-config Host or reachable hostname)
 
 set -euo pipefail
 

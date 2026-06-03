@@ -43,6 +43,10 @@ config.local.*
 .claude/settings.local.json
 .claude.local.md
 
+# Google service-account credentials (no code consumer in this repo;
+# used only by one-off out-of-band agent tasks — never commit)
+google/
+
 # Runtime data
 *.sqlite
 *.sqlite-journal

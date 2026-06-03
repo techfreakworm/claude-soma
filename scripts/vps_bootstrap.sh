@@ -1,6 +1,17 @@
 #!/usr/bin/env bash
 # scripts/vps_bootstrap.sh
 #
+# NOTE: This script is the PREDECESSOR to scripts/bootstrap.sh.
+# For a fresh VPS install, run scripts/bootstrap.sh FIRST (it covers all
+# required services + units + markserv + engagement dir + all 12 timers).
+# Then run THIS script for optional extras:
+#   - voice STT/TTS (whisper.cpp + piper)
+#   - Docker
+#   - playwright chromium
+#   - bun runtime
+#   - ngrok
+# See: scripts/bootstrap.sh — canonical on-VPS installer (idempotent).
+#
 # Idempotent OS-level bootstrap for a fresh OCI Ubuntu 24.04 ARM VPS:
 #   - 8 GB swap (sized for a 4-16 GB RAM box)
 #   - iptables ingress for 80/443 INSERTED AT THE RIGHT POSITION
