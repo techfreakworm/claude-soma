@@ -7,6 +7,32 @@ For a quickstart, see README.md. For an architecture overview, see
 
 ---
 
+## Two external prerequisites (outside the scripts)
+
+These two cannot be configured by the bootstrap script — they live outside
+the VPS. The script prints reminders at the end, but you must action them
+manually:
+
+1. **DNS A records** at your DNS provider for `soma.<your-domain>` and
+   `files.<your-domain>` pointing at your VPS public IP.
+
+2. **Cloud-provider firewall** (OCI Security List, AWS Security Group,
+   GCP VPC firewall, DigitalOcean Firewall, etc.) — inbound TCP ports 80
+   and 443 from `0.0.0.0/0`. This is INDEPENDENT of the on-box ufw rules
+   the bootstrap configures.
+
+Without both, Caddy cannot obtain TLS certificates from Let's Encrypt
+(the ACME challenge requires inbound port 80), and your sites will be
+unreachable even though every local service is running healthy.
+
+The bootstrap prints a copy-pasteable block with provider-specific
+cloud-provider firewall instructions at the end (via `show-dns-setup.sh`).
+You can re-print it anytime:
+
+    bash scripts/show-dns-setup.sh
+
+---
+
 ## A note on errors
 
 The bootstrap script (`scripts/bootstrap.sh`) and `scripts/finalize-caddy.sh` are designed to

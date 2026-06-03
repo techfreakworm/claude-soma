@@ -148,3 +148,39 @@ if [[ "${CHECK_PROPAGATION}" -eq 1 && "${IPV4}" != "<YOUR_VPS_PUBLIC_IPV4>" && "
 fi
 
 echo "=============================================================="
+echo
+echo "=============================================================="
+echo "CLOUD-PROVIDER FIREWALL (BUG #8) — also required"
+echo "=============================================================="
+cat <<'CLOUD_FIREWALL'
+
+Your VPS's cloud provider has its OWN firewall (independent of any on-box
+ufw rules). You MUST open inbound TCP ports 80 + 443 there too, or Caddy
+cannot complete the ACME TLS challenge and your sites will be unreachable
+even though every local service is healthy. This is a silent, confusing
+failure if missed.
+
+Quick steps per provider:
+
+  Oracle Cloud (OCI) — VCN → Security Lists (or NSG) → Add Ingress Rule:
+    Source: 0.0.0.0/0,  IP Protocol: TCP,  Destination Port: 80, 443
+
+  AWS — EC2 Console → Security Groups → inbound rules → add:
+    Type: HTTP   (port 80,  source 0.0.0.0/0)
+    Type: HTTPS  (port 443, source 0.0.0.0/0)
+
+  GCP — VPC network → Firewall → Create Rule:
+    Targets: All instances in the network (or specific tag)
+    Source IP ranges: 0.0.0.0/0
+    Protocols + ports: tcp:80,443
+
+  DigitalOcean — Networking → Firewalls → Inbound Rules:
+    HTTP (80) + HTTPS (443) from any source
+
+Without both DNS (above) AND cloud-provider firewall ingress, Caddy's
+automatic TLS will fail with "no http server is listening on port 80"
+or similar ACME challenge errors. The ACME TLS challenge requires inbound
+port 80 to be open at the cloud-provider layer.
+
+CLOUD_FIREWALL
+echo "=============================================================="

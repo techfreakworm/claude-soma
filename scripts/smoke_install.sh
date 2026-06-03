@@ -86,6 +86,11 @@ check_optional "codex CLI installed" "command -v codex"
 check_optional "hf CLI installed" "command -v hf"
 check_optional "markserv CLI installed" "command -v markserv"
 
+# Section 6b: install correctness (bugs 6+7+8)
+check "native claude binary at /home/ubuntu/.local/bin/claude" "test -x /home/ubuntu/.local/bin/claude"
+check "tmux session 'hermes' running" "sudo -u ubuntu tmux -L hermes ls >/dev/null 2>&1 || sudo -u ubuntu tmux ls 2>/dev/null | grep -q hermes"
+check_optional "ufw active OR not installed (on-box firewall OK)" "ufw status 2>/dev/null | grep -q 'Status: active' || ! command -v ufw"
+
 # Section 7: Python venv
 check "venv exists" "test -x /opt/claude-soma/.venv/bin/python"
 check "claude_soma package importable" "/opt/claude-soma/.venv/bin/python -c 'import claude_soma' 2>/dev/null"

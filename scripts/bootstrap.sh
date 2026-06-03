@@ -214,14 +214,35 @@ MSG
 )"
     fi
 fi
-# Native binary (idempotent: skip if already present)
-if [ ! -x "$HOME/.local/bin/claude" ]; then
-    claude install latest || true
+# BUG #7: install the native claude binary as ubuntu, not root.
+# When bootstrap runs as root, $HOME=/root, so the old $HOME-based code
+# wrote to /root/.local/bin/claude — never visible to the ubuntu user.
+# channel-claude.sh hardcodes /home/ubuntu/.local/bin/claude and requires
+# the native build (--channels is rejected by the npm /usr/bin/claude).
+if ! as_ubuntu test -x /home/ubuntu/.local/bin/claude; then
+    as_ubuntu mkdir -p /home/ubuntu/.local/bin
+    if ! as_ubuntu /usr/bin/claude install latest; then
+        friendly_warn "Native claude binary install may need interactive auth (BUG #7)" \
+"$(cat <<MSG
+'claude install latest' failed or may need interactive auth.
+Re-run manually as the ubuntu user:
+  sudo -u ubuntu /usr/bin/claude install latest
+
+After it completes, verify:
+  ls -l /home/ubuntu/.local/bin/claude
+
+The Telegram channel bot requires THIS native binary at
+/home/ubuntu/.local/bin/claude because --channels is a native-only
+feature not supported by the npm package at /usr/bin/claude.
+MSG
+)"
+    fi
 fi
-if ! grep -q 'local/bin' "$HOME/.bashrc" 2>/dev/null; then
-    echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$HOME/.bashrc"
+# Ensure ~/.local/bin is in ubuntu's PATH for future logins
+if ! as_ubuntu grep -q 'local/bin' /home/ubuntu/.bashrc 2>/dev/null; then
+    echo 'export PATH="$HOME/.local/bin:$PATH"' | as_ubuntu tee -a /home/ubuntu/.bashrc > /dev/null
 fi
-"$HOME/.local/bin/claude" --version 2>/dev/null || claude --version || true
+as_ubuntu /home/ubuntu/.local/bin/claude --version 2>/dev/null || /usr/bin/claude --version || true
 
 # ---------------------------------------------------------------------------
 step "4/15  markserv@1.17.4  (pinned — markdown preview for files domain)"
@@ -346,6 +367,18 @@ echo "  total units installed: ${_units_installed}"
 step "9/15  systemctl daemon-reload"
 # ---------------------------------------------------------------------------
 sudo systemctl daemon-reload
+
+# ---------------------------------------------------------------------------
+step "9b/17  tmux: pre-warm server + placeholder hermes session (BUG #6)"
+# ---------------------------------------------------------------------------
+# On a completely fresh box, the ubuntu user has no tmux server running.
+# The channel service's ExecStartPre tries 'tmux kill-session -t hermes'
+# before creating the session — on a fresh box this hits "no server running
+# on /tmp/tmux-1001/default". Create a placeholder hermes session here so
+# the server is already up. The service will kill this placeholder in
+# ExecStartPre and create the real one in ExecStart.
+as_ubuntu tmux new-session -d -s hermes -x 220 -y 50 2>/dev/null || true
+echo "  tmux server pre-warmed for ubuntu; placeholder hermes session ready"
 
 # ---------------------------------------------------------------------------
 step "10/15  enable long-running services (start immediately)"
@@ -493,6 +526,24 @@ if [ "${SOMA_CLOUD:-}" = "oci" ]; then
     sudo netfilter-persistent save 2>&1 | tail -2 || true
 else
     echo "  skipping OCI iptables; pass --cloud=oci if on Oracle Cloud"
+fi
+
+# ---------------------------------------------------------------------------
+step "14b/17  open on-box firewall ports (ufw — BUG #8)"
+# ---------------------------------------------------------------------------
+# If ufw is active, open 22 (SSH — first, to prevent lockout), 80, 443.
+# If ufw is inactive, skip.
+# IMPORTANT: the cloud-provider firewall (OCI Security List, AWS Security
+# Group, GCP VPC firewall, DigitalOcean Firewall) is a SEPARATE layer —
+# you must open ports 80+443 there too. See the block printed by
+# scripts/show-dns-setup.sh at step 16/17 for provider-specific steps.
+if command -v ufw >/dev/null 2>&1 && ufw status 2>/dev/null | grep -q "Status: active"; then
+    ufw allow 22/tcp >/dev/null 2>&1 || true
+    ufw allow 80/tcp >/dev/null 2>&1 || true
+    ufw allow 443/tcp >/dev/null 2>&1 || true
+    echo "  ufw is active; opened ports 22, 80, 443"
+else
+    echo "  ufw is inactive on this box (no on-box firewall changes needed)"
 fi
 
 # ---------------------------------------------------------------------------
