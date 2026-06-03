@@ -1,3 +1,16 @@
-ignoredBuiltDependencies:
+# pnpm 10+ reads onlyBuiltDependencies from pnpm-workspace.yaml (not from a
+# "pnpm" field in package.json — that location was removed in pnpm 10 and is
+# ignored with a warning).
+#
+# Allow-list semantics: ONLY these packages may run install/build scripts.
+# Everything else is silently allowed but their scripts are blocked.
+#
+# Required because pnpm 10 blocks all postinstall by default for supply-chain
+# safety. Without this, fresh installs halt with ERR_PNPM_IGNORED_BUILDS at
+# bootstrap step 7.
+onlyBuiltDependencies:
+  - "@tailwindcss/oxide"
+  - esbuild
+  - msw
   - sharp
   - unrs-resolver
