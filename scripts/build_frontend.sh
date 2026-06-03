@@ -19,12 +19,44 @@ if [[ -z "${AUTH_SECRET:-}" ]]; then
     fi
 fi
 
-pnpm install --prod=false || {
+# pnpm 10 quirks defensively handled:
+#   - The deprecated `pnpm` field in package.json is IGNORED (warning emitted).
+#     Canonical config now lives in frontend/pnpm-workspace.yaml.
+#   - In non-TTY contexts (CI / bootstrap.sh via `sudo -u ubuntu bash ...`),
+#     pnpm exits non-zero with ERR_PNPM_IGNORED_BUILDS even when those deps
+#     are listed in onlyBuiltDependencies (the YAML is respected for the
+#     allow-list semantics but the gate still trips without TTY confirmation).
+#     Detect that exact case and run `pnpm rebuild` for the allowed deps so
+#     their native binaries actually get built.
+ALLOWED_BUILDS="@tailwindcss/oxide esbuild msw sharp unrs-resolver"
+PNPM_LOG=$(mktemp)
+
+if pnpm install --prod=false --config.onlyBuiltDependencies="$(echo $ALLOWED_BUILDS | tr ' ' ,)" 2>&1 | tee "$PNPM_LOG"; then
+    PNPM_INSTALL_EXIT=0
+else
+    PNPM_INSTALL_EXIT=${PIPESTATUS[0]}
+fi
+
+if [[ $PNPM_INSTALL_EXIT -ne 0 ]]; then
+    if grep -q 'ERR_PNPM_IGNORED_BUILDS\|Ignored build scripts' "$PNPM_LOG"; then
+        echo "Note: pnpm 10 strict-mode tripped on ignored builds. Forcing rebuild:" >&2
+        for pkg in $ALLOWED_BUILDS; do
+            pnpm rebuild "$pkg" 2>&1 | tail -1 || true
+        done
+        PNPM_INSTALL_EXIT=0
+    fi
+fi
+rm -f "$PNPM_LOG"
+
+if [[ $PNPM_INSTALL_EXIT -ne 0 ]]; then
     echo "ERROR: pnpm install FAILED in frontend/" >&2
-    echo "  Common cause: pnpm 10 ignored-builds. If you see ERR_PNPM_IGNORED_BUILDS above," >&2
-    echo "  verify frontend/package.json has pnpm.onlyBuiltDependencies listing every native dep." >&2
+    echo "  Diagnosis:" >&2
+    echo "    1. Verify frontend/pnpm-workspace.yaml has onlyBuiltDependencies" >&2
+    echo "       containing every native dep (sharp, msw, etc.)" >&2
+    echo "    2. The deprecated 'pnpm' field in frontend/package.json is IGNORED by pnpm 10." >&2
+    echo "    3. To temporarily unblock: cd frontend && pnpm approve-builds (interactive)" >&2
     exit 1
-}
+fi
 
 pnpm run build || {
     echo "ERROR: next build FAILED in frontend/" >&2
