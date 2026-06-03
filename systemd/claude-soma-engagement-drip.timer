@@ -1,0 +1,8 @@
+[Unit]
+Description=Run engagement drip hourly
+[Timer]
+OnCalendar=hourly
+Persistent=true
+Unit=claude-soma-engagement-drip.service
+[Install]
+WantedBy=timers.target

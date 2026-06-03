@@ -1,0 +1,11 @@
+[Unit]
+Description=Hourly engagement-draft drip (mechanical; zero LLM tokens)
+After=network.target
+
+[Service]
+Type=oneshot
+User=ubuntu
+EnvironmentFile=-/etc/claude-soma/secrets.env
+ExecStart=/opt/claude-soma/scripts/engagement-hourly-drip.py
+StandardOutput=journal
+StandardError=journal

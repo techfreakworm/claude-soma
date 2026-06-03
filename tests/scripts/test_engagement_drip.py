@@ -1,0 +1,498 @@
+"""Tests for scripts/engagement-hourly-drip.py and bash helper scripts."""
+from __future__ import annotations
+
+import importlib.util
+import json
+import os
+import subprocess
+import sys
+import time
+from pathlib import Path
+from unittest.mock import MagicMock, patch
+
+import pytest
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+SCRIPTS_DIR = REPO_ROOT / "scripts"
+DRIP_SCRIPT = SCRIPTS_DIR / "engagement-hourly-drip.py"
+APPROVE_SCRIPT = SCRIPTS_DIR / "engagement-approve.sh"
+POSTED_SCRIPT = SCRIPTS_DIR / "engagement-posted.sh"
+DECLINE_SCRIPT = SCRIPTS_DIR / "engagement-decline.sh"
+SERVICE_FILE = REPO_ROOT / "systemd" / "claude-soma-engagement-drip.service"
+TIMER_FILE = REPO_ROOT / "systemd" / "claude-soma-engagement-drip.timer"
+
+_spec = importlib.util.spec_from_file_location("engagement_drip", DRIP_SCRIPT)
+_mod = importlib.util.module_from_spec(_spec)  # type: ignore[arg-type]
+_spec.loader.exec_module(_mod)  # type: ignore[union-attr]
+
+
+def _entry(
+    entry_id: str,
+    platform: str,
+    status: str = "queued",
+    queued_at: float | None = None,
+    **kwargs,
+) -> dict:
+    base: dict = {
+        "id": entry_id,
+        "platform": platform,
+        "source_permalink": f"https://example.com/{entry_id}",
+        "source_author": f"author_{entry_id}",
+        "source_excerpt": f"Excerpt for {entry_id}",
+        "why_engage": "good opportunity",
+        "draft_text": f"Draft reply for {entry_id}",
+        "status": status,
+        "queued_at": queued_at if queued_at is not None else time.time() - 3600,
+        "released_at": None,
+        "approved_at": None,
+        "posted_at": None,
+        "post_permalink": None,
+        "post_error": None,
+        "declined_at": None,
+        "decline_reason": None,
+    }
+    base.update(kwargs)
+    return base
+
+
+def _cfg(tmp_path: Path, **overrides) -> dict:
+    defaults = {
+        "queue_path": str(tmp_path / "queue.jsonl"),
+        "pause_path": str(tmp_path / "PAUSE"),
+        "refill_flag": str(tmp_path / "REFILL_NEEDED"),
+        "refill_threshold": 6,
+        "review_page": str(tmp_path / "relay" / "engagement-review.md"),
+        "log_path": str(tmp_path / "drip.log"),
+        "tg_token": "",
+        "tg_chat_id": "",
+        "review_url": "https://files.mayankgupta.in/engagement-review.md",
+    }
+    defaults.update(overrides)
+    return defaults
+
+
+def _write_queue(path: Path | str, entries: list[dict]) -> None:
+    Path(path).parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "w", encoding="utf-8") as fh:
+        for e in entries:
+            fh.write(json.dumps(e) + "\n")
+
+
+def _read_queue(path: Path | str) -> list[dict]:
+    return _mod.read_queue(str(path))
+
+
+def _run_helper(script: Path, args: list[str], tmp_path: Path) -> subprocess.CompletedProcess:
+    env = {
+        **os.environ,
+        "HERMES_ENGAGEMENT_QUEUE": str(tmp_path / "queue.jsonl"),
+        "HERMES_ENGAGEMENT_REVIEW_PAGE": str(tmp_path / "relay" / "engagement-review.md"),
+        "HERMES_ENGAGEMENT_LOG": str(tmp_path / "drip.log"),
+        "HERMES_ENGAGEMENT_REVIEW_URL": "https://files.mayankgupta.in/engagement-review.md",
+        "HERMES_ENGAGEMENT_REFILL_FLAG": str(tmp_path / "REFILL_NEEDED"),
+        "HERMES_ENGAGEMENT_REFILL_THRESHOLD": "6",
+        "TELEGRAM_BOT_TOKEN": "",
+        "HERMES_NOTIFY_CHAT_ID": "",
+    }
+    return subprocess.run(
+        ["bash", str(script)] + args,
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+
+
+# ────────────────────────────────────────────────────────────────────────────
+# Drip logic tests
+# ────────────────────────────────────────────────────────────────────────────
+
+
+def test_pause_flag_no_op(tmp_path: Path) -> None:
+    cfg = _cfg(tmp_path)
+    pause = Path(cfg["pause_path"])
+    pause.parent.mkdir(parents=True, exist_ok=True)
+    pause.touch()
+
+    entries = [_entry("id1", "x"), _entry("id2", "linkedin")]
+    _write_queue(cfg["queue_path"], entries)
+
+    result = _mod.drip(cfg)
+
+    assert result == 0
+    after = _read_queue(cfg["queue_path"])
+    assert all(e["status"] == "queued" for e in after), "PAUSE must prevent any mutation"
+    assert not Path(cfg["review_page"]).exists(), "review page must not be written"
+
+
+def test_empty_queue_no_op(tmp_path: Path) -> None:
+    cfg = _cfg(tmp_path)
+    Path(cfg["queue_path"]).parent.mkdir(parents=True, exist_ok=True)
+    Path(cfg["queue_path"]).write_text("")
+
+    with patch("urllib.request.urlopen") as mock_open:
+        result = _mod.drip(cfg)
+
+    assert result == 0
+    assert not mock_open.called, "Telegram DM must not fire on empty queue"
+
+
+def test_drips_one_x_one_linkedin(tmp_path: Path) -> None:
+    cfg = _cfg(tmp_path, tg_token="tok", tg_chat_id="999")
+    entries = [
+        _entry("x-old", "x", queued_at=1000.0),
+        _entry("x-new", "x", queued_at=2000.0),
+        _entry("li-old", "linkedin", queued_at=1000.0),
+        _entry("li-new", "linkedin", queued_at=2000.0),
+    ]
+    _write_queue(cfg["queue_path"], entries)
+
+    with patch("urllib.request.urlopen") as mock_open:
+        mock_open.return_value = MagicMock()
+        result = _mod.drip(cfg)
+
+    assert result == 0
+    after = _read_queue(cfg["queue_path"])
+    by_id = {e["id"]: e for e in after}
+
+    assert by_id["x-old"]["status"] == "pending_review", "oldest X must be popped"
+    assert by_id["x-new"]["status"] == "queued", "newer X must stay queued"
+    assert by_id["li-old"]["status"] == "pending_review", "oldest LI must be popped"
+    assert by_id["li-new"]["status"] == "queued", "newer LI must stay queued"
+
+    assert mock_open.called, "Telegram urlopen must be called"
+    req = mock_open.call_args[0][0]
+    assert "api.telegram.org" in req.full_url
+    assert "sendMessage" in req.full_url
+    body = req.data.decode()
+    assert "chat_id=999" in body or "chat_id" in body
+
+
+def test_drips_only_one_platform_if_other_empty(tmp_path: Path) -> None:
+    cfg = _cfg(tmp_path)
+    entries = [
+        _entry("x1", "x", queued_at=1000.0),
+        _entry("x2", "x", queued_at=2000.0),
+    ]
+    _write_queue(cfg["queue_path"], entries)
+
+    result = _mod.drip(cfg)
+
+    assert result == 0
+    after = _read_queue(cfg["queue_path"])
+    by_id = {e["id"]: e for e in after}
+    assert by_id["x1"]["status"] == "pending_review"
+    assert by_id["x2"]["status"] == "queued"
+
+
+def test_queue_low_writes_refill_flag(tmp_path: Path) -> None:
+    cfg = _cfg(tmp_path, refill_threshold=6)
+    entries = [
+        _entry(f"x{i}", "x", queued_at=float(i)) for i in range(3)
+    ] + [
+        _entry(f"li{i}", "linkedin", queued_at=float(i)) for i in range(2)
+    ]
+    _write_queue(cfg["queue_path"], entries)
+
+    result = _mod.drip(cfg)
+
+    assert result == 0
+    flag = Path(cfg["refill_flag"])
+    assert flag.exists(), "REFILL_NEEDED must be written when count < threshold"
+    flag_data = json.loads(flag.read_text())
+    assert flag_data["remaining_queued"] < 6
+
+
+def test_queue_full_removes_refill_flag(tmp_path: Path) -> None:
+    cfg = _cfg(tmp_path, refill_threshold=6)
+    flag = Path(cfg["refill_flag"])
+    flag.parent.mkdir(parents=True, exist_ok=True)
+    flag.write_text('{"ts":0,"remaining_queued":2,"breakdown":{"x":1,"linkedin":1}}\n')
+
+    entries = [
+        _entry(f"x{i}", "x", queued_at=float(i)) for i in range(10)
+    ] + [
+        _entry(f"li{i}", "linkedin", queued_at=float(i)) for i in range(10)
+    ]
+    _write_queue(cfg["queue_path"], entries)
+
+    result = _mod.drip(cfg)
+
+    assert result == 0
+    assert not flag.exists(), "REFILL_NEEDED must be removed when count >= threshold"
+
+
+def test_review_page_rendered_with_pending_section(tmp_path: Path) -> None:
+    cfg = _cfg(tmp_path)
+    entries = [
+        _entry("x-id", "x", queued_at=1000.0),
+        _entry("li-id", "linkedin", queued_at=1000.0),
+    ]
+    _write_queue(cfg["queue_path"], entries)
+
+    result = _mod.drip(cfg)
+
+    assert result == 0
+    review = Path(cfg["review_page"])
+    assert review.exists(), "review page must be created"
+    content = review.read_text()
+    assert "## Pending Review (2)" in content
+    assert "### #x-id" in content
+    assert "### #li-id" in content
+
+
+def test_review_page_recently_posted_table(tmp_path: Path) -> None:
+    cfg = _cfg(tmp_path)
+    entries = [
+        _entry(
+            "post-id",
+            "x",
+            status="posted",
+            posted_at=time.time() - 100,
+            post_permalink="https://x.com/handle/status/999",
+        ),
+        _entry("q1", "x", queued_at=1000.0),
+    ]
+    _write_queue(cfg["queue_path"], entries)
+
+    result = _mod.drip(cfg)
+
+    assert result == 0
+    content = Path(cfg["review_page"]).read_text()
+    assert "## Recently posted" in content
+    assert "https://x.com/handle/status/999" in content
+    assert "| post-id |" in content
+
+
+def test_atomic_write_no_partial_on_crash(tmp_path: Path) -> None:
+    queue = tmp_path / "queue.jsonl"
+    original_entries = [_entry("orig", "x")]
+    _mod.write_queue_atomic(original_entries, queue)
+    original_text = queue.read_text()
+
+    with patch("os.replace", side_effect=OSError("simulated disk full")):
+        with pytest.raises(OSError):
+            _mod.write_queue_atomic([_entry("new", "linkedin")], queue)
+
+    assert queue.read_text() == original_text, "original queue must be unchanged after failed atomic write"
+    tmp_file = tmp_path / "queue.jsonl.tmp"
+    assert tmp_file.exists(), ".tmp file should exist (orphaned)"
+
+
+def test_regen_only_no_queue_mutation(tmp_path: Path) -> None:
+    cfg = _cfg(tmp_path)
+    entries = [_entry("id1", "x", status="pending_review")]
+    _write_queue(cfg["queue_path"], entries)
+
+    result = _mod.regen_only(cfg)
+
+    assert result == 0
+    after = _read_queue(cfg["queue_path"])
+    assert after[0]["status"] == "pending_review", "regen_only must not mutate queue"
+    assert Path(cfg["review_page"]).exists()
+
+
+# ────────────────────────────────────────────────────────────────────────────
+# Approve / posted / decline function tests
+# ────────────────────────────────────────────────────────────────────────────
+
+
+def test_approve_entries_sets_approved_at(tmp_path: Path) -> None:
+    cfg = _cfg(tmp_path)
+    entries = [_entry("id1", "x", status="pending_review")]
+    _write_queue(cfg["queue_path"], entries)
+
+    before = time.time()
+    result = _mod.approve_entries(cfg, ids=["id1"])
+    after_t = time.time()
+
+    assert result == 0
+    after = _read_queue(cfg["queue_path"])
+    assert after[0]["status"] == "approved"
+    assert after[0]["approved_at"] is not None
+    assert before <= after[0]["approved_at"] <= after_t
+
+
+def test_approve_all_entries(tmp_path: Path) -> None:
+    cfg = _cfg(tmp_path)
+    entries = [
+        _entry("id1", "x", status="pending_review"),
+        _entry("id2", "linkedin", status="pending_review"),
+        _entry("id3", "x", status="queued"),
+    ]
+    _write_queue(cfg["queue_path"], entries)
+
+    result = _mod.approve_entries(cfg, all_pending=True)
+
+    assert result == 0
+    after = _read_queue(cfg["queue_path"])
+    by_id = {e["id"]: e for e in after}
+    assert by_id["id1"]["status"] == "approved"
+    assert by_id["id2"]["status"] == "approved"
+    assert by_id["id3"]["status"] == "queued", "queued entries must not be touched by approve_all"
+
+
+def test_posted_helper_records_permalink(tmp_path: Path) -> None:
+    cfg = _cfg(tmp_path)
+    entries = [_entry("id1", "x", status="approved")]
+    _write_queue(cfg["queue_path"], entries)
+
+    permalink = "https://x.com/user/status/12345"
+    result = _mod.mark_posted(cfg, "id1", permalink)
+
+    assert result == 0
+    after = _read_queue(cfg["queue_path"])
+    assert after[0]["status"] == "posted"
+    assert after[0]["post_permalink"] == permalink
+    assert after[0]["posted_at"] is not None
+
+
+def test_posted_error_sets_failed_status(tmp_path: Path) -> None:
+    cfg = _cfg(tmp_path)
+    entries = [_entry("id1", "x", status="approved")]
+    _write_queue(cfg["queue_path"], entries)
+
+    result = _mod.mark_posted_error(cfg, "id1", "rate limited")
+
+    assert result == 0
+    after = _read_queue(cfg["queue_path"])
+    assert after[0]["status"] == "failed"
+    assert after[0]["post_error"] == "rate limited"
+
+
+def test_decline_entry_sets_declined(tmp_path: Path) -> None:
+    cfg = _cfg(tmp_path)
+    entries = [_entry("id1", "x", status="pending_review")]
+    _write_queue(cfg["queue_path"], entries)
+
+    result = _mod.decline_entry(cfg, "id1", reason="off-brand")
+
+    assert result == 0
+    after = _read_queue(cfg["queue_path"])
+    assert after[0]["status"] == "declined"
+    assert after[0]["decline_reason"] == "off-brand"
+    assert after[0]["declined_at"] is not None
+
+
+# ────────────────────────────────────────────────────────────────────────────
+# Bash helper subprocess tests
+# ────────────────────────────────────────────────────────────────────────────
+
+
+def test_approve_helper_sets_approved_at(tmp_path: Path) -> None:
+    entries = [_entry("h-id1", "x", status="pending_review")]
+    _write_queue(tmp_path / "queue.jsonl", entries)
+
+    result = _run_helper(APPROVE_SCRIPT, ["h-id1"], tmp_path)
+
+    assert result.returncode == 0, result.stderr
+    after = _read_queue(tmp_path / "queue.jsonl")
+    assert after[0]["status"] == "approved"
+    assert after[0]["approved_at"] is not None and after[0]["approved_at"] > 0
+
+
+def test_approve_all_helper(tmp_path: Path) -> None:
+    entries = [
+        _entry("h1", "x", status="pending_review"),
+        _entry("h2", "linkedin", status="pending_review"),
+        _entry("h3", "x", status="pending_review"),
+    ]
+    _write_queue(tmp_path / "queue.jsonl", entries)
+
+    result = _run_helper(APPROVE_SCRIPT, ["--all"], tmp_path)
+
+    assert result.returncode == 0, result.stderr
+    after = _read_queue(tmp_path / "queue.jsonl")
+    assert all(e["status"] == "approved" for e in after)
+    assert "Approved 3 entries" in result.stdout
+
+
+def test_posted_helper_records_permalink_subprocess(tmp_path: Path) -> None:
+    entries = [_entry("p-id1", "x", status="approved")]
+    _write_queue(tmp_path / "queue.jsonl", entries)
+
+    permalink = "https://x.com/testuser/status/9999"
+    result = _run_helper(POSTED_SCRIPT, ["p-id1", permalink], tmp_path)
+
+    assert result.returncode == 0, result.stderr
+    after = _read_queue(tmp_path / "queue.jsonl")
+    assert after[0]["status"] == "posted"
+    assert after[0]["post_permalink"] == permalink
+
+
+# ────────────────────────────────────────────────────────────────────────────
+# Telegram mock test
+# ────────────────────────────────────────────────────────────────────────────
+
+
+def test_telegram_dm_invoked_with_correct_url(tmp_path: Path) -> None:
+    cfg = _cfg(tmp_path, tg_token="bot-token-123", tg_chat_id="777888")
+    entries = [
+        _entry("x1", "x", queued_at=1000.0),
+        _entry("l1", "linkedin", queued_at=1000.0),
+    ]
+    _write_queue(cfg["queue_path"], entries)
+
+    with patch("urllib.request.urlopen") as mock_open:
+        mock_open.return_value = MagicMock()
+        _mod.drip(cfg)
+
+    assert mock_open.called
+    req = mock_open.call_args[0][0]
+    assert "https://api.telegram.org/botbot-token-123/sendMessage" == req.full_url
+    body = urllib.parse.parse_qs(req.data.decode())
+    assert body.get("chat_id") == ["777888"]
+    assert "777888" in req.data.decode()
+
+
+# ────────────────────────────────────────────────────────────────────────────
+# systemd unit shape tests
+# ────────────────────────────────────────────────────────────────────────────
+
+
+def test_service_file_exec_path() -> None:
+    content = SERVICE_FILE.read_text()
+    assert "ExecStart=/opt/claude-soma/scripts/engagement-hourly-drip.py" in content
+    assert "User=ubuntu" in content
+    assert "Type=oneshot" in content
+
+
+def test_timer_file_hourly() -> None:
+    content = TIMER_FILE.read_text()
+    assert "OnCalendar=hourly" in content
+    assert "Persistent=true" in content
+    assert "WantedBy=timers.target" in content
+
+
+def test_drip_script_executable() -> None:
+    assert os.access(str(DRIP_SCRIPT), os.X_OK), "drip script must have executable bit"
+
+
+def test_approve_script_executable() -> None:
+    assert os.access(str(APPROVE_SCRIPT), os.X_OK)
+
+
+def test_posted_script_executable() -> None:
+    assert os.access(str(POSTED_SCRIPT), os.X_OK)
+
+
+def test_decline_script_executable() -> None:
+    assert os.access(str(DECLINE_SCRIPT), os.X_OK)
+
+
+def test_bash_syntax_approve() -> None:
+    r = subprocess.run(["bash", "-n", str(APPROVE_SCRIPT)], capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr
+
+
+def test_bash_syntax_posted() -> None:
+    r = subprocess.run(["bash", "-n", str(POSTED_SCRIPT)], capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr
+
+
+def test_bash_syntax_decline() -> None:
+    r = subprocess.run(["bash", "-n", str(DECLINE_SCRIPT)], capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr
+
+
+# need to import urllib.parse for the telegram test assertion
+import urllib.parse  # noqa: E402
