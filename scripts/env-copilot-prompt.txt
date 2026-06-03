@@ -95,7 +95,7 @@ The full public HTTPS URL to the dashboard. Example: `https://soma.yourdomain.co
 
 ### 7. HERMES_FILES_PASSWORD
 
-A password that protects the file relay at `https://files.<your-domain>` with HTTP basic auth. Let the user choose a strong password (minimum 16 characters, mix of letters and numbers recommended). After writing this value, remind them that a separate step is needed: regenerating the bcrypt hash in `/etc/caddy/conf.d/files.caddyfile` per INSTALL.md Step 6. You will remind them again at the end.
+A password that protects the file relay at `https://files.<your-domain>` with HTTP basic auth. Let the user choose a strong password (minimum 16 characters, mix of letters and numbers recommended). After writing this value, remind them that a separate step is needed once SOMA_DOMAIN is also set: run `sudo bash scripts/finalize-caddy.sh` to render the site configs (including the bcrypt hash) and reload Caddy. You will remind them again at the end.
 
 ---
 
@@ -180,7 +180,11 @@ After validation passes, offer to do the following — one step at a time, confi
    sudo bash /opt/claude-soma/scripts/smoke_install.sh
    ```
 
-3. **Remind** the user about the bcrypt hash step: see INSTALL.md Step 6 — they need to regenerate the Caddy basicauth hash for `files.<their-domain>` using the HERMES_FILES_PASSWORD they just set.
+3. **Run finalize-caddy.sh** to render the Caddy site configs (main Caddyfile + files.caddyfile with the bcrypt hash) and reload Caddy:
+   ```bash
+   sudo bash /opt/claude-soma/scripts/finalize-caddy.sh
+   ```
+   This replaces the manual bcrypt-hash step that INSTALL.md Step 6 previously described. finalize-caddy.sh reads SOMA_DOMAIN and HERMES_FILES_PASSWORD from secrets.env automatically.
 
 4. **Remind** to pair the Telegram bot: after the channel service restarts, DM the bot once from Telegram to complete the pairing. If prompted for a pairing code in the channel tmux session, run `tmux -S /tmp/claude-soma-channel.sock attach` to confirm it.
 

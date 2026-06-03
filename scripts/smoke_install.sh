@@ -45,6 +45,8 @@ echo "=== claude-soma smoke install verification ==="
 
 # Section 1: filesystem
 check "/opt/claude-soma exists" "test -d /opt/claude-soma"
+check "/opt/claude-soma owned by ubuntu" "test \"\$(stat -c '%U' /opt/claude-soma)\" = ubuntu"
+check_optional "/opt/claude-soma/frontend/node_modules writable by ubuntu" "sudo -u ubuntu test -w /opt/claude-soma/frontend/node_modules"
 check "/etc/claude-soma/secrets.env exists + readable" "sudo test -r /etc/claude-soma/secrets.env"
 check "/var/log/claude-soma exists" "test -d /var/log/claude-soma"
 check "/var/lib/claude-soma/relay exists" "test -d /var/lib/claude-soma/relay"

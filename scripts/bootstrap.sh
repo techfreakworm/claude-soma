@@ -49,6 +49,23 @@ SYSTEMD_SRC="${REPO_ROOT}/systemd"
 
 step() { echo; echo "==== $* ===="; }
 
+# Ownership model: when invoked as root (sudo bash bootstrap.sh), writes into
+# /opt/claude-soma must end up owned by ubuntu. as_ubuntu drops privileges for
+# individual commands when running as root.
+as_ubuntu() {
+    if [[ "${EUID}" -eq 0 ]]; then
+        sudo -u ubuntu "$@"
+    else
+        "$@"
+    fi
+}
+
+# Defensive ownership: if /opt/claude-soma is root-owned (e.g. cloned as root),
+# fix it now before any build steps write into it.
+if [[ -d /opt/claude-soma ]] && [[ "$(stat -c '%U' /opt/claude-soma)" != "ubuntu" ]]; then
+    chown -R ubuntu:ubuntu /opt/claude-soma
+fi
+
 echo "claude-soma bootstrap starting at $(date)"
 echo "REPO_ROOT: ${REPO_ROOT}"
 echo "Log: ${LOG}"
@@ -122,12 +139,12 @@ markserv --version 2>/dev/null || echo "markserv installed"
 step "5/15  Python venv + claude-soma package + huggingface_hub[cli]"
 # ---------------------------------------------------------------------------
 if [[ ! -d "${REPO_ROOT}/.venv" ]]; then
-    python3.12 -m venv "${REPO_ROOT}/.venv"
+    as_ubuntu python3.12 -m venv "${REPO_ROOT}/.venv"
 fi
-"${REPO_ROOT}/.venv/bin/pip" install --upgrade pip
-"${REPO_ROOT}/.venv/bin/pip" install -e "${REPO_ROOT}"
+as_ubuntu "${REPO_ROOT}/.venv/bin/pip" install --upgrade pip
+as_ubuntu "${REPO_ROOT}/.venv/bin/pip" install -e "${REPO_ROOT}"
 # huggingface_hub[cli] is NOT in pyproject.toml but required by the hf CLI
-"${REPO_ROOT}/.venv/bin/pip" install 'huggingface_hub[cli]'
+as_ubuntu "${REPO_ROOT}/.venv/bin/pip" install 'huggingface_hub[cli]'
 
 # ---------------------------------------------------------------------------
 step "6/15  create runtime directories"
@@ -141,6 +158,9 @@ sudo install -d -m 700 -o ubuntu -g ubuntu /etc/claude-soma
 sudo install -d -m 700 -o ubuntu -g ubuntu /home/ubuntu/secrets-backups
 sudo install -d -m 755 -o ubuntu -g ubuntu /home/ubuntu/hermes-work
 sudo install -d -m 755 -o ubuntu -g ubuntu /home/ubuntu/.claude-soma
+# Caddy snippet directory — must exist so the import glob is a no-op (not an error)
+# when no site configs have been rendered yet (finalize-caddy.sh populates it later).
+sudo install -d -m 755 /etc/caddy/conf.d
 # Seed the engagement queue (engagement-drip.service reads it at start)
 if [[ ! -f /var/lib/claude-soma/engagement/queue.jsonl ]]; then
     sudo touch /var/lib/claude-soma/engagement/queue.jsonl
@@ -157,7 +177,7 @@ step "7/15  frontend build (pnpm install + build_frontend.sh standalone copy)"
 # public/ next to server.js in .next/standalone/.
 # pnpm 10+ blocks build scripts by default; frontend/package.json configures
 # pnpm.onlyBuiltDependencies to allow sharp, msw, @tailwindcss/oxide.
-if ! bash "${REPO_ROOT}/scripts/build_frontend.sh"; then
+if ! as_ubuntu bash "${REPO_ROOT}/scripts/build_frontend.sh"; then
     echo
     echo "FATAL: frontend build failed at step 7." >&2
     echo "  Common causes:" >&2
@@ -216,23 +236,31 @@ sudo systemctl enable --now \
     claude-soma-relay-cleanup.timer
 
 # ---------------------------------------------------------------------------
-step "12/15  install Caddyfile"
+step "13/17  Install Caddyfile + reload (base only; site configs land via finalize-caddy.sh later)"
 # ---------------------------------------------------------------------------
-# NOTE: The repo Caddyfile must include `import /etc/caddy/conf.d/*.caddyfile`
-# at the bottom (added by W2 task). Without that line, the files relay domain
-# (files.<your-domain>) will be unreachable after this install step.
+# Install the base Caddyfile only. The `import /etc/caddy/conf.d/*.caddyfile`
+# glob is a no-op when conf.d/ is empty (created in step 6 above). Site configs
+# (soma.<domain>, files.<domain>) are rendered by finalize-caddy.sh after
+# SOMA_DOMAIN + HERMES_FILES_PASSWORD are set in /etc/claude-soma/secrets.env.
 sudo install -m 644 "${REPO_ROOT}/Caddyfile" /etc/caddy/Caddyfile
+if sudo caddy validate --config /etc/caddy/Caddyfile 2>&1; then
+    if ! sudo systemctl reload caddy.service 2>&1; then
+        cat <<'WARN'
+WARNING: Caddy reload failed (likely because site configs in /etc/caddy/conf.d/
+reference SOMA_DOMAIN which is not set yet). This is NON-FATAL — Caddy will
+come up properly after you:
+  1. Fill SOMA_DOMAIN, FILES_DOMAIN, HERMES_FILES_PASSWORD in /etc/claude-soma/secrets.env
+  2. Run: sudo bash /opt/claude-soma/scripts/finalize-caddy.sh
 
-# ---------------------------------------------------------------------------
-step "13/15  caddy validate + reload"
-# ---------------------------------------------------------------------------
-if ! sudo caddy validate --config /etc/caddy/Caddyfile 2>&1; then
-    echo "WARNING: caddy config validation failed — skipping reload." >&2
-    echo "  Fix /etc/caddy/Caddyfile or check DNS before proceeding." >&2
-    echo "  To reload manually: sudo caddy validate && sudo systemctl reload caddy" >&2
+The rest of the bootstrap continues.
+WARN
+    else
+        echo "  Caddy reloaded OK"
+    fi
 else
-    sudo systemctl reload caddy.service
-    echo "  Caddy reloaded OK"
+    echo "WARNING: Caddyfile validation failed — skipping reload." >&2
+    echo "  Investigate /etc/caddy/Caddyfile, then run: sudo systemctl reload caddy.service" >&2
+    echo "  The rest of bootstrap continues." >&2
 fi
 
 # ---------------------------------------------------------------------------

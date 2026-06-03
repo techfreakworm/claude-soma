@@ -63,7 +63,7 @@ What it does (see `scripts/bootstrap.sh` for the full source):
 - Enables and starts the four long-running services: `claude-soma-channel`, `claude-soma-api`, `claude-soma-frontend`, `claude-soma-markserv`
 - Enables all timers: healthcheck, cache-refresh, secrets-backup, pw-refresh, usage-snapshot, rc-url-refresh, idle-reaper, daily-status, listener-healthcheck, engagement-drip, channel-clear, relay-cleanup
 - Installs `scripts/claude-safe.sh` to `/usr/local/bin/claude-safe` (the wrapper that strips the Telegram plugin before invoking claude in lead sessions — prevents leads from hijacking the channel)
-- Installs the Caddyfile to `/etc/caddy/Caddyfile` (with `import /etc/caddy/conf.d/*.caddyfile` at the bottom) and the files relay config to `/etc/caddy/conf.d/files.caddyfile`; reloads Caddy
+- Installs the base Caddyfile to `/etc/caddy/Caddyfile` (with `import /etc/caddy/conf.d/*.caddyfile` at the bottom); the site-specific configs (`soma.<domain>`, `files.<domain>`) are rendered later by `finalize-caddy.sh` after secrets are set
 - (OCI only) Applies the iptables ACCEPT rules for ports 80/443 before Oracle's default REJECT rule, then saves with `netfilter-persistent`
 
 ---
@@ -108,6 +108,7 @@ sudo cp /opt/claude-soma/secrets.env.example /etc/claude-soma/secrets.env
 sudo chmod 600 /etc/claude-soma/secrets.env
 sudo chown ubuntu:ubuntu /etc/claude-soma/secrets.env
 sudo nano /etc/claude-soma/secrets.env   # fill in every required key
+sudo bash /opt/claude-soma/scripts/finalize-caddy.sh   # render site configs + reload Caddy
 sudo systemctl restart claude-soma-channel.service \
     claude-soma-api.service claude-soma-frontend.service
 sudo bash /opt/claude-soma/scripts/smoke_install.sh
@@ -180,20 +181,20 @@ Optional keys (leave commented out to use defaults):
 
 ---
 
-## Step 6 — Generate the files domain bcrypt hash
+## Step 6 — Finalize Caddy site configs
 
-After setting `HERMES_FILES_PASSWORD` in secrets.env, generate the bcrypt hash for the Caddy basicauth block:
-
-```bash
-source /etc/claude-soma/secrets.env
-caddy hash-password --plaintext "$HERMES_FILES_PASSWORD"
-```
-
-Copy the output hash. Edit `/etc/caddy/conf.d/files.caddyfile` and replace the placeholder hash with the output. Then reload Caddy:
+After filling in `SOMA_DOMAIN` and `HERMES_FILES_PASSWORD` (and optionally `FILES_DOMAIN`) in `secrets.env`, run:
 
 ```bash
-sudo systemctl reload caddy.service
+sudo bash /opt/claude-soma/scripts/finalize-caddy.sh
 ```
+
+This script:
+- Reads `SOMA_DOMAIN`, `FILES_DOMAIN`, and `HERMES_FILES_PASSWORD` from `/etc/claude-soma/secrets.env`
+- Generates the bcrypt hash for the Caddy basicauth block automatically
+- Renders `/etc/caddy/Caddyfile` with `soma.<your-domain>` replacing the hardcoded placeholder
+- Renders `/etc/caddy/conf.d/files.caddyfile` with `files.<your-domain>` + the generated hash
+- Validates the Caddy config and reloads Caddy
 
 Verify: `curl -sI -u "soma:$HERMES_FILES_PASSWORD" https://files.<your-domain>/ | head -3` — expect HTTP 200.
 
