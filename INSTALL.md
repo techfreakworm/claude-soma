@@ -68,6 +68,35 @@ What it does (see `scripts/bootstrap.sh` for the full source):
 
 ---
 
+### Step 3b — Add DNS records
+
+The bootstrap ends by printing the DNS A records you must add at your DNS provider:
+
+```
+==============================================================
+DNS SETUP REQUIRED
+==============================================================
+
+  Type    Name (Host)             Value (points to)
+  ----    ----------------------  ------------------
+  A       soma.<your-domain>      <YOUR_VPS_IPV4>
+  A       files.<your-domain>     <YOUR_VPS_IPV4>
+  ...
+```
+
+Add these records at your domain registrar (Cloudflare, Namecheap, GoDaddy, etc.). Allow 1-5 minutes for DNS propagation.
+
+Re-run the instructions anytime:
+
+```bash
+bash scripts/show-dns-setup.sh           # print records
+bash scripts/show-dns-setup.sh --check   # also check current DNS propagation
+```
+
+Without these records, Caddy cannot obtain TLS certificates and the dashboard + files relay will be unreachable.
+
+---
+
 ## Step 4 — Install external CLI binaries (interactive auth)
 
 Each of the following requires a one-time interactive login. The bot needs these on disk to function:

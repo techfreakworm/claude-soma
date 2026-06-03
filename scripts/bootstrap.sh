@@ -254,7 +254,7 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-step "15/15  DONE — next steps"
+step "15/16  DONE — next steps"
 # ---------------------------------------------------------------------------
 cat <<'NEXT'
 
@@ -288,4 +288,12 @@ Bootstrap complete. Required next steps:
        bash scripts/bootstrap.sh --cloud=oci
 
 NEXT
+
+# ---------------------------------------------------------------------------
+step "16/16  DNS guidance — A records the operator must add"
+# ---------------------------------------------------------------------------
+if [[ -x "${REPO_ROOT}/scripts/show-dns-setup.sh" ]]; then
+    bash "${REPO_ROOT}/scripts/show-dns-setup.sh"
+fi
+
 echo "Log written to: ${LOG}"

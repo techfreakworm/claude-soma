@@ -104,7 +104,7 @@ On a fresh Ubuntu 24.04 VPS (2 GB+ RAM, public IPv4, DNS A-records configured):
 sudo mkdir -p /opt/claude-soma && sudo chown ubuntu:ubuntu /opt/claude-soma
 cd /opt/claude-soma
 git clone https://github.com/techfreakworm/claude-soma.git .
-sudo bash scripts/bootstrap.sh --cloud=oci  # or omit --cloud=oci on non-OCI
+sudo bash scripts/bootstrap.sh --cloud=oci  # or omit --cloud=oci on non-OCI; ends with DNS records you must add at your DNS provider
 sudo cp secrets.env.example /etc/claude-soma/secrets.env
 sudo nano /etc/claude-soma/secrets.env  # fill in the required keys
 sudo bash scripts/smoke_install.sh       # verify
