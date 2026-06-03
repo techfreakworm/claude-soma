@@ -9,7 +9,7 @@ Pick up the plan at Task 29 (Week 3 dashboard) or Task 42 (Week 4 polish).
 ### Option 1 — Fresh Claude Code session at this repo
 
 ```bash
-cd ~/Projects/llm/hermes-claude
+cd /opt/claude-soma   # on VPS (author's dev machine: ~/Projects/llm/hermes-claude)
 claude
 ```
 
@@ -31,7 +31,7 @@ claude --resume
 
 ### What Week 3 builds
 
-The dashboard at `claude.mayankgupta.in`. ~13 tasks:
+The dashboard at `soma.mayankgupta.in`. ~13 tasks:
 
 | Task | What |
 |---|---|
@@ -197,10 +197,9 @@ wget https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/ryan/medi
 
 ### B5 — Deploy the plugin to the VPS
 
-From the local repo:
+From the local dev machine (author's path `~/Projects/llm/hermes-claude`; on the VPS this is `/opt/claude-soma`):
 
 ```bash
-cd ~/Projects/llm/hermes-claude
 ./scripts/deploy.sh   # rsync, venv + pip install, build frontend (+ copy static), restart frontend
 ```
 
@@ -270,8 +269,8 @@ ssh oci-hermes tmux a -t hermes   # detach with Ctrl+B, then D
 When Week 3 code is committed:
 
 1. GitHub OAuth app: <https://github.com/settings/developers> → New OAuth App
-   - Homepage: `https://claude.mayankgupta.in`
-   - Callback: `https://claude.mayankgupta.in/api/auth/callback/github`
+   - Homepage: `https://soma.mayankgupta.in`
+   - Callback: `https://soma.mayankgupta.in/api/auth/callback/github`
    - Copy Client ID + Secret.
 
 2. DNS A record: in your domain DNS provider, add
@@ -283,7 +282,7 @@ When Week 3 code is committed:
      echo "AUTH_GITHUB_ID=<id>" >> /etc/claude-soma/secrets.env
      echo "AUTH_GITHUB_SECRET=<secret>" >> /etc/claude-soma/secrets.env
      echo "AUTH_SECRET=$(openssl rand -hex 32)" >> /etc/claude-soma/secrets.env
-     echo "AUTH_URL=https://claude.mayankgupta.in" >> /etc/claude-soma/secrets.env
+     echo "AUTH_URL=https://soma.mayankgupta.in" >> /etc/claude-soma/secrets.env
      echo "AUTH_TRUST_HOST=true" >> /etc/claude-soma/secrets.env
    '
    ```
@@ -307,12 +306,12 @@ When Week 3 code is committed:
    EOF
 
    sleep 10
-   curl -s https://claude.mayankgupta.in/api/healthz | jq .
+   curl -s https://soma.mayankgupta.in/api/healthz | jq .
    # expect: {"status":"ok",...}
    ```
 
-5. Open https://claude.mayankgupta.in/ — landing renders with live stats.
-   Open https://claude.mayankgupta.in/admin — GitHub OAuth → admin loads.
+5. Open https://soma.mayankgupta.in/ — landing renders with live stats.
+   Open https://soma.mayankgupta.in/admin — GitHub OAuth → admin loads.
 
 ### B10 — Scheduled routines (after Week 4 code lands)
 
@@ -329,14 +328,14 @@ Each invocation produces a routine on Anthropic's infrastructure. Verify in the 
 ### B11 — Install scheduled timers on VPS (after Week 4)
 
 ```bash
-scp systemd/hermes-{healthcheck,cache-refresh,usage-snapshot,idle-reaper}.{service,timer} oci-hermes:/tmp/
+scp systemd/claude-soma-{healthcheck,cache-refresh,usage-snapshot,idle-reaper}.{service,timer} oci-hermes:/tmp/
 ssh oci-hermes bash <<'EOF'
-  sudo install -m 644 /tmp/hermes-*.service /etc/systemd/system/
-  sudo install -m 644 /tmp/hermes-*.timer   /etc/systemd/system/
+  sudo install -m 644 /tmp/claude-soma-*.service /etc/systemd/system/
+  sudo install -m 644 /tmp/claude-soma-*.timer   /etc/systemd/system/
   sudo systemctl daemon-reload
-  sudo systemctl enable --now hermes-healthcheck.timer hermes-cache-refresh.timer \
-                              hermes-usage-snapshot.timer hermes-idle-reaper.timer
-  sudo systemctl list-timers --no-pager | grep hermes
+  sudo systemctl enable --now claude-soma-healthcheck.timer claude-soma-cache-refresh.timer \
+                              claude-soma-usage-snapshot.timer claude-soma-idle-reaper.timer
+  sudo systemctl list-timers --no-pager | grep claude-soma
 EOF
 ```
 
@@ -357,7 +356,7 @@ EOF
 ## Quick references
 
 - Repo: <https://github.com/techfreakworm/claude-soma>
-- Dashboard (when shipped): <https://claude.mayankgupta.in>
+- Dashboard (when shipped): <https://soma.mayankgupta.in>
 - Design spec: `docs/superpowers/specs/2026-05-22-hermes-claude-design.md`
 - Implementation plan: `docs/superpowers/plans/2026-05-22-hermes-claude-v1.md`
 - Repo conventions: `CLAUDE.md`

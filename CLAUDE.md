@@ -11,9 +11,10 @@ Claude Soma is a Claude Code plugin + companion services that wraps Claude Code 
 - **Spec + plan**: frozen (commits `81513a2`, `453c167`).
 - **Week 1 code**: complete (tag `week-1-code-complete`).
 - **Week 2 code**: complete (tag `week-2-code-complete`).
-- **Week 3 (dashboard)**: not started. Begin at Task 29 of the plan.
-- **Week 4 (polish)**: not started. Begin at Task 42.
-- **User-action items** (VPS provisioning, OAuth, Telegram pairing, systemd installs): pending — see [NEXT.md](NEXT.md).
+- **Week 3 (dashboard)**: complete. Live at https://soma.mayankgupta.in (GitHub OAuth gated).
+- **Week 4 (polish)**: complete.
+- **Post-V1 additions** (shipped 2026-05 → 2026-06): FI-NOTIFY (lead → orchestrator notify channel), FI-DOMAIN (Caddy files relay at https://files.mayankgupta.in), engagement-drip (hourly draft pipeline), proactive-DM coverage for MILESTONE events, generalized auto-restart dispatch table, listener-direct healthcheck, S-EVENT-HANDLING (NEEDS_INPUT bypass-path fix), spawner --mcp-config + --setting-sources fix, usage-tab UTC + graceful-ceilings render, and the admin-upload sanitize-filenames fix. See git log for details.
+- **User-action items** (VPS provisioning, OAuth, Telegram pairing, systemd installs): complete — see [INSTALL.md](INSTALL.md) for the canonical runbook.
 
 ## Hard conventions
 

@@ -98,22 +98,19 @@ Remote Control URL. Three control surfaces, one Max account.
 
 ## Quickstart
 
-Claude Soma targets a single Ubuntu ARM VPS (Oracle Cloud free tier fits). The
-full, copy-pasteable bring-up — VPS provisioning, Max OAuth token, whisper/piper,
-Telegram pairing, systemd + Caddy — lives in [`NEXT.md`](NEXT.md). In brief:
+On a fresh Ubuntu 24.04 VPS (2 GB+ RAM, public IPv4, DNS A-records configured):
 
 ```bash
-# On a fresh Ubuntu ARM VPS, as the deploy user:
-git clone https://github.com/techfreakworm/claude-soma.git /opt/claude-soma
+sudo mkdir -p /opt/claude-soma && sudo chown ubuntu:ubuntu /opt/claude-soma
 cd /opt/claude-soma
-bash scripts/vps_bootstrap.sh            # node, bun, caddy, claude, helpers (incl. somux)
-python3.12 -m venv .venv && .venv/bin/pip install -e ".[dev]"
-# put your Max token in /etc/claude-soma/secrets.env (CLAUDE_CODE_OAUTH_TOKEN=...)
-./scripts/deploy.sh                       # sync, build the dashboard, (re)start services
+git clone https://github.com/techfreakworm/claude-soma.git .
+sudo bash scripts/bootstrap.sh --cloud=oci  # or omit --cloud=oci on non-OCI
+sudo cp secrets.env.example /etc/claude-soma/secrets.env
+sudo nano /etc/claude-soma/secrets.env  # fill in the required keys
+sudo bash scripts/smoke_install.sh       # verify
 ```
 
-Then install the systemd units in [`systemd/`](systemd/), pair the Telegram bot,
-and point Caddy at your domain — see `NEXT.md`.
+For the full install runbook with prerequisites, external CLI setup, and troubleshooting: see [INSTALL.md](INSTALL.md).
 
 ## Configuration
 
