@@ -85,6 +85,10 @@ check_optional "grok CLI installed" "command -v grok"
 check_optional "codex CLI installed" "command -v codex"
 check_optional "hf CLI installed" "command -v hf"
 check_optional "markserv CLI installed" "command -v markserv"
+check "bun runtime installed" "command -v bun"
+check_optional "somux CLI installed" "command -v somux"
+check_optional "soma-relay CLI installed" "command -v soma-relay"
+check_optional "soma-publish CLI installed" "command -v soma-publish"
 
 # Section 6b: install correctness (bugs 6+7+8)
 check "native claude binary at /home/ubuntu/.local/bin/claude" "test -x /home/ubuntu/.local/bin/claude"

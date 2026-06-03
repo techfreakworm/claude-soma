@@ -19,7 +19,7 @@
 #
 # DO NOT confuse with scripts/deploy.sh — that's a dev-machine→remote rsync tool.
 #
-# OPTIONAL EXTRAS not covered here (voice STT/TTS, Docker, playwright, bun, ngrok):
+# OPTIONAL EXTRAS not covered here (voice STT/TTS, Docker, playwright, ngrok):
 #   bash scripts/vps_bootstrap.sh [--cloud=oci]
 #
 # Relationship to other install tooling:
@@ -193,6 +193,27 @@ fi
 pnpm --version
 
 # ---------------------------------------------------------------------------
+step "2b/17  bun runtime (Telegram plugin MCP server requires it)"
+# ---------------------------------------------------------------------------
+if ! as_ubuntu test -x /home/ubuntu/.bun/bin/bun && ! command -v bun >/dev/null 2>&1; then
+    as_ubuntu bash -c "curl -fsSL https://bun.sh/install | bash" || friendly_warn "bun install failed" \
+"$(cat <<MSG
+The bun runtime install (curl https://bun.sh/install | bash) failed.
+Re-run as ubuntu:
+  sudo -u ubuntu bash -c 'curl -fsSL https://bun.sh/install | bash'
+  sudo ln -sf /home/ubuntu/.bun/bin/bun /usr/local/bin/bun
+
+The Telegram plugin's MCP server (server.ts) requires bun to launch.
+MSG
+)"
+fi
+# Symlink to /usr/local/bin/bun so systemd units + tmux subshells find it
+if [[ -x /home/ubuntu/.bun/bin/bun ]] && [[ ! -e /usr/local/bin/bun ]]; then
+    ln -sf /home/ubuntu/.bun/bin/bun /usr/local/bin/bun
+fi
+as_ubuntu /home/ubuntu/.bun/bin/bun --version 2>/dev/null || bun --version 2>/dev/null || true
+
+# ---------------------------------------------------------------------------
 step "3/15  Claude Code CLI (npm global + native binary for --channels)"
 # ---------------------------------------------------------------------------
 # npm global gives /usr/bin/claude; native binary at ~/.local/bin/claude is
@@ -362,6 +383,21 @@ for unit in "${SYSTEMD_SRC}"/claude-soma-*.service "${SYSTEMD_SRC}"/claude-soma-
     (( _units_installed++ )) || true
 done
 echo "  total units installed: ${_units_installed}"
+
+# ---------------------------------------------------------------------------
+step "8b/17  Install operator CLI helpers (somux / soma-* commands)"
+# ---------------------------------------------------------------------------
+# Symlink each operator-facing helper onto PATH so operators can run them
+# without knowing the repo path. ln -sf is idempotent; only symlinks helpers
+# that actually exist as files in scripts/.
+for _helper in somux soma-relay soma-publish; do
+    _src="${REPO_ROOT}/scripts/${_helper}"
+    if [[ -f "${_src}" ]]; then
+        chmod +x "${_src}"
+        ln -sf "${_src}" "/usr/local/bin/${_helper}"
+        echo "  installed: ${_helper} -> ${_src}"
+    fi
+done
 
 # ---------------------------------------------------------------------------
 step "9/15  systemctl daemon-reload"
@@ -574,7 +610,7 @@ Bootstrap complete. Required next steps:
   3. Run the smoke-install checker (once it exists):
        sudo bash scripts/smoke_install.sh
 
-  4. Optional extras (voice STT/TTS, Docker, playwright, bun, ngrok):
+  4. Optional extras (voice STT/TTS, Docker, playwright, ngrok):
        bash scripts/vps_bootstrap.sh [--cloud=oci]
 
   5. On Oracle Cloud only: run with --cloud=oci flag:

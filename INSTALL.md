@@ -114,6 +114,8 @@ What it does (see `scripts/bootstrap.sh` for the full source):
 - Enables and starts the four long-running services: `claude-soma-channel`, `claude-soma-api`, `claude-soma-frontend`, `claude-soma-markserv`
 - Enables all timers: healthcheck, cache-refresh, secrets-backup, pw-refresh, usage-snapshot, rc-url-refresh, idle-reaper, daily-status, listener-healthcheck, engagement-drip, channel-clear, relay-cleanup
 - Installs `scripts/claude-safe.sh` to `/usr/local/bin/claude-safe` (the wrapper that strips the Telegram plugin before invoking claude in lead sessions — prevents leads from hijacking the channel)
+- Installs `bun` runtime via `curl https://bun.sh/install | bash` for the `ubuntu` user; symlinks `~/.bun/bin/bun` to `/usr/local/bin/bun` (required by the Telegram plugin's MCP server, which runs `bun server.ts` as a child of `claude --channels`)
+- Installs operator CLI helpers to `/usr/local/bin/`: `somux` (list/attach/peek project-lead tmux sessions), `soma-relay` (publish files to the Caddy file relay), `soma-publish` (alias for `soma-relay publish`)
 - Installs the base Caddyfile to `/etc/caddy/Caddyfile` (with `import /etc/caddy/conf.d/*.caddyfile` at the bottom); the site-specific configs (`soma.<domain>`, `files.<domain>`) are rendered later by `finalize-caddy.sh` after secrets are set
 - (OCI only) Applies the iptables ACCEPT rules for ports 80/443 before Oracle's default REJECT rule, then saves with `netfilter-persistent`
 
@@ -337,6 +339,7 @@ systemctl is-enabled claude-soma-relay-cleanup.timer   # should print: enabled
 
 - Confirm `CLAUDE_CODE_OAUTH_TOKEN` is set in secrets.env
 - Confirm `TELEGRAM_BOT_TOKEN` is set in secrets.env (or at `~/.claude/channels/telegram/.env` as fallback)
+- Confirm `bun` is installed: `which bun` (should be `/usr/local/bin/bun` or `/home/ubuntu/.bun/bin/bun`). If missing: `sudo -u ubuntu bash -c 'curl -fsSL https://bun.sh/install | bash' && sudo ln -sf /home/ubuntu/.bun/bin/bun /usr/local/bin/bun`
 - Tail the channel journal: `sudo journalctl -u claude-soma-channel -f`
 - Attach the channel tmux: `somux a channel`
 
