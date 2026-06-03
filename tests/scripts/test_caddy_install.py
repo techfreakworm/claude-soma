@@ -50,8 +50,9 @@ def test_secrets_env_example_has_required_keys():
     content = (REPO_ROOT / "secrets.env.example").read_text()
     required = [
         "CLAUDE_CODE_OAUTH_TOKEN",
-        "AUTH_GITHUB_CLIENT_ID",
-        "AUTH_GITHUB_CLIENT_SECRET",
+        "AUTH_GITHUB_ID",
+        "AUTH_GITHUB_SECRET",
+        "HERMES_ALLOWED_GITHUB_HANDLES",
         "TELEGRAM_BOT_TOKEN",
         "HERMES_NOTIFY_CHAT_ID",
         "HERMES_FILES_PASSWORD",

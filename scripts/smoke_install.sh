@@ -100,13 +100,19 @@ check "venv exists" "test -x /opt/claude-soma/.venv/bin/python"
 check "claude_soma package importable" "/opt/claude-soma/.venv/bin/python -c 'import claude_soma' 2>/dev/null"
 
 # Section 8: secrets keys (KEY existence only — NEVER echo values)
-for key in CLAUDE_CODE_OAUTH_TOKEN AUTH_GITHUB_CLIENT_ID AUTH_GITHUB_CLIENT_SECRET NEXTAUTH_SECRET TELEGRAM_BOT_TOKEN HERMES_NOTIFY_CHAT_ID HERMES_FILES_PASSWORD; do
+for key in CLAUDE_CODE_OAUTH_TOKEN AUTH_GITHUB_ID AUTH_GITHUB_SECRET HERMES_ALLOWED_GITHUB_HANDLES NEXTAUTH_SECRET TELEGRAM_BOT_TOKEN HERMES_NOTIFY_CHAT_ID HERMES_FILES_PASSWORD; do
     check "$key set in secrets.env" "sudo grep -q '^$key=.\+' /etc/claude-soma/secrets.env"
 done
 
 # Section 9: public reachability (optional — depends on DNS config + cloud config)
-check_optional "soma.<domain> reaches via Caddy (port 443)" "curl -sI -o /dev/null -w '%{http_code}' --max-time 5 https://soma.mayankgupta.in/ | grep -qE '200|307|401'"
-check_optional "files.<domain> reaches via Caddy (port 443) — basicauth challenge" "curl -sI -o /dev/null -w '%{http_code}' --max-time 5 https://files.mayankgupta.in/ | grep -qE '401'"
+_SOMA_DOMAIN="$(sudo grep '^SOMA_DOMAIN=' /etc/claude-soma/secrets.env 2>/dev/null | cut -d= -f2-)"
+_FILES_DOMAIN="${_SOMA_DOMAIN:+files.${_SOMA_DOMAIN}}"
+if [[ -n "${_SOMA_DOMAIN}" ]]; then
+    check_optional "soma.<domain> reaches via Caddy (port 443)" "curl -sI -o /dev/null -w '%{http_code}' --max-time 5 \"https://soma.${_SOMA_DOMAIN}/\" | grep -qE '200|307|401'"
+    check_optional "files.<domain> reaches via Caddy (port 443) — basicauth challenge" "curl -sI -o /dev/null -w '%{http_code}' --max-time 5 \"https://${_FILES_DOMAIN}/\" | grep -qE '401'"
+else
+    check_optional "soma.<domain> reachability (skipped — SOMA_DOMAIN not set in secrets.env)" "false"
+fi
 
 # Summary
 echo

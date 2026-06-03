@@ -94,7 +94,7 @@ def test_render_substitutes_hash(tmp_path: Path) -> None:
     content = dest.read_text()
     assert FAKE_HASH in content, "bcrypt hash should appear in rendered config"
     assert "__BCRYPT_HASH__" not in content, "placeholder should be substituted"
-    assert "files.mayankgupta.in" in content, "site block should be present"
+    assert "__FILES_DOMAIN__" not in content, "__FILES_DOMAIN__ placeholder should be substituted"
     assert "basicauth" in content, "basicauth directive should be present"
 
 
@@ -139,8 +139,10 @@ def test_files_domain_default(tmp_path: Path) -> None:
 
     dest = tmp_path / "conf.d" / "files.caddyfile"
     content = dest.read_text()
-    assert "files.mayankgupta.in" in content, "default domain should appear in rendered config"
     assert "__FILES_DOMAIN__" not in content, "__FILES_DOMAIN__ placeholder should be substituted"
+    assert "files.mayankgupta.in" not in content, (
+        "default domain must not be the hardcoded personal domain — FILES_DOMAIN must come from env"
+    )
 
 
 def test_files_domain_override(tmp_path: Path) -> None:

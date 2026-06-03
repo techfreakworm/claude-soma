@@ -1,7 +1,7 @@
 import NextAuth from "next-auth";
 import GitHub from "next-auth/providers/github";
 
-const ALLOWED = (process.env.HERMES_ALLOWED_GITHUB_HANDLES || "techfreakworm")
+const ALLOWED = (process.env.HERMES_ALLOWED_GITHUB_HANDLES || "")
   .split(",")
   .map((s) => s.trim())
   .filter(Boolean);

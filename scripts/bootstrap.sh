@@ -594,14 +594,21 @@ Bootstrap complete. Required next steps:
        sudo -u ubuntu nano /etc/claude-soma/secrets.env
      Keys needed (minimum):
        CLAUDE_CODE_OAUTH_TOKEN=<from: claude login on a dev machine>
-       AUTH_GITHUB_CLIENT_ID=<GitHub OAuth app>
-       AUTH_GITHUB_CLIENT_SECRET=<GitHub OAuth app>
-       AUTH_GITHUB_OWNER=techfreakworm
+       AUTH_GITHUB_ID=<GitHub OAuth app Client ID>
+       AUTH_GITHUB_SECRET=<GitHub OAuth app Client Secret>
+       HERMES_ALLOWED_GITHUB_HANDLES=<your-github-username>
        NEXTAUTH_SECRET=<openssl rand -base64 32>
        NEXTAUTH_URL=https://soma.<your-domain>
+       HERMES_API_CORS_ORIGINS=https://soma.<your-domain>,http://localhost:3000
        TELEGRAM_BOT_TOKEN=<from @BotFather>
        HERMES_NOTIFY_CHAT_ID=<your Telegram chat id>
        HERMES_FILES_PASSWORD=<choose a strong password>
+
+     NOTE: AUTH_GITHUB_ID + AUTH_GITHUB_SECRET are the NextAuth v5 names.
+     Do NOT use AUTH_GITHUB_CLIENT_ID / AUTH_GITHUB_CLIENT_SECRET — they are ignored.
+
+     After filling secrets, run: bash scripts/setup-telegram.sh
+     to pair your Telegram account with the bot.
 
   2. Restart services after filling secrets:
        sudo systemctl restart claude-soma-api.service

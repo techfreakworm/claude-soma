@@ -73,8 +73,9 @@ def test_required_secrets_keys_checked() -> None:
     content = SCRIPT.read_text()
     for key in (
         "CLAUDE_CODE_OAUTH_TOKEN",
-        "AUTH_GITHUB_CLIENT_ID",
-        "AUTH_GITHUB_CLIENT_SECRET",
+        "AUTH_GITHUB_ID",
+        "AUTH_GITHUB_SECRET",
+        "HERMES_ALLOWED_GITHUB_HANDLES",
         "NEXTAUTH_SECRET",
         "TELEGRAM_BOT_TOKEN",
         "HERMES_NOTIFY_CHAT_ID",

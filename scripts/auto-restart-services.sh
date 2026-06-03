@@ -98,7 +98,7 @@ if [[ -r /home/ubuntu/.claude/channels/telegram/.env ]]; then
     source /home/ubuntu/.claude/channels/telegram/.env
     ts="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
     curl -sX POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
-        --data-urlencode "chat_id=${HERMES_NOTIFY_CHAT_ID:-${TELEGRAM_CHAT_ID:-935376085}}" \
+        --data-urlencode "chat_id=${HERMES_NOTIFY_CHAT_ID:-${TELEGRAM_CHAT_ID:-}}" \
         --data-urlencode "text=automation 'restart' completed at $ts: ${1:-(no services arg)}" \
         --max-time 5 >/dev/null 2>&1 || true
 fi

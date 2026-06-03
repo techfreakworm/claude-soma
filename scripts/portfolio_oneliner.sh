@@ -12,7 +12,7 @@ set -uo pipefail
 
 LOG=/var/log/claude-soma/portfolio_oneliner.log
 TS="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-CHAT_ID=935376085
+CHAT_ID="${HERMES_NOTIFY_CHAT_ID:-${TELEGRAM_CHAT_ID:-}}"
 REPO=/opt/claude-soma
 REGISTRY=/opt/claude-soma/registry.sqlite
 ENV_FILE=/home/ubuntu/.claude/channels/telegram/.env

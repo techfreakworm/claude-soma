@@ -14,7 +14,7 @@ set -uo pipefail
 REGISTRY="${HERMES_ORCH_DB:-/opt/claude-soma/registry.sqlite}"
 LOG="${HERMES_DAILY_STATUS_LOG:-/var/log/claude-soma/daily-status.log}"
 CLAUDE_BIN="${HERMES_CLAUDE_BIN:-/home/ubuntu/.local/bin/claude}"
-CHAT_ID="${TELEGRAM_CHAT_ID:-935376085}"
+CHAT_ID="${HERMES_NOTIFY_CHAT_ID:-${TELEGRAM_CHAT_ID:-}}"
 ENV_FILE="${TG_ENV_FILE:-/home/ubuntu/.claude/channels/telegram/.env}"
 TMUX_BIN="${HERMES_TMUX_BIN:-/usr/bin/tmux}"
 

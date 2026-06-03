@@ -47,7 +47,7 @@ if [ -z "${HERMES_FILES_PASSWORD:-}" ]; then
     exit 1
 fi
 
-FILES_DOMAIN="${FILES_DOMAIN:-files.mayankgupta.in}"
+FILES_DOMAIN="${FILES_DOMAIN:-}"
 
 # Generate bcrypt hash via caddy
 if ! hash=$(caddy hash-password --plaintext "${HERMES_FILES_PASSWORD}"); then

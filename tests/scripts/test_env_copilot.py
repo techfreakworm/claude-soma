@@ -22,8 +22,9 @@ def test_env_copilot_prompt_lists_required_keys():
     text = COPILOT_PROMPT.read_text()
     required_keys = [
         "CLAUDE_CODE_OAUTH_TOKEN",
-        "AUTH_GITHUB_CLIENT_ID",
-        "AUTH_GITHUB_CLIENT_SECRET",
+        "AUTH_GITHUB_ID",
+        "AUTH_GITHUB_SECRET",
+        "HERMES_ALLOWED_GITHUB_HANDLES",
         "NEXTAUTH_SECRET",
         "NEXTAUTH_URL",
         "TELEGRAM_BOT_TOKEN",

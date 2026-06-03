@@ -148,7 +148,7 @@ fi
 (
     CLAUDE_PW_DIR="${CLAUDE_PW_DIR:-/home/ubuntu/.claude-pw}"
     TG_ENV_FILE="${TG_ENV_FILE:-/home/ubuntu/.claude/channels/telegram/.env}"
-    CHAT_ID="${TELEGRAM_CHAT_ID:-935376085}"
+    CHAT_ID="${HERMES_NOTIFY_CHAT_ID:-${TELEGRAM_CHAT_ID:-}}"
     PINGED_FILE="/home/ubuntu/.claude-soma/needs_reauth_pinged.txt"
     TODAY="$(date -u +%Y%m%d)"
 

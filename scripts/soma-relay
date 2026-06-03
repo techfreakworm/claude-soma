@@ -17,7 +17,7 @@
 set -euo pipefail
 
 LEAD="${HERMES_LEAD_NAME:-general}"
-DOMAIN="${SOMA_RELAY_DOMAIN:-files.mayankgupta.in}"
+DOMAIN="${SOMA_RELAY_DOMAIN:-}"
 ROOT="${SOMA_RELAY_ROOT:-/var/lib/claude-soma/relay}"
 
 _usage() {

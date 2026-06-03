@@ -55,10 +55,7 @@ def _cfg() -> dict[str, Any]:
             os.environ.get("HERMES_NOTIFY_CHAT_ID")
             or os.environ.get("TELEGRAM_CHAT_ID", "")
         ),
-        "review_url": os.environ.get(
-            "HERMES_ENGAGEMENT_REVIEW_URL",
-            "https://files.mayankgupta.in/engagement-review.md",
-        ),
+        "review_url": os.environ.get("HERMES_ENGAGEMENT_REVIEW_URL", ""),
     }
 
 

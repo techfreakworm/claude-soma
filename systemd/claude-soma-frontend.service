@@ -14,7 +14,6 @@ Environment=NODE_ENV=production
 Environment=HOSTNAME=127.0.0.1
 Environment=PORT=3000
 Environment=HERMES_API_BASE=http://127.0.0.1:9000
-Environment=HERMES_ALLOWED_GITHUB_HANDLES=techfreakworm
 Environment=AUTH_TRUST_HOST=true
 ExecStart=/usr/bin/node .next/standalone/server.js
 Restart=always

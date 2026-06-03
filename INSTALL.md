@@ -63,7 +63,7 @@ please report it at https://github.com/techfreakworm/claude-soma/issues.
 External accounts you must provision before starting. Have these values ready in a notes file:
 
 1. **Claude Max OAuth** — sign up at claude.ai; run `claude` once interactively on any browser-capable machine to mint `CLAUDE_CODE_OAUTH_TOKEN`. Copy the `oat-...` token.
-2. **GitHub OAuth App** — create at `https://github.com/settings/developers`. Set callback URL to `https://soma.<your-domain>/api/auth/callback/github`. Save `AUTH_GITHUB_CLIENT_ID` + `AUTH_GITHUB_CLIENT_SECRET`.
+2. **GitHub OAuth App** — create at `https://github.com/settings/developers`. Set callback URL to `https://soma.<your-domain>/api/auth/callback/github`. Save `AUTH_GITHUB_ID` + `AUTH_GITHUB_SECRET` (NextAuth v5 names — note: NOT _CLIENT_ID / _CLIENT_SECRET).
 3. **Telegram Bot** — DM `@BotFather`, create a bot, save `TELEGRAM_BOT_TOKEN`. Get your personal chat ID: DM your bot, then call `https://api.telegram.org/bot<token>/getUpdates` and find `chat.id` — that is `HERMES_NOTIFY_CHAT_ID`.
 4. **xAI account** — for the `grok` CLI (used for image generation). Sign up at x.ai.
 5. **ChatGPT subscription** — for the `codex` CLI. A Plus or higher subscription is required.
@@ -216,13 +216,15 @@ See `secrets.env.example` in the repo root for the full key list with inline com
 | Key | Where to get it |
 |---|---|
 | `CLAUDE_CODE_OAUTH_TOKEN` | Step 4 (`claude login`) |
-| `AUTH_GITHUB_CLIENT_ID` | Step 0, GitHub OAuth App |
-| `AUTH_GITHUB_CLIENT_SECRET` | Step 0, GitHub OAuth App |
+| `AUTH_GITHUB_ID` | GitHub OAuth App (Client ID) — see Prerequisites |
+| `AUTH_GITHUB_SECRET` | GitHub OAuth App (Client Secret) — see Prerequisites |
+| `HERMES_ALLOWED_GITHUB_HANDLES` | your GitHub username (comma-separated for multiple) |
 | `NEXTAUTH_SECRET` | `openssl rand -base64 32` |
 | `NEXTAUTH_URL` | `https://soma.<your-domain>` |
-| `AUTH_GITHUB_OWNER` | your GitHub username |
-| `TELEGRAM_BOT_TOKEN` | Step 0, @BotFather |
-| `HERMES_NOTIFY_CHAT_ID` | Step 0, getUpdates chat.id |
+| `TELEGRAM_BOT_TOKEN` | @BotFather — see Prerequisites; then run `setup-telegram.sh` |
+| `HERMES_NOTIFY_CHAT_ID` | auto-detected by `setup-telegram.sh`, or getUpdates chat.id |
+| `TELEGRAM_CHAT_ID` | same value as `HERMES_NOTIFY_CHAT_ID` |
+| `HERMES_API_CORS_ORIGINS` | `https://soma.<your-domain>,http://localhost:3000` |
 | `HERMES_FILES_PASSWORD` | choose a strong password (used for basicauth on files domain) |
 
 Optional keys (leave commented out to use defaults):
@@ -271,11 +273,50 @@ systemctl is-active claude-soma-channel claude-soma-api claude-soma-frontend cla
 
 ## Step 8 — Pair the Telegram bot
 
-Open Telegram and DM your bot. The channel session picks up the chat ID automatically via the Telegram plugin pairing flow. If prompted for a pairing code:
+After `TELEGRAM_BOT_TOKEN` is written to secrets.env and services are restarted (Step 7), run the pairing script:
 
 ```bash
-# Attach to the channel session to confirm pairing:
-somux a channel   # or: tmux -S /tmp/claude-soma-channel.sock attach
+bash /opt/claude-soma/scripts/setup-telegram.sh
+```
+
+What this does:
+1. Reads `TELEGRAM_BOT_TOKEN` from `/etc/claude-soma/secrets.env`.
+2. Writes the token to `~/.claude/channels/telegram/.env` so the channel plugin can read it.
+3. Prompts you to send any message to your bot from the Telegram app.
+4. Polls `getUpdates` to auto-detect your numeric chat ID.
+5. Writes your chat ID to `~/.claude/channels/telegram/access.json` (the plugin allowlist).
+6. Writes `HERMES_NOTIFY_CHAT_ID` and `TELEGRAM_CHAT_ID` back into `/etc/claude-soma/secrets.env`.
+7. Restarts `claude-soma-channel.service` so it picks up the new config.
+
+Manual alternative (if the script is unavailable):
+
+```bash
+# 1. Mirror the bot token to the channel plugin config
+mkdir -p ~/.claude/channels/telegram
+echo "TELEGRAM_BOT_TOKEN=<your-token>" > ~/.claude/channels/telegram/.env
+chmod 600 ~/.claude/channels/telegram/.env
+
+# 2. Send a message to your bot from Telegram, then get your chat ID:
+TOKEN=$(grep '^TELEGRAM_BOT_TOKEN=' /etc/claude-soma/secrets.env | cut -d= -f2-)
+curl -s "https://api.telegram.org/bot${TOKEN}/getUpdates" | python3 -c \
+  "import json,sys; u=json.load(sys.stdin); print(u['result'][-1]['message']['chat']['id'])"
+
+# 3. Write the chat ID into access.json (replace 0 with your actual ID):
+CHAT_ID=<your-chat-id>
+cat > ~/.claude/channels/telegram/access.json <<EOF
+{"dmPolicy":"allowlist","allowFrom":["${CHAT_ID}"],"groups":{},"pending":{}}
+EOF
+
+# 4. Update secrets.env and restart:
+sudo sed -i "s|^HERMES_NOTIFY_CHAT_ID=.*|HERMES_NOTIFY_CHAT_ID=${CHAT_ID}|" /etc/claude-soma/secrets.env
+sudo sed -i "s|^TELEGRAM_CHAT_ID=.*|TELEGRAM_CHAT_ID=${CHAT_ID}|" /etc/claude-soma/secrets.env
+sudo systemctl restart claude-soma-channel.service
+```
+
+Verify: send a message to your bot — it should respond. If not, tail the channel log:
+
+```bash
+sudo journalctl -u claude-soma-channel -f
 ```
 
 ---
