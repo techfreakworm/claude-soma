@@ -153,10 +153,20 @@ ls -ld /var/log/claude-soma /var/lib/claude-soma /etc/claude-soma
 # ---------------------------------------------------------------------------
 step "7/15  frontend build (pnpm install + build_frontend.sh standalone copy)"
 # ---------------------------------------------------------------------------
-# build_frontend.sh does: pnpm build + copies .next/static + public/ next to
-# server.js in .next/standalone/ so the frontend service can start correctly.
-(cd "${REPO_ROOT}/frontend" && pnpm install --prod=false)
-bash "${REPO_ROOT}/scripts/build_frontend.sh"
+# build_frontend.sh does: pnpm install + pnpm build + copies .next/static +
+# public/ next to server.js in .next/standalone/.
+# pnpm 10+ blocks build scripts by default; frontend/package.json configures
+# pnpm.onlyBuiltDependencies to allow sharp, msw, @tailwindcss/oxide.
+if ! bash "${REPO_ROOT}/scripts/build_frontend.sh"; then
+    echo
+    echo "FATAL: frontend build failed at step 7." >&2
+    echo "  Common causes:" >&2
+    echo "    1. pnpm 10 ignored-builds — check frontend/package.json pnpm.onlyBuiltDependencies" >&2
+    echo "    2. Insufficient memory (next build needs ~1-2 GB free during build)" >&2
+    echo "    3. Network failure during pnpm install" >&2
+    echo "  Bootstrap will exit. Fix the cause + re-run scripts/bootstrap.sh (idempotent)." >&2
+    exit 7
+fi
 
 # ---------------------------------------------------------------------------
 step "8/15  install systemd unit files (all claude-soma-* .service + .timer)"

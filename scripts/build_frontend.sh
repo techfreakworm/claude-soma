@@ -19,8 +19,17 @@ if [[ -z "${AUTH_SECRET:-}" ]]; then
     fi
 fi
 
-pnpm install --prod=false
-pnpm build
+pnpm install --prod=false || {
+    echo "ERROR: pnpm install FAILED in frontend/" >&2
+    echo "  Common cause: pnpm 10 ignored-builds. If you see ERR_PNPM_IGNORED_BUILDS above," >&2
+    echo "  verify frontend/package.json has pnpm.onlyBuiltDependencies listing every native dep." >&2
+    exit 1
+}
+
+pnpm run build || {
+    echo "ERROR: next build FAILED in frontend/" >&2
+    exit 1
+}
 
 # Copy static + public NEXT TO the standalone server.js. Use rm -rf + cp (not
 # `cp -rf src dst`) so this is rebuild-safe: if the target dir already exists
@@ -32,5 +41,9 @@ rm -rf .next/standalone/.next/static .next/standalone/public
 cp -r .next/static .next/standalone/.next/static
 cp -r public       .next/standalone/public
 
-ls .next/standalone/.next/static >/dev/null && echo "static assets copied"
-ls .next/standalone/server.js     >/dev/null && echo "server.js present"
+if [[ ! -d .next/standalone/.next/static ]]; then
+    echo "ERROR: .next/standalone/.next/static was NOT created by the copy step" >&2
+    exit 1
+fi
+echo "static assets copied"
+ls .next/standalone/server.js >/dev/null && echo "server.js present"
