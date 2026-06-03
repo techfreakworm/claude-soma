@@ -15,18 +15,59 @@
 
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib-friendly.sh
+source "$SCRIPT_DIR/lib-friendly.sh"
+
 SECRETS=/etc/claude-soma/secrets.env
 
 if [[ ! -r "$SECRETS" ]]; then
-    echo "ERROR: $SECRETS not readable. Run as root (sudo bash finalize-caddy.sh)." >&2
-    exit 1
+    friendly_halt "Secrets file not found or not readable" \
+"$(cat <<MSG
+$SECRETS is not readable.
+
+This script must be run as root:
+  sudo bash /opt/claude-soma/scripts/finalize-caddy.sh
+
+If the file does not exist yet, create it first:
+  sudo cp /opt/claude-soma/secrets.env.example $SECRETS
+  sudo chmod 600 $SECRETS
+  sudo chown ubuntu:ubuntu $SECRETS
+  sudo nano $SECRETS   # fill in at minimum: SOMA_DOMAIN + HERMES_FILES_PASSWORD
+MSG
+)"
 fi
 
 # shellcheck disable=SC1090
 source <(grep -E '^[A-Z_]+=' "$SECRETS")
 
-: "${SOMA_DOMAIN:?SOMA_DOMAIN must be set in $SECRETS}"
-: "${HERMES_FILES_PASSWORD:?HERMES_FILES_PASSWORD must be set in $SECRETS}"
+if [[ -z "${SOMA_DOMAIN:-}" ]]; then
+    friendly_halt "Missing required secret: SOMA_DOMAIN" \
+"$(cat <<MSG
+SOMA_DOMAIN is not set in $SECRETS.
+
+Add this line to the file and re-run:
+  SOMA_DOMAIN=<your-domain>   # e.g. example.com (without the soma. prefix)
+
+Edit with:  sudo nano $SECRETS
+Then re-run: sudo bash /opt/claude-soma/scripts/finalize-caddy.sh
+MSG
+)"
+fi
+
+if [[ -z "${HERMES_FILES_PASSWORD:-}" ]]; then
+    friendly_halt "Missing required secret: HERMES_FILES_PASSWORD" \
+"$(cat <<MSG
+HERMES_FILES_PASSWORD is not set in $SECRETS.
+
+Add a strong password for the files relay basicauth:
+  HERMES_FILES_PASSWORD=<your-strong-password>
+
+Edit with:  sudo nano $SECRETS
+Then re-run: sudo bash /opt/claude-soma/scripts/finalize-caddy.sh
+MSG
+)"
+fi
 
 # Strip a leading "soma." prefix if the user accidentally included it.
 SOMA_DOMAIN_BASE="${SOMA_DOMAIN#soma.}"
@@ -62,12 +103,73 @@ install -m 644 "$TMP_MAIN" /etc/caddy/Caddyfile
 install -d -m 755 /etc/caddy/conf.d
 install -m 644 "$TMP_FILES" /etc/caddy/conf.d/files.caddyfile
 
-echo "Validating Caddy config..."
-caddy validate --config /etc/caddy/Caddyfile
+# Bug #5: caddy runs as the `caddy` user; access logs go to /var/log/caddy.
+# Ensure the directory exists and is owned by caddy before caddy starts/reloads.
+sudo mkdir -p /var/log/caddy
+sudo chown -R caddy:caddy /var/log/caddy
+sudo chmod 755 /var/log/caddy
 
-echo "Reloading Caddy..."
-systemctl reload caddy.service
-echo "Caddy reloaded with site configs."
+echo "Validating Caddy config..."
+if ! caddy validate --config /etc/caddy/Caddyfile; then
+    friendly_halt "Caddy configuration validation failed" \
+"$(cat <<MSG
+caddy validate --config /etc/caddy/Caddyfile reported errors (see above).
+
+Common causes:
+  1. Malformed bcrypt hash — re-run this script to regenerate it:
+       sudo bash /opt/claude-soma/scripts/finalize-caddy.sh
+  2. Missing secrets — ensure SOMA_DOMAIN and HERMES_FILES_PASSWORD are set
+  3. Template rendering issue — inspect the rendered file:
+       cat /etc/caddy/Caddyfile
+       cat /etc/caddy/conf.d/files.caddyfile
+
+Fix the issue and re-run:
+  sudo bash /opt/claude-soma/scripts/finalize-caddy.sh
+MSG
+)"
+fi
+
+# Bug #4: caddy.service may be enabled but not yet ACTIVE (bootstrap step 13
+# did not start it because no site configs existed yet). Detect + start if needed.
+if sudo systemctl is-active --quiet caddy.service; then
+    if ! sudo systemctl reload caddy.service; then
+        friendly_halt "Caddy reload failed" \
+"$(cat <<MSG
+systemctl reload caddy.service failed even though caddy.service is active.
+
+Check Caddy's status and logs:
+  sudo systemctl status caddy.service
+  sudo journalctl -u caddy.service -n 50
+
+Then re-run:
+  sudo bash /opt/claude-soma/scripts/finalize-caddy.sh
+MSG
+)"
+    fi
+    echo "Caddy reloaded with site configs."
+else
+    if ! sudo systemctl enable --now caddy.service; then
+        friendly_halt "Caddy failed to start" \
+"$(cat <<MSG
+systemctl enable --now caddy.service failed.
+
+Check Caddy's status and logs:
+  sudo systemctl status caddy.service
+  sudo journalctl -u caddy.service -n 50
+
+Common causes:
+  1. /var/log/caddy not owned by caddy — should be fixed by this script, but verify:
+       ls -la /var/log/caddy
+  2. Port 80/443 already in use — check: sudo ss -tlnp | grep -E ':80|:443'
+  3. Bad config (should have been caught by validate above)
+
+Then re-run:
+  sudo bash /opt/claude-soma/scripts/finalize-caddy.sh
+MSG
+)"
+    fi
+    echo "Caddy started with site configs."
+fi
 
 cat <<NEXT
 

@@ -7,6 +7,31 @@ For a quickstart, see README.md. For an architecture overview, see
 
 ---
 
+## A note on errors
+
+The bootstrap script (`scripts/bootstrap.sh`) and `scripts/finalize-caddy.sh` are designed to
+NEVER crash with a raw error thrown in your face. Every step that can fail for a known or
+expected reason — domain not set yet, DNS not pointing, secrets not filled, log directory
+missing, Caddy not started yet — detects the condition and prints a clear yellow (warning) or
+red (fatal) box explaining what happened and the exact commands to fix it. The script then
+either continues with the rest of the install or exits cleanly with next-step instructions.
+
+In particular:
+
+- Step 13 (Caddy install): Caddy **not** serving your sites at bootstrap time is completely
+  expected — it needs your domain and DNS records first. You will see a yellow "Caddy is
+  installed but not yet serving your sites" friendly box. This is NOT an error. Follow the
+  instructions in the box to set `SOMA_DOMAIN` in secrets.env and run `finalize-caddy.sh`
+  after DNS propagates.
+
+- `finalize-caddy.sh`: Detects whether `caddy.service` is already active (reload path) or
+  not yet started (enable --now path), and handles both without raw systemd errors.
+
+If you see a raw error or stack trace that is NOT wrapped in a friendly box, that is a bug —
+please report it at https://github.com/techfreakworm/claude-soma/issues.
+
+---
+
 ## Prerequisites
 
 External accounts you must provision before starting. Have these values ready in a notes file:

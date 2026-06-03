@@ -47,6 +47,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 SYSTEMD_SRC="${REPO_ROOT}/systemd"
 
+# shellcheck source=lib-friendly.sh
+source "$SCRIPT_DIR/lib-friendly.sh"
+
 step() { echo; echo "==== $* ===="; }
 
 # Ownership model: when invoked as root (sudo bash bootstrap.sh), writes into
@@ -73,14 +76,42 @@ echo "Log: ${LOG}"
 # ---------------------------------------------------------------------------
 step "1/15  apt: base packages"
 # ---------------------------------------------------------------------------
-sudo DEBIAN_FRONTEND=noninteractive apt-get update -y
-sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
+if ! sudo DEBIAN_FRONTEND=noninteractive apt-get update -y; then
+    friendly_halt "Package index update failed (step 1)" \
+"$(cat <<MSG
+apt-get update failed. Common causes:
+  1. No internet access — check network / firewall / VPS routing
+  2. A broken apt source in /etc/apt/sources.list.d/
+
+Try manually:
+  sudo apt-get update
+
+Then re-run (idempotent):
+  sudo bash /opt/claude-soma/scripts/bootstrap.sh
+MSG
+)"
+fi
+if ! sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
     build-essential git curl wget pkg-config unzip \
     python3.12 python3.12-venv python3.12-dev python3-pip \
     ffmpeg cmake tmux jq sqlite3 \
     libssl-dev \
     debian-keyring debian-archive-keyring apt-transport-https \
-    rsync ca-certificates gnupg
+    rsync ca-certificates gnupg; then
+    friendly_halt "System package install failed (step 1)" \
+"$(cat <<MSG
+apt-get install failed for one or more base packages.
+
+  1. Run manually to see which package failed and read the error:
+       sudo DEBIAN_FRONTEND=noninteractive apt-get install -y build-essential git curl wget ...
+  2. Check disk space: df -h
+  3. Try: sudo apt-get --fix-broken install
+
+Then re-run (idempotent):
+  sudo bash /opt/claude-soma/scripts/bootstrap.sh
+MSG
+)"
+fi
 # Optional: libreoffice (needed by ppt-manager feature — ~500 MB download)
 # Uncomment to install: sudo DEBIAN_FRONTEND=noninteractive apt-get install -y libreoffice
 
@@ -97,16 +128,67 @@ if ! command -v caddy >/dev/null 2>&1; then
 fi
 caddy version
 
+# BUG #5: caddy runs as the `caddy` user. Its log directives in conf.d/ write to
+# /var/log/caddy/*.log. Without this dir owned by caddy:caddy, caddy fails to
+# start with permission denied.
+sudo mkdir -p /var/log/caddy
+sudo chown -R caddy:caddy /var/log/caddy
+sudo chmod 755 /var/log/caddy
+
 # ---------------------------------------------------------------------------
 step "2/15  Node 22 + pnpm"
 # ---------------------------------------------------------------------------
 if ! command -v node >/dev/null 2>&1; then
-    curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
-    sudo DEBIAN_FRONTEND=noninteractive apt-get install -y nodejs
+    if ! curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -; then
+        friendly_halt "NodeSource repository setup failed (step 2)" \
+"$(cat <<MSG
+Could not set up the NodeSource apt repository for Node 22.
+Common causes:
+  1. No internet access — check network / firewall
+  2. NodeSource service temporarily unreachable
+
+Try manually:
+  curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
+
+Then re-run (idempotent):
+  sudo bash /opt/claude-soma/scripts/bootstrap.sh
+MSG
+)"
+    fi
+    if ! sudo DEBIAN_FRONTEND=noninteractive apt-get install -y nodejs; then
+        friendly_halt "Node.js installation failed (step 2)" \
+"$(cat <<MSG
+apt-get install nodejs failed after NodeSource repo setup.
+
+Try manually:
+  sudo apt-get install -y nodejs
+  node --version
+
+Then re-run (idempotent):
+  sudo bash /opt/claude-soma/scripts/bootstrap.sh
+MSG
+)"
+    fi
 fi
 node --version
 if ! command -v pnpm >/dev/null 2>&1; then
-    sudo npm install -g pnpm
+    if ! sudo npm install -g pnpm; then
+        friendly_halt "pnpm global install failed (step 2)" \
+"$(cat <<MSG
+npm install -g pnpm failed.
+Common causes:
+  1. npm registry unreachable (network issue)
+  2. Disk full: check with df -h
+
+Try manually:
+  sudo npm install -g pnpm
+  pnpm --version
+
+Then re-run (idempotent):
+  sudo bash /opt/claude-soma/scripts/bootstrap.sh
+MSG
+)"
+    fi
 fi
 pnpm --version
 
@@ -116,7 +198,21 @@ step "3/15  Claude Code CLI (npm global + native binary for --channels)"
 # npm global gives /usr/bin/claude; native binary at ~/.local/bin/claude is
 # required for `claude --channels` routing (the npm wrap silently rejects it).
 if ! npm ls -g @anthropic-ai/claude-code >/dev/null 2>&1; then
-    sudo npm install -g @anthropic-ai/claude-code
+    if ! sudo npm install -g @anthropic-ai/claude-code; then
+        friendly_warn "Claude Code CLI npm install failed (step 3, non-fatal)" \
+"$(cat <<MSG
+sudo npm install -g @anthropic-ai/claude-code failed. This is NON-FATAL —
+you can install it manually after bootstrap completes.
+
+To install manually:
+  sudo npm install -g @anthropic-ai/claude-code
+  claude --version
+
+The bootstrap will continue. Services that do not depend on the claude
+CLI will start normally.
+MSG
+)"
+    fi
 fi
 # Native binary (idempotent: skip if already present)
 if [ ! -x "$HOME/.local/bin/claude" ]; then
@@ -131,7 +227,25 @@ fi
 step "4/15  markserv@1.17.4  (pinned — markdown preview for files domain)"
 # ---------------------------------------------------------------------------
 if ! npm ls -g markserv 2>/dev/null | grep -q markserv; then
-    sudo npm install -g markserv@1.17.4
+    if ! sudo npm install -g markserv@1.17.4; then
+        friendly_halt "markserv install failed (step 4)" \
+"$(cat <<MSG
+npm install -g markserv@1.17.4 failed.
+markserv is required for the files relay domain to serve markdown previews.
+
+Common causes:
+  1. npm registry unreachable (network issue)
+  2. Disk full: check with df -h
+
+Try manually:
+  sudo npm install -g markserv@1.17.4
+  markserv --version
+
+Then re-run (idempotent):
+  sudo bash /opt/claude-soma/scripts/bootstrap.sh
+MSG
+)"
+    fi
 fi
 markserv --version 2>/dev/null || echo "markserv installed"
 
@@ -142,7 +256,24 @@ if [[ ! -d "${REPO_ROOT}/.venv" ]]; then
     as_ubuntu python3.12 -m venv "${REPO_ROOT}/.venv"
 fi
 as_ubuntu "${REPO_ROOT}/.venv/bin/pip" install --upgrade pip
-as_ubuntu "${REPO_ROOT}/.venv/bin/pip" install -e "${REPO_ROOT}"
+if ! as_ubuntu "${REPO_ROOT}/.venv/bin/pip" install -e "${REPO_ROOT}"; then
+    friendly_halt "Python package install failed (step 5)" \
+"$(cat <<MSG
+pip install -e failed for the claude-soma package.
+Common causes:
+  1. A missing system library (check pyproject.toml [build-system] dependencies)
+  2. Network failure downloading a PyPI dependency
+  3. Python C extension compilation failed (missing build-essential or cmake)
+
+Try manually:
+  source /opt/claude-soma/.venv/bin/activate
+  pip install -e /opt/claude-soma
+
+Then re-run (idempotent):
+  sudo bash /opt/claude-soma/scripts/bootstrap.sh
+MSG
+)"
+fi
 # huggingface_hub[cli] is NOT in pyproject.toml but required by the hf CLI
 as_ubuntu "${REPO_ROOT}/.venv/bin/pip" install 'huggingface_hub[cli]'
 
@@ -178,14 +309,24 @@ step "7/15  frontend build (pnpm install + build_frontend.sh standalone copy)"
 # pnpm 10+ blocks build scripts by default; frontend/package.json configures
 # pnpm.onlyBuiltDependencies to allow sharp, msw, @tailwindcss/oxide.
 if ! as_ubuntu bash "${REPO_ROOT}/scripts/build_frontend.sh"; then
-    echo
-    echo "FATAL: frontend build failed at step 7." >&2
-    echo "  Common causes:" >&2
-    echo "    1. pnpm 10 ignored-builds — check frontend/package.json pnpm.onlyBuiltDependencies" >&2
-    echo "    2. Insufficient memory (next build needs ~1-2 GB free during build)" >&2
-    echo "    3. Network failure during pnpm install" >&2
-    echo "  Bootstrap will exit. Fix the cause + re-run scripts/bootstrap.sh (idempotent)." >&2
-    exit 7
+    friendly_halt "Frontend build failed (step 7)" \
+"$(cat <<MSG
+The Next.js frontend build did not complete. This is unusual because
+build_frontend.sh has built-in pnpm 10 ignored-builds detection + recovery.
+
+Common remaining causes:
+  1. Insufficient memory — next build needs ~1-2 GB free
+       Free memory: $(free -h | awk '/^Mem:/{print $4}' 2>/dev/null || echo '(unknown)')
+  2. Network failure during pnpm install (NPM registry timeout)
+  3. Lockfile vs package.json mismatch — regenerate with:
+       cd /opt/claude-soma/frontend && rm pnpm-lock.yaml && pnpm install
+  4. Stale pnpm store — clear with:
+       pnpm store prune
+
+Fix the cause + re-run (idempotent):
+  sudo bash /opt/claude-soma/scripts/bootstrap.sh
+MSG
+)"
 fi
 
 # ---------------------------------------------------------------------------
@@ -211,17 +352,33 @@ step "10/15  enable long-running services (start immediately)"
 # ---------------------------------------------------------------------------
 # These are the 4 persistent services that must be running at all times.
 # Secrets must be in /etc/claude-soma/secrets.env before starting channel.service.
-sudo systemctl enable --now \
+if ! sudo systemctl enable --now \
     claude-soma-api.service \
     claude-soma-frontend.service \
     claude-soma-markserv.service \
-    claude-soma-channel.service
+    claude-soma-channel.service; then
+    friendly_warn "One or more long-running services failed to start (step 10)" \
+"$(cat <<MSG
+systemctl enable --now failed for at least one service. This can happen because:
+  1. Secrets are not yet filled in /etc/claude-soma/secrets.env
+     (claude-soma-channel.service needs TELEGRAM_BOT_TOKEN to start cleanly)
+  2. A port conflict — check: sudo ss -tlnp | grep -E '3000|8080|4000'
+  3. A unit file error — check: sudo systemctl status claude-soma-*.service
+
+After filling secrets, restart the services:
+  sudo systemctl restart claude-soma-api.service claude-soma-frontend.service \
+      claude-soma-channel.service claude-soma-markserv.service
+
+The bootstrap will continue — Caddy + timers will still be configured.
+MSG
+)"
+fi
 
 # ---------------------------------------------------------------------------
 step "11/15  enable timers (start immediately)"
 # ---------------------------------------------------------------------------
 # All 12 production timers. Re-enabling an already-enabled timer is a no-op.
-sudo systemctl enable --now \
+if ! sudo systemctl enable --now \
     claude-soma-healthcheck.timer \
     claude-soma-cache-refresh.timer \
     claude-soma-secrets-backup.timer \
@@ -233,34 +390,81 @@ sudo systemctl enable --now \
     claude-soma-listener-healthcheck.timer \
     claude-soma-engagement-drip.timer \
     claude-soma-channel-clear.timer \
-    claude-soma-relay-cleanup.timer
+    claude-soma-relay-cleanup.timer; then
+    friendly_warn "One or more timers failed to enable (step 11)" \
+"$(cat <<MSG
+systemctl enable --now failed for at least one timer. This is usually
+non-critical — the system can come up and run without all timers.
+
+Check which timers failed:
+  systemctl list-timers --all | grep claude-soma
+
+Re-enable a specific failed timer:
+  sudo systemctl enable --now claude-soma-<name>.timer
+
+The bootstrap will continue.
+MSG
+)"
+fi
 
 # ---------------------------------------------------------------------------
-step "13/17  Install Caddyfile + reload (base only; site configs land via finalize-caddy.sh later)"
+step "13/17  Install Caddyfile (base only; site configs land via finalize-caddy.sh after secrets+DNS)"
 # ---------------------------------------------------------------------------
 # Install the base Caddyfile only. The `import /etc/caddy/conf.d/*.caddyfile`
 # glob is a no-op when conf.d/ is empty (created in step 6 above). Site configs
 # (soma.<domain>, files.<domain>) are rendered by finalize-caddy.sh after
 # SOMA_DOMAIN + HERMES_FILES_PASSWORD are set in /etc/claude-soma/secrets.env.
-sudo install -m 644 "${REPO_ROOT}/Caddyfile" /etc/caddy/Caddyfile
-if sudo caddy validate --config /etc/caddy/Caddyfile 2>&1; then
-    if ! sudo systemctl reload caddy.service 2>&1; then
-        cat <<'WARN'
-WARNING: Caddy reload failed (likely because site configs in /etc/caddy/conf.d/
-reference SOMA_DOMAIN which is not set yet). This is NON-FATAL — Caddy will
-come up properly after you:
-  1. Fill SOMA_DOMAIN, FILES_DOMAIN, HERMES_FILES_PASSWORD in /etc/claude-soma/secrets.env
-  2. Run: sudo bash /opt/claude-soma/scripts/finalize-caddy.sh
 
-The rest of the bootstrap continues.
-WARN
-    else
+sudo install -d -m 755 /etc/caddy/conf.d
+sudo install -m 644 "${REPO_ROOT}/Caddyfile" /etc/caddy/Caddyfile
+
+CADDY_OK=0
+if sudo caddy validate --config /etc/caddy/Caddyfile >/dev/null 2>&1; then
+    if sudo systemctl reload caddy.service >/dev/null 2>&1; then
+        CADDY_OK=1
         echo "  Caddy reloaded OK"
+    elif sudo systemctl restart caddy.service >/dev/null 2>&1; then
+        CADDY_OK=1
+        echo "  Caddy restarted OK"
     fi
-else
-    echo "WARNING: Caddyfile validation failed — skipping reload." >&2
-    echo "  Investigate /etc/caddy/Caddyfile, then run: sudo systemctl reload caddy.service" >&2
-    echo "  The rest of bootstrap continues." >&2
+fi
+
+if [[ $CADDY_OK -eq 0 ]]; then
+    PUBLIC_IP="$(bash "${REPO_ROOT}/scripts/show-dns-setup.sh" 2>/dev/null | grep -m1 -oE '([0-9]+\.){3}[0-9]+' || echo '<your-VPS-public-IP>')"
+    friendly_warn "Caddy is installed but not yet serving your sites — this is EXPECTED" \
+"$(cat <<MSG
+Caddy needs your domain + DNS to be set before it can serve and auto-obtain TLS certs.
+This is NORMAL at this point in the install.
+
+To finish (after this bootstrap completes):
+
+  1. Set your domain in /etc/claude-soma/secrets.env:
+       SOMA_DOMAIN=<your-domain>         (e.g. example.com — without the soma. prefix)
+       HERMES_FILES_PASSWORD=<password>  (strong password for the files relay)
+     Edit with:  sudo nano /etc/claude-soma/secrets.env
+     (Or use the OPTION B Claude copilot described in the FINAL STEP below.)
+
+  2. Add these DNS A records at your DNS provider (Cloudflare, Namecheap, etc.):
+
+       Type   Name (Host)             Value (points to)
+       A      soma.<your-domain>      ${PUBLIC_IP}
+       A      files.<your-domain>     ${PUBLIC_IP}
+
+     Or a single wildcard:
+       A      *.<your-domain>         ${PUBLIC_IP}
+
+  3. Once DNS records are propagating, finish Caddy:
+       sudo bash /opt/claude-soma/scripts/finalize-caddy.sh
+
+     This renders site configs, validates, starts Caddy, and Caddy
+     auto-obtains TLS certificates from Let's Encrypt.
+
+Re-check DNS propagation anytime:
+  bash /opt/claude-soma/scripts/show-dns-setup.sh --check
+
+The rest of this bootstrap continues normally.
+MSG
+)"
 fi
 
 # ---------------------------------------------------------------------------
