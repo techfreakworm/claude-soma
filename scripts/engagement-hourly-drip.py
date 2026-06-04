@@ -214,13 +214,14 @@ def regenerate_review_page(
     os.replace(tmp, out_path)
 
 
-def send_telegram_dm(token: str, chat_id: str, text: str) -> None:
+def send_telegram_dm(token: str, chat_id: str, text: str) -> bool:
     if not token or not chat_id:
-        return
+        return False
     url = f"https://api.telegram.org/bot{token}/sendMessage"
     data = urllib.parse.urlencode({"chat_id": chat_id, "text": text}).encode()
     req = urllib.request.Request(url, data=data)
     urllib.request.urlopen(req, timeout=5)
+    return True
 
 
 def drip(cfg: dict) -> int:
@@ -309,8 +310,20 @@ def drip(cfg: dict) -> int:
     dm_text = "\n".join(dm_lines)
 
     try:
-        send_telegram_dm(cfg["tg_token"], cfg["tg_chat_id"], dm_text)
-        _log(log, "drip: Telegram DM sent")
+        if send_telegram_dm(cfg["tg_token"], cfg["tg_chat_id"], dm_text):
+            _log(log, "drip: Telegram DM sent")
+        else:
+            missing = []
+            if not cfg["tg_token"]:
+                missing.append("TELEGRAM_BOT_TOKEN")
+            if not cfg["tg_chat_id"]:
+                missing.append("HERMES_NOTIFY_CHAT_ID")
+            _log(
+                log,
+                "WARNING: Telegram DM skipped — missing in environment: "
+                + ", ".join(missing)
+                + " (set in /etc/claude-soma/secrets.env and restart engagement-drip)",
+            )
     except Exception as exc:
         _log(log, f"WARNING: Telegram DM failed: {exc}")
 
