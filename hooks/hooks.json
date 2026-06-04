@@ -38,6 +38,15 @@
             "command": "/opt/claude-soma/scripts/orchestrator_gate.sh"
           }
         ]
+      },
+      {
+        "matcher": "mcp__hermes_api__send_tg_reply|mcp__plugin_telegram_telegram__reply",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/opt/claude-soma/scripts/heard_gate.py"
+          }
+        ]
       }
     ],
     "PostToolUse": [
@@ -47,6 +56,15 @@
           {
             "type": "command",
             "command": "/opt/claude-soma/scripts/log_activity.sh"
+          }
+        ]
+      },
+      {
+        "matcher": "mcp__voice-stt__transcribe",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/opt/claude-soma/scripts/heard_gate.py"
           }
         ]
       }

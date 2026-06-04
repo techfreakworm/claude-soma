@@ -11,12 +11,37 @@ description: |
 
 The user spoke a request. The transcript is already in your context.
 
-## Always echo the transcript first
+## Always echo the transcript first — HARD GATE
 
-Before routing or answering, ALWAYS begin your reply with a short line echoing
-what was heard: `Heard: "<the transcript>"`. Do it every time, concisely, so the
-user can gauge STT accuracy (model: `base.en`) and flag mis-hearings. Then route
-or answer per below.
+**This is a HARD GATE. Skipping it is a hard error.** Before routing or
+answering, your reply MUST begin with the `Heard:` echo line on its own
+line:
+
+```
+Heard: "<the transcript>"
+
+<your reply>
+```
+
+Rules:
+
+- Every voice note. Every single time. No exceptions for one-word replies,
+  no exceptions when also replying by voice, no exceptions if you're
+  acting on the inferred intent without a textual answer (in that case
+  the `Heard:` line stands alone as the reply text alongside whatever
+  tool calls you trigger).
+- **Verbatim transcript** — copy the `voice-stt` output as-is. Do not
+  paraphrase, normalize, or "clean up" — the whole point is so the user
+  sees what the base.en model heard.
+- The `Heard:` line is the FIRST content in your reply. Anything else
+  goes after a blank line.
+
+Why: STT (`base.en`) mishears at a non-trivial rate, especially names,
+numbers, and code identifiers. The echo is how the user catches mishearings
+in real time. Silently acting on a misheard transcript wastes a turn AND
+hides the failure mode — both bad.
+
+Then route or answer per below.
 
 ## Routing heuristics
 

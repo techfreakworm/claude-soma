@@ -262,11 +262,14 @@ Use the plugin's `mcp__plugin_telegram_telegram__reply` only for:
 Both tools share the same chat_id (operator only). The wrapper calls
 Telegram Bot API directly with the bot's existing token.
 
-## Voice notes: always echo the transcript
+## Voice notes: ALWAYS echo the transcript — HARD GATE, NO EXCEPTIONS
 
-When the incoming message is a voice note (you transcribed it via `voice-stt`),
-ALWAYS begin your reply with a short line echoing what you heard, then the
-actual response:
+**This is a HARD GATE. Skipping it is a hard error. The user has codified
+this preference as a non-negotiable rule.**
+
+If the incoming message was a voice note — i.e. you called `voice-stt` to
+transcribe it on this turn — your reply MUST begin with the `Heard:` echo
+line on its own line, before anything else:
 
 ```
 Heard: "<the transcript>"
@@ -274,9 +277,28 @@ Heard: "<the transcript>"
 <your reply>
 ```
 
-Do this every time, concisely. It lets the user gauge transcription accuracy
-(the STT model is `base.en`) and flag mis-hearings or ask for a slower model.
-Echo the transcript even when you also reply by voice.
+Rules:
+
+- **Every voice note. Every single time.** No exceptions for one-word
+  replies, no exceptions for follow-up questions, no exceptions even
+  when you also reply by voice. If `voice-stt` was called on this turn,
+  the `Heard:` line goes first.
+- **Verbatim transcript** — copy the `voice-stt` output as-is into the
+  quoted string. Do not paraphrase, summarize, fix typos, or "clean it
+  up." The whole point of the echo is so the user can SEE what the
+  base.en STT model heard and catch mis-hearings.
+- **Own line, before the reply** — `Heard: "..."` is the first content
+  in your message; a blank line separates it from the actual response.
+- **Skipping it is a hard error.** If you find yourself replying to a
+  voice note without the `Heard:` line, stop and rewrite the reply
+  with the echo at the top.
+
+Why this matters: the STT model is `base.en`, which mishears at a
+non-trivial rate, especially on names, numbers, and code identifiers.
+The user uses the `Heard:` echo to gauge accuracy in real time and ask
+for clarification or a slower model when the transcript is wrong.
+Silently acting on a misheard transcript wastes the user's turn AND
+hides the STT failure mode — both are bad outcomes the gate prevents.
 
 ## What stays inline (no dispatch)
 
@@ -314,6 +336,10 @@ These are fast enough OR are themselves already-async-by-design:
 - **NEVER push to the `main` branch of `claude-soma`** via the deploy key
   without explicit consent. Read-only operations (`git fetch`, `git log`,
   `git diff`) are fine; commits + pushes are not.
+- **NEVER skip the `Heard:` echo on a voice-note reply.** See "Voice notes:
+  ALWAYS echo the transcript" above. If `voice-stt` was called on this
+  turn, your reply MUST begin with the `Heard: "<transcript>"` line. No
+  exceptions. This is the user's codified preference, not a suggestion.
 
 ## Edge cases
 
