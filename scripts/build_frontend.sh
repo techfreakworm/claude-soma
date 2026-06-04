@@ -19,6 +19,28 @@ if [[ -z "${AUTH_SECRET:-}" ]]; then
     fi
 fi
 
+# Force pnpm into a deterministic mode regardless of TTY / HOME / sudo
+# context.  Reasoning:
+#
+#   - CI=1: makes pnpm behave identically in TTY and non-TTY (no interactive
+#     prompts, consistent strict-dep-builds enforcement). Without this, the
+#     user's interactive sudo run and our headless test exercise different
+#     code paths in pnpm 10, and the gap between them is exactly how step 7
+#     repeatedly broke for the user but passed in our test harness.
+#   - HOME defaulted to /home/ubuntu when invoked via `sudo -u ubuntu`, but
+#     only when sudoers preserves HOME. Setting it explicitly removes any
+#     dependence on the operator's sudo configuration (e.g. `Defaults
+#     always_set_home`, `sudo -H`, `sudo -i`).
+#   - PNPM_HOME pins the store location so a `sudo` invocation with a
+#     scrubbed env can't fall back to /usr/local/share/pnpm and lose track
+#     of previously-fetched packages.
+export CI=1
+if [[ -z "${HOME:-}" || "${HOME}" == "/root" ]]; then
+    export HOME=/home/ubuntu
+fi
+export PNPM_HOME="${HOME}/.local/share/pnpm"
+mkdir -p "${PNPM_HOME}"
+
 # pnpm 10 quirks defensively handled.
 #
 # CONFIGURATION:
@@ -107,17 +129,49 @@ if ! sharp_binary_present; then
         exit 1
     fi
     force_rebuild_natives
-    if ! sharp_binary_present; then
-        echo "ERROR: sharp native binary still missing after clean install + rebuild." >&2
-        echo "  Diagnosis:" >&2
-        echo "    1. Verify frontend/pnpm-workspace.yaml lists onlyBuiltDependencies" >&2
-        echo "       including 'sharp' (and 'msw', '@tailwindcss/oxide')." >&2
-        echo "    2. Check that pnpm 10 is the right version: pnpm --version" >&2
-        echo "    3. Look for sharp under node_modules/.pnpm/@img+sharp-*" >&2
-        echo "    4. Manual unblock: cd frontend && rm -rf node_modules && \\" >&2
-        echo "         pnpm install --config.strict-dep-builds=false && pnpm rebuild sharp" >&2
-        exit 1
+fi
+
+# === Phase 2b: belt-and-suspenders — if pnpm STILL didn't materialize sharp,
+# fetch the prebuilt binary via npm directly. npm has no strict-dep-builds gate
+# so this always works regardless of pnpm version, TTY state, or sudo HOME
+# weirdness. Sharp publishes a `@img/sharp-libvips-<platform>` prebuild that
+# `npm install --no-save sharp` will pull into ./node_modules/sharp/build/
+# under the standard npm layout; symlink the binary into the pnpm tree so
+# next-server can resolve it.
+if ! sharp_binary_present; then
+    echo "Note: sharp still missing — falling back to npm direct install..." >&2
+    if npm install --no-save --prefix /tmp/sharp-fallback sharp 2>&1 | tail -5; then
+        SHARP_SRC="/tmp/sharp-fallback/node_modules/sharp"
+        if [[ -d "${SHARP_SRC}/build/Release" ]]; then
+            # Copy into the pnpm content-addressed location the project resolved.
+            for target in node_modules/.pnpm/sharp@*/node_modules/sharp \
+                          node_modules/sharp; do
+                if [[ -d "${target}" ]]; then
+                    mkdir -p "${target}/build"
+                    cp -r "${SHARP_SRC}/build/Release" "${target}/build/Release"
+                    echo "  copied sharp prebuild into ${target}/build/Release"
+                fi
+            done
+        fi
+        rm -rf /tmp/sharp-fallback
     fi
+fi
+
+if ! sharp_binary_present; then
+    echo "ERROR: sharp native binary still missing after every recovery path." >&2
+    echo "  Recovery attempts that ran:" >&2
+    echo "    1. pnpm install --config.strict-dep-builds=false (Phase 1)" >&2
+    echo "    2. pnpm rebuild @tailwindcss/oxide esbuild msw sharp unrs-resolver" >&2
+    echo "    3. rm -rf node_modules + pnpm install + pnpm rebuild (Phase 2)" >&2
+    echo "    4. npm install --no-save sharp + copy into pnpm tree (Phase 2b)" >&2
+    echo "  Diagnosis:" >&2
+    echo "    1. Verify frontend/pnpm-workspace.yaml lists onlyBuiltDependencies" >&2
+    echo "       including 'sharp' (and 'msw', '@tailwindcss/oxide')." >&2
+    echo "    2. Check pnpm is pinned: pnpm --version (expected 10.34.1)" >&2
+    echo "    3. Look for sharp under node_modules/.pnpm/@img+sharp-*" >&2
+    echo "    4. Manual unblock: cd frontend && rm -rf node_modules && \\" >&2
+    echo "         pnpm install --config.strict-dep-builds=false && pnpm rebuild sharp" >&2
+    exit 1
 fi
 
 pnpm run build || {

@@ -171,42 +171,43 @@ MSG
     fi
 fi
 node --version
-# Pin pnpm to the 10.x major.
+# Pin pnpm to an EXACT, tested version. Not just the 10.x major.
 #
-# Why pinned: frontend/pnpm-lock.yaml was generated with pnpm 10. pnpm 11
-# introduced changes that:
-#   1. May silently upgrade the lockfile format (breaks reproducible builds
-#      and our supply-chain policy check).
-#   2. Moved `strict-dep-builds` enforcement into an internal
-#      runDepsStatusCheck that fires inside `pnpm rebuild` and does NOT
-#      honour the `--config.strict-dep-builds=false` flag we pass — so the
-#      ignored-builds recovery path in scripts/build_frontend.sh fails
-#      even after the explicit allow-list is configured.
-#
-# 10.x is the version the live VPS runs and the lockfile was built against;
-# pin until pnpm 11 supports both reproducibly.
-PNPM_PIN_MAJOR=10
+# Why a single exact version (not "@10" or "@latest"):
+#   1. frontend/pnpm-lock.yaml was generated with pnpm 10. pnpm 11 silently
+#      upgrades the lockfile format (breaks reproducible builds + supply-chain
+#      policy) and moves strict-dep-builds enforcement into an internal
+#      runDepsStatusCheck that fires inside `pnpm rebuild` WITHOUT honouring
+#      our --config.strict-dep-builds=false flag — step 7 fails.
+#   2. Inside 10.x there have been behaviour drifts in onlyBuiltDependencies
+#      handling (e.g. between 10.33 and 10.34). The recipe in build_frontend.sh
+#      was tested against 10.34.1 — that is the version we install.
+#   3. The MAJOR-only check ('pnpm@10') accepts whatever 10.x patch the user
+#      already has locally, even if that patch has a known regression.
+#      Pinning the exact version + forcing reinstall on mismatch guarantees
+#      the build runs against the recipe's tested version.
+PNPM_PIN_VERSION="10.34.1"
 need_pnpm_install=0
 if ! command -v pnpm >/dev/null 2>&1; then
     need_pnpm_install=1
 else
-    _installed_pnpm_major="$(pnpm --version 2>/dev/null | cut -d. -f1)"
-    if [[ "${_installed_pnpm_major}" != "${PNPM_PIN_MAJOR}" ]]; then
-        echo "  pnpm $(pnpm --version) installed; re-installing pinned pnpm@${PNPM_PIN_MAJOR}"
+    _installed_pnpm="$(pnpm --version 2>/dev/null)"
+    if [[ "${_installed_pnpm}" != "${PNPM_PIN_VERSION}" ]]; then
+        echo "  pnpm ${_installed_pnpm} installed; re-installing pinned pnpm@${PNPM_PIN_VERSION}"
         need_pnpm_install=1
     fi
 fi
 if [[ "${need_pnpm_install}" -eq 1 ]]; then
-    if ! sudo npm install -g "pnpm@${PNPM_PIN_MAJOR}"; then
+    if ! sudo npm install -g "pnpm@${PNPM_PIN_VERSION}"; then
         friendly_halt "pnpm global install failed (step 2)" \
 "$(cat <<MSG
-npm install -g pnpm@${PNPM_PIN_MAJOR} failed.
+npm install -g pnpm@${PNPM_PIN_VERSION} failed.
 Common causes:
   1. npm registry unreachable (network issue)
   2. Disk full: check with df -h
 
 Try manually:
-  sudo npm install -g pnpm@${PNPM_PIN_MAJOR}
+  sudo npm install -g pnpm@${PNPM_PIN_VERSION}
   pnpm --version
 
 Then re-run (idempotent):
@@ -216,6 +217,31 @@ MSG
     fi
 fi
 pnpm --version
+# Sanity check: confirm the binary on PATH now resolves to the pinned version.
+# A pre-existing pnpm at /usr/local/bin or ~/.local/bin could shadow the npm
+# global install path; if that happens we want the operator to see it loudly,
+# not pick up a stale version silently.
+_active_pnpm_version="$(pnpm --version 2>/dev/null || echo unknown)"
+if [[ "${_active_pnpm_version}" != "${PNPM_PIN_VERSION}" ]]; then
+    friendly_halt "pnpm version mismatch after install (step 2)" \
+"$(cat <<MSG
+After installing pnpm@${PNPM_PIN_VERSION}, 'pnpm --version' still reports
+${_active_pnpm_version}. A stale pnpm binary is shadowing it on PATH.
+
+Find the stale binary:
+  which -a pnpm
+
+Common causes:
+  1. corepack-installed pnpm at /root/.local/share/pnpm or
+     /home/ubuntu/.local/share/pnpm — disable with: corepack disable
+  2. An old global install at /usr/local/bin/pnpm — sudo rm /usr/local/bin/pnpm
+  3. A bunx/asdf-managed pnpm — bring it to ${PNPM_PIN_VERSION} or remove it
+
+After fixing, re-run (idempotent):
+  sudo bash /opt/claude-soma/scripts/bootstrap.sh
+MSG
+)"
+fi
 
 # ---------------------------------------------------------------------------
 step "2b/17  bun runtime (Telegram plugin MCP server requires it)"
