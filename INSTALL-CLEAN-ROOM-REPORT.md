@@ -175,6 +175,49 @@ After those three, `sudo systemctl restart claude-soma-{api,frontend,channel}`
 
 ---
 
+### FI-DOMAIN-PLACEHOLDER — commit `143c161`
+
+User ask 2026-06-04 after viewing the install output: domain must not be
+hardcoded; SOMA_DOMAIN / FILES_DOMAIN must be properly asked / filled.
+
+**Changes:** every shipped install artifact (Caddyfile, caddy/files.caddyfile,
+finalize-caddy.sh, markserv-launch.sh, soma-relay, vps_bootstrap.sh, frontend
+landing components, app/layout metadata, api/main CORS, wizard/init, system
+prompt, systemd unit Description, secrets template, env-copilot prompt,
+INSTALL.md, README forking section, docs/engagement-drip.md URLs) now reads
+its domain from `SOMA_DOMAIN` / `FILES_DOMAIN` / `ACME_EMAIL` in
+`/etc/claude-soma/secrets.env`. Templates use `__SOMA_DOMAIN__`,
+`__FILES_DOMAIN__`, `__ACME_EMAIL__`, `__BCRYPT_HASH__` placeholders that
+`finalize-caddy.sh` substitutes (with sed-fallbacks for pre-migration
+checkouts). `secrets.env.example` now has SOMA_DOMAIN / FILES_DOMAIN /
+ACME_EMAIL at the top as REQUIRED / OPTIONAL keys; env-copilot prompts for
+SOMA_DOMAIN at step 2 (right after CLAUDE_CODE_OAUTH_TOKEN, before GitHub
+OAuth so the callback URL can be derived); NEXTAUTH_URL + CORS are derived
+without re-asking.
+
+### Domain verify run — VERDICT PASS
+
+- Harness: `/tmp/clean-room/iter-domain-verify.sh 1`
+- Started 2026-06-04T13:11Z, ended 13:29Z
+- Faithful clean-VM bootstrap with PTY+sudo+ubuntu invoking sudo: rc=0
+  (placeholder `__SOMA_DOMAIN__` Caddyfile validates as literal site name,
+  step 13 completes normally)
+- Provisioned synthetic `/etc/claude-soma/secrets.env`:
+    ```
+    SOMA_DOMAIN=example.com
+    ACME_EMAIL=admin@example.com
+    HERMES_FILES_PASSWORD=test-bulk-files-password-1234
+    ```
+- `sudo bash scripts/finalize-caddy.sh` substituted placeholders:
+    - `/etc/caddy/Caddyfile` → `soma.example.com` + `admin@example.com`
+    - `/etc/caddy/conf.d/files.caddyfile` → `files.example.com` + real bcrypt hash
+- Final grep across every install artifact (rendered live configs + repo
+  templates + secrets template + env-copilot + INSTALL.md + system prompt):
+  **literal-mayankgupta.in hits: 0** → VERDICT: PASS
+- Full transcript: `/tmp/clean-room/domain-verify-1-131136.log`
+
+---
+
 ## Verdict
 
 (filled in after the loop converges)
