@@ -126,14 +126,26 @@ For the full install runbook with prerequisites, external CLI setup, and trouble
 
 ### Forking — replace the author's personal defaults
 
-The repo ships with the author's live deployment as the worked example, so a few
-personal values appear as defaults. If you stand up your own instance,
-find-replace your domain, Let's Encrypt email, and GitHub handle across
-`Caddyfile`, `systemd/*.service`, `src/claude_soma/api/main.py`,
-`src/claude_soma/wizard/init.py`, the frontend landing components, and
-`.claude-plugin/*.json`. `HERMES_ALLOWED_GITHUB_HANDLES` (the dashboard's
-single-user gate) is set via `/etc/claude-soma/secrets.env`. The
-`docs/superpowers/` specs are frozen historical artifacts — leave them as-is.
+Shipped install artifacts (Caddyfile, `caddy/files.caddyfile`, the API CORS
+fallback, the frontend metadata, the engagement-drip URL template, the channel
+bot's system prompt) all read their domain from envs in
+`/etc/claude-soma/secrets.env`. To stand up your own instance, set these
+keys in that file:
+
+```
+SOMA_DOMAIN=example.com            # base domain — dashboard goes on soma.<this>
+FILES_DOMAIN=files.example.com     # optional override; defaults to files.<SOMA_DOMAIN>
+ACME_EMAIL=you@example.com         # Let's Encrypt registration email
+HERMES_ALLOWED_GITHUB_HANDLES=your-github-username
+```
+
+`scripts/finalize-caddy.sh` renders the Caddyfile + site configs from those
+values. The frontend reads `NEXT_PUBLIC_SITE_URL`, `NEXT_PUBLIC_AUTHOR_NAME`,
+and `NEXT_PUBLIC_AUTHOR_URL` at build time for footer attribution + OpenGraph
+metadata. The `.claude-plugin/*.json` files are plugin marketplace metadata —
+keep the original author there unless you're publishing a fork to your own
+plugin marketplace. The `docs/superpowers/` specs are frozen historical
+artifacts — leave them as-is.
 
 ## Project layout
 

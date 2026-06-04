@@ -9,7 +9,7 @@
 #   SOMA_MARKSERV_PORT  — TCP port to bind    (default: 18081)
 #   SOMA_MARKSERV_ADDR  — bind address        (default: 127.0.0.1)
 #
-# Caddy reverse_proxy forwards files.mayankgupta.in → 127.0.0.1:18081.
+# Caddy's files.<your-domain> site block reverse_proxies to 127.0.0.1:18081.
 
 STAGING_DIR=${SOMA_MARKSERV_ROOT:-/var/lib/claude-soma/relay}
 MARKSERV_PORT=${SOMA_MARKSERV_PORT:-18081}

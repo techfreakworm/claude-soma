@@ -25,7 +25,7 @@ export function Architecture() {
                 ├── voice_stt MCP            ──► whisper.cpp
                 ├── voice_tts MCP            ──► piper → opus
                 ├── project_orchestrator MCP ──► spawns project-leads
-                └── hermes_api MCP           ──► FastAPI ──► soma.mayankgupta.in
+                └── hermes_api MCP           ──► FastAPI ──► soma.<your-domain>
 
 Each lead is spawned via 'sudo systemd-run' into its own transient
 unit + dedicated tmux socket. It inherits every MCP server EXCEPT

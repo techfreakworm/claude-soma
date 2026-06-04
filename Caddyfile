@@ -1,9 +1,16 @@
 # Caddyfile
+#
+# Placeholders (__SOMA_DOMAIN__, __ACME_EMAIL__) are substituted by
+# scripts/finalize-caddy.sh from /etc/claude-soma/secrets.env after the
+# operator fills SOMA_DOMAIN + ACME_EMAIL. The unrendered file is also
+# installed at bootstrap step 13 — Caddy accepts the literal strings as
+# site names (TLS acquisition fails silently) so caddy.service starts;
+# finalize-caddy.sh re-renders + reloads once the operator runs it.
 {
-    email mayank@mayankgupta.in
+    email __ACME_EMAIL__
 }
 
-soma.mayankgupta.in {
+__SOMA_DOMAIN__ {
     # /api/auth/* → Next.js (port 3000). Next-auth owns these routes
     # (signin, callback, session, csrf, etc.) via app/api/auth/[...nextauth].
     # Must be matched BEFORE the generic /api/* rule below.

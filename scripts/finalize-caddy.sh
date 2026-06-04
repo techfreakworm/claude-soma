@@ -86,15 +86,25 @@ TMP_FILES=$(mktemp)
 # shellcheck disable=SC2064
 trap "rm -f '$TMP_MAIN' '$TMP_FILES'" EXIT
 
-# Render the main Caddyfile: replace hardcoded soma.mayankgupta.in with real domain.
-sed -e "s|soma\.mayankgupta\.in|soma.${SOMA_DOMAIN_BASE}|g" \
+# Render the main Caddyfile: substitute __SOMA_DOMAIN__ + __ACME_EMAIL__.
+# Repo template uses placeholders so a fresh clone never ships with someone
+# else's domain in it (and so the installed config is unambiguous about what
+# was substituted vs left literal).
+# The fallback to the old literal `soma.mayankgupta.in` / `mayank@…` keeps
+# this script usable against pre-FI-DOMAIN-PLACEHOLDER checkouts.
+ACME_EMAIL="${ACME_EMAIL:-soma-acme@${SOMA_DOMAIN_BASE}}"
+sed -e "s|__SOMA_DOMAIN__|soma.${SOMA_DOMAIN_BASE}|g" \
+    -e "s|__ACME_EMAIL__|${ACME_EMAIL}|g" \
+    -e "s|soma\.mayankgupta\.in|soma.${SOMA_DOMAIN_BASE}|g" \
+    -e "s|mayank@mayankgupta\.in|${ACME_EMAIL}|g" \
     "$REPO_ROOT/Caddyfile" > "$TMP_MAIN"
 
-# Render files.caddyfile: replace hardcoded domain + bcrypt hash.
-# The sed pattern matches any $2a$14$ bcrypt hash (53 chars of ./[A-Za-z0-9]).
-# The replacement uses mixed quoting so HASH expands via shell but the pattern
-# stays in single quotes (preventing shell expansion of the $2a$14$ in the pattern).
-sed -e "s|files\.mayankgupta\.in|${FILES_DOMAIN}|g" \
+# Render files.caddyfile: substitute __FILES_DOMAIN__ + __BCRYPT_HASH__.
+# Same fallback story for older checkouts that still contain the literal
+# bcrypt hash + domain (regex matches any $2a$14$ hash).
+sed -e "s|__FILES_DOMAIN__|${FILES_DOMAIN}|g" \
+    -e "s|__BCRYPT_HASH__|${HASH}|g" \
+    -e "s|files\.mayankgupta\.in|${FILES_DOMAIN}|g" \
     -e 's|\$2a\$14\$[A-Za-z0-9./]\{53\}|'"${HASH}"'|g' \
     "$REPO_ROOT/caddy/files.caddyfile" > "$TMP_FILES"
 

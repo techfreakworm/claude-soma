@@ -1,3 +1,11 @@
+// Operator-overridable attribution. Defaults preserve the canonical project
+// author when running unconfigured (e.g. a friend doing a quick clone +
+// docker-style trial). Forks who deploy under their own domain should set
+// NEXT_PUBLIC_AUTHOR_NAME + NEXT_PUBLIC_AUTHOR_URL in their build env.
+const AUTHOR_NAME = process.env.NEXT_PUBLIC_AUTHOR_NAME || "the Claude Soma maintainers";
+const AUTHOR_URL =
+  process.env.NEXT_PUBLIC_AUTHOR_URL || "https://github.com/techfreakworm/claude-soma";
+
 export function Footer() {
   return (
     <footer className="border-t border-slate-800/60">
@@ -12,10 +20,10 @@ export function Footer() {
           <p className="text-sm text-slate-500">
             A body for Claude Code. MIT licensed. Built by{" "}
             <a
-              href="https://mayankgupta.in"
+              href={AUTHOR_URL}
               className="text-slate-300 underline underline-offset-4 transition-colors hover:text-slate-100"
             >
-              Mayank Gupta
+              {AUTHOR_NAME}
             </a>
             .
           </p>

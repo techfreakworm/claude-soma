@@ -393,7 +393,7 @@ Layout:
 
 Retention: HERMES_RELAY_RETENTION_DAYS (default 7 days).
 Pin a directory from cleanup: touch <dir>/.pin
-Served at: https://files.mayankgupta.in/ (Caddy basicauth, password in secrets.env)
+Served at: https://files.<your-domain>/ (Caddy basicauth, password in secrets.env)
 RELAY_README_EOF
     echo "Created $RELAY_README"
 fi

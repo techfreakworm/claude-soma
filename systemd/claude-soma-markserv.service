@@ -1,5 +1,5 @@
 [Unit]
-Description=Claude Soma file relay (markserv on /var/lib/claude-soma/relay served via files.mayankgupta.in)
+Description=Claude Soma file relay (markserv on /var/lib/claude-soma/relay served via FILES_DOMAIN)
 After=network-online.target
 Wants=network-online.target
 

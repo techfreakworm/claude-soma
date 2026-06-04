@@ -45,7 +45,7 @@ queued  →  pending_review  →  approved  →  posted
 ```
 
 The review page is served publicly at:
-`https://files.mayankgupta.in/engagement-review.md`
+`https://<FILES_DOMAIN>/engagement-review.md`
 
 ---
 
@@ -119,7 +119,7 @@ journalctl -u claude-soma-engagement-drip.service -n 50
 | `HERMES_ENGAGEMENT_REFILL_THRESHOLD` | `6` |
 | `HERMES_ENGAGEMENT_REVIEW_PAGE` | `/var/lib/claude-soma/relay/engagement-review.md` |
 | `HERMES_ENGAGEMENT_LOG` | `/var/log/claude-soma/engagement-drip.log` |
-| `HERMES_ENGAGEMENT_REVIEW_URL` | `https://files.mayankgupta.in/engagement-review.md` |
+| `HERMES_ENGAGEMENT_REVIEW_URL` | `https://<FILES_DOMAIN>/engagement-review.md` |
 | `TELEGRAM_BOT_TOKEN` | (required for DM) |
 | `HERMES_NOTIFY_CHAT_ID` | (required for DM; fallback: `TELEGRAM_CHAT_ID`) |
 
@@ -204,7 +204,7 @@ Engagement drafts ready for review:
 X: @handle (id: <id>)
 LinkedIn: Name (id: <id>)
 
-Review: https://files.mayankgupta.in/engagement-review.md
+Review: https://<FILES_DOMAIN>/engagement-review.md
 
 Commands: approve <id> | approve all | decline <id>
 ```

@@ -69,7 +69,7 @@ def validate_domain(d: str) -> bool:
 
 def render_caddyfile(domain: str | None = None, email: str = "") -> str:
     if domain is None:
-        domain = os.environ.get("SOMA_DOMAIN", "soma.mayankgupta.in")
+        domain = os.environ.get("SOMA_DOMAIN", "soma.example.com")
     email_block = f"    email {email}\n" if email else ""
     return dedent(f"""\
         {{
@@ -403,7 +403,7 @@ def run() -> int:
     print("Claude Soma setup wizard")
     print("========================\n")
 
-    domain = prompt("Public dashboard domain", os.environ.get("SOMA_DOMAIN", "soma.mayankgupta.in"))
+    domain = prompt("Public dashboard domain", os.environ.get("SOMA_DOMAIN", "soma.example.com"))
     if not validate_domain(domain):
         print(f"invalid domain: {domain!r}", file=sys.stderr)
         return 1

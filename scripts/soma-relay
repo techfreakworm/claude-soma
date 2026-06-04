@@ -11,14 +11,39 @@
 #
 # Environment:
 #   HERMES_LEAD_NAME    lead namespace (default: general)
-#   SOMA_RELAY_DOMAIN   relay domain (default: files.mayankgupta.in)
+#   SOMA_RELAY_DOMAIN   relay domain (default: read from FILES_DOMAIN in
+#                       /etc/claude-soma/secrets.env, fall back to
+#                       files.<SOMA_DOMAIN>; required if neither is set)
 #   SOMA_RELAY_ROOT     relay root directory (default: /var/lib/claude-soma/relay)
 
 set -euo pipefail
 
 LEAD="${HERMES_LEAD_NAME:-general}"
-DOMAIN="${SOMA_RELAY_DOMAIN:-}"
 ROOT="${SOMA_RELAY_ROOT:-/var/lib/claude-soma/relay}"
+
+# Resolve relay domain. Precedence: explicit env > FILES_DOMAIN from
+# secrets.env > files.<SOMA_DOMAIN>. Sourcing the secrets file is best-effort
+# (it's root-owned 600 in the canonical deploy; non-root callers fall through).
+_resolve_relay_domain() {
+    if [[ -n "${SOMA_RELAY_DOMAIN:-}" ]]; then
+        echo "${SOMA_RELAY_DOMAIN}"; return
+    fi
+    local secrets=/etc/claude-soma/secrets.env
+    if [[ -r "${secrets}" ]]; then
+        # shellcheck disable=SC1090
+        local _files _soma
+        _files="$(grep -E '^FILES_DOMAIN=' "${secrets}" | tail -1 | cut -d= -f2- | tr -d '"')"
+        if [[ -n "${_files}" ]]; then echo "${_files}"; return; fi
+        _soma="$(grep -E '^SOMA_DOMAIN=' "${secrets}" | tail -1 | cut -d= -f2- | tr -d '"')"
+        if [[ -n "${_soma}" ]]; then echo "files.${_soma#soma.}"; return; fi
+    fi
+}
+DOMAIN="$(_resolve_relay_domain)"
+if [[ -z "${DOMAIN}" ]]; then
+    echo "ERROR: relay domain not resolvable. Set SOMA_RELAY_DOMAIN, or" >&2
+    echo "       SOMA_DOMAIN/FILES_DOMAIN in /etc/claude-soma/secrets.env." >&2
+    exit 2
+fi
 
 _usage() {
     echo "Usage: soma-relay publish [--public] <file>" >&2

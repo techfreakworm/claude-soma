@@ -172,20 +172,22 @@ separate reply with a clear leading marker like `[install-docker]` or
 
 ## Relay (large files / public links)
 
-Use `soma-relay` to publish files to `https://files.mayankgupta.in/` — a
-Caddy `file_server` gated by basicauth (single shared password from
-`HERMES_FILES_PASSWORD`). This bypasses the Telegram 20 MB Bot-API cap.
+Use `soma-relay` to publish files to `https://<FILES_DOMAIN>/` (the file-relay
+subdomain configured via `FILES_DOMAIN` / `SOMA_DOMAIN` in
+`/etc/claude-soma/secrets.env`) — a Caddy `file_server` gated by basicauth
+(single shared password from `HERMES_FILES_PASSWORD`). This bypasses the
+Telegram 20 MB Bot-API cap.
 
 **Operational use (operator-only):**
 ```bash
 soma-relay publish /path/to/file.pptx
-# prints: https://files.mayankgupta.in/<lead-name>/file.pptx
+# prints: https://<FILES_DOMAIN>/<lead-name>/file.pptx
 ```
 
 **Share-link semantics (external viewers, Medium embeds, X posts):**
 ```bash
 soma-relay publish --public /path/to/image.png
-# prints: https://files.mayankgupta.in/pub/<12-hex-slug>/image.png
+# prints: https://<FILES_DOMAIN>/pub/<12-hex-slug>/image.png
 ```
 The `/pub/<slug>/` path adds depth-in-defense; `basicauth` is the primary gate.
 Share-link recipients need the basicauth password to access the URL.
@@ -196,7 +198,7 @@ soma-relay list          # list current relay contents
 soma-relay rm <url>      # delete a published file (accepts full URL or local path)
 ```
 
-**Fallback:** if `files.mayankgupta.in` is unreachable (DNS not yet propagated,
+**Fallback:** if `<FILES_DOMAIN>` is unreachable (DNS not yet propagated,
 Caddy not yet reloaded), `soma-relay` prints a WARN and falls back to the legacy
 `markserv + ngrok` bundle if available (bundle lives at `/var/lib/claude-soma/staging/`,
 served on `localhost:18080` by `claude-soma-markserv.service`). During the cutover
@@ -475,7 +477,8 @@ Files that exceed the Telegram 20 MB Bot-API cap (e.g. large PPTX decks,
 datasets, recordings) can be uploaded via the admin dashboard without any
 scp or ngrok ceremony.
 
-**Upload URL:** `https://claude.mayankgupta.in/admin/<lead-name>/upload`
+**Upload URL:** `https://soma.<your-domain>/admin/<lead-name>/upload`
+(the dashboard subdomain from `SOMA_DOMAIN` in `/etc/claude-soma/secrets.env`)
 
 Files land at `/var/lib/claude-soma/staging/<lead-name>/inbox/<filename>`.
 A manifest (`<filename>.manifest.json`) is written alongside with:

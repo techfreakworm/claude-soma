@@ -12,8 +12,14 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+// NEXT_PUBLIC_SITE_URL is set from NEXTAUTH_URL at build/runtime and tells
+// Next where the canonical public origin is. Fallback is a deliberately
+// invalid local sentinel so a misconfigured deploy is obvious in the rendered
+// HTML rather than silently leaking a previous operator's domain.
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
+
 export const metadata: Metadata = {
-  metadataBase: new URL("https://soma.mayankgupta.in"),
+  metadataBase: new URL(SITE_URL),
   title: {
     default: "Claude Soma — a body for Claude Code",
     template: "%s · Claude Soma",
@@ -28,7 +34,7 @@ export const metadata: Metadata = {
     description:
       "A Telegram channel, voice in/out, and a project orchestrator that spawns " +
       "persistent isolated agent teams. Built as a Claude Code plugin. No API keys.",
-    url: "https://soma.mayankgupta.in",
+    url: SITE_URL,
     siteName: "Claude Soma",
     type: "website",
   },

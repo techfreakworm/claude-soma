@@ -47,7 +47,44 @@ sudo sed -i "s|^CLAUDE_CODE_OAUTH_TOKEN=.*|CLAUDE_CODE_OAUTH_TOKEN=<value>|" /et
 
 ---
 
-### 2. AUTH_GITHUB_ID and AUTH_GITHUB_SECRET
+### 2. SOMA_DOMAIN (REQUIRED — set this BEFORE the GitHub OAuth step)
+
+The base domain you own. The dashboard will live at `soma.<SOMA_DOMAIN>` and the file relay at `files.<SOMA_DOMAIN>`. Ask the user "what's the domain you own?" — they should answer with just the apex (e.g. `example.com`, not `https://example.com` or `soma.example.com`).
+
+Once you have it, also explain what derives from it: their dashboard URL is `https://soma.<value>`, the GitHub OAuth callback they configure next must point to that URL.
+
+Write command:
+```bash
+sudo sed -i "s|^SOMA_DOMAIN=.*|SOMA_DOMAIN=<value>|" /etc/claude-soma/secrets.env
+```
+
+DNS reminder: tell the user they will need to add two A records at their DNS provider — `soma.<value>` and `files.<value>` both pointing at this VPS's public IP. They can do this now or at the finalize-caddy step; either is fine.
+
+---
+
+### 3. FILES_DOMAIN (optional — leave blank to use the default)
+
+Only ask if the user wants the file relay on a different host from `files.<SOMA_DOMAIN>` (e.g. a CDN subdomain). For 99% of installs, leave this blank. If they don't say otherwise, skip without writing.
+
+Write command (only if they explicitly provide one):
+```bash
+sudo sed -i "s|^# *FILES_DOMAIN=.*|FILES_DOMAIN=<value>|" /etc/claude-soma/secrets.env
+```
+
+---
+
+### 4. ACME_EMAIL (REQUIRED for Let's Encrypt)
+
+The email address Let's Encrypt registers your TLS certs under. They send expiry warnings here. Ask the user for a real inbox they check (their personal email is fine).
+
+Write command:
+```bash
+sudo sed -i "s|^ACME_EMAIL=.*|ACME_EMAIL=<value>|" /etc/claude-soma/secrets.env
+```
+
+---
+
+### 5. AUTH_GITHUB_ID and AUTH_GITHUB_SECRET
 
 These two keys enable GitHub OAuth login on the dashboard. You need to create a GitHub OAuth App:
 
@@ -72,7 +109,7 @@ sudo sed -i "s|^AUTH_GITHUB_SECRET=.*|AUTH_GITHUB_SECRET=<value>|" /etc/claude-s
 
 ---
 
-### 3. HERMES_ALLOWED_GITHUB_HANDLES
+### 6. HERMES_ALLOWED_GITHUB_HANDLES
 
 A comma-separated list of GitHub usernames allowed to log into the dashboard. **This is required — leave it empty and no one can log in.** Typically this is just your own GitHub username.
 
@@ -85,7 +122,7 @@ sudo sed -i "s|^HERMES_ALLOWED_GITHUB_HANDLES=.*|HERMES_ALLOWED_GITHUB_HANDLES=<
 
 ---
 
-### 4. NEXTAUTH_SECRET
+### 7. NEXTAUTH_SECRET
 
 A random 32-byte secret used to sign NextAuth session cookies. Generate it for the user right now:
 
@@ -97,28 +134,25 @@ Run that command, then write the output to the file. The user does not need to t
 
 ---
 
-### 5. NEXTAUTH_URL
+### 8. NEXTAUTH_URL
 
-The full public HTTPS URL to the dashboard. Example: `https://soma.yourdomain.com`. Ask the user for their domain and confirm the URL before writing.
-
----
-
-### 6. HERMES_API_CORS_ORIGINS
-
-The allowed CORS origins for the API service. This must include your soma domain and localhost for dev.
-Format: `https://soma.<your-domain>,http://localhost:3000`
-
-Ask the user to confirm their soma domain and write the value.
+The full public HTTPS URL to the dashboard. Derive it from SOMA_DOMAIN that the user already set in step 2: it must be exactly `https://soma.<SOMA_DOMAIN>` (e.g. SOMA_DOMAIN=example.com → NEXTAUTH_URL=https://soma.example.com). Read SOMA_DOMAIN from the file and write NEXTAUTH_URL without re-asking the user.
 
 ---
 
-### 7. HERMES_FILES_PASSWORD
+### 9. HERMES_API_CORS_ORIGINS
 
-A password that protects the file relay at `https://files.<your-domain>` with HTTP basic auth. Let the user choose a strong password (minimum 16 characters, mix of letters and numbers recommended). After writing this value, remind them that a separate step is needed once SOMA_DOMAIN is also set: run `sudo bash scripts/finalize-caddy.sh` to render the site configs (including the bcrypt hash) and reload Caddy. You will remind them again at the end.
+The allowed CORS origins for the API service. Derive from SOMA_DOMAIN — no need to re-ask. Format: `https://soma.<SOMA_DOMAIN>,http://localhost:3000` (e.g. `https://soma.example.com,http://localhost:3000`). Write it without prompting.
 
 ---
 
-### 8. TELEGRAM_BOT_TOKEN
+### 10. HERMES_FILES_PASSWORD
+
+A password that protects the file relay at `https://files.<SOMA_DOMAIN>` (or `https://<FILES_DOMAIN>` if they set an override in step 3) with HTTP basic auth. Let the user choose a strong password (minimum 16 characters, mix of letters and numbers recommended). After writing this value, remind them that `sudo bash scripts/finalize-caddy.sh` (run later) will render the site configs (including the bcrypt hash) and reload Caddy. You will remind them again at the end.
+
+---
+
+### 11. TELEGRAM_BOT_TOKEN
 
 This is how the bot talks to Telegram. To get it:
 
@@ -137,7 +171,7 @@ chmod 600 ~/.claude/channels/telegram/.env
 
 ---
 
-### 9. HERMES_NOTIFY_CHAT_ID and TELEGRAM_CHAT_ID — Telegram pairing
+### 12. HERMES_NOTIFY_CHAT_ID and TELEGRAM_CHAT_ID — Telegram pairing
 
 These are your personal numeric Telegram chat ID. Both keys get the same value.
 
@@ -161,9 +195,9 @@ This script auto-detects your chat ID and writes it to both keys and to the acce
 
 ---
 
-### 10. SOMA_DOMAIN (if not already set)
+### 13. Final confirmation — SOMA_DOMAIN consistency check
 
-The base domain, e.g. `yourdomain.com`. If this key is present in the template and currently blank, ask the user to confirm their domain and write it.
+By now SOMA_DOMAIN, FILES_DOMAIN (optional), and ACME_EMAIL are all set from steps 2-4. Double-check the derived values are consistent: NEXTAUTH_URL = `https://soma.<SOMA_DOMAIN>`, HERMES_API_CORS_ORIGINS contains the same. If not, fix before moving on.
 
 ---
 
@@ -223,7 +257,7 @@ After validation passes, offer to do the following — one step at a time, confi
    ```bash
    sudo bash /opt/claude-soma/scripts/finalize-caddy.sh
    ```
-   This replaces the manual bcrypt-hash step that INSTALL.md Step 6 previously described. finalize-caddy.sh reads SOMA_DOMAIN and HERMES_FILES_PASSWORD from secrets.env automatically.
+   This reads SOMA_DOMAIN, ACME_EMAIL, FILES_DOMAIN, and HERMES_FILES_PASSWORD from `/etc/claude-soma/secrets.env` and renders `/etc/caddy/Caddyfile` + `/etc/caddy/conf.d/files.caddyfile` with the user's real domain (substituting the `__SOMA_DOMAIN__` / `__FILES_DOMAIN__` / `__ACME_EMAIL__` placeholders in the shipped templates) plus the bcrypt hash for the file relay's basicauth. Then reloads Caddy. After this step, `https://soma.<SOMA_DOMAIN>` + `https://files.<SOMA_DOMAIN>` should resolve and serve TLS.
 
 Congratulate the user — they have completed the hardest part of the install. The dashboard should be live and the bot should be responding.
 

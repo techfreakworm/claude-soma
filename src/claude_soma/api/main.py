@@ -8,10 +8,19 @@ from fastapi.middleware.cors import CORSMiddleware
 
 def create_app() -> FastAPI:
     app = FastAPI(title="claude-soma-api", version="0.1.0")
-    _soma_domain = os.environ.get("SOMA_DOMAIN", "soma.mayankgupta.in")
+    # SOMA_DOMAIN is the base domain (e.g. example.com). CORS allows the
+    # soma.<domain> origin + localhost. If neither HERMES_API_CORS_ORIGINS nor
+    # SOMA_DOMAIN is set, fall back to localhost-only — explicit deploys must
+    # configure their domain via secrets.env to be reachable cross-origin.
+    _soma_domain = os.environ.get("SOMA_DOMAIN", "").strip()
+    _base = _soma_domain[5:] if _soma_domain.startswith("soma.") else _soma_domain
+    if _base:
+        _default_origin = f"https://soma.{_base},http://localhost:3000"
+    else:
+        _default_origin = "http://localhost:3000"
     origins = [o.strip() for o in os.environ.get(
         "HERMES_API_CORS_ORIGINS",
-        f"https://{_soma_domain},http://localhost:3000",
+        _default_origin,
     ).split(",") if o.strip()]
     app.add_middleware(
         CORSMiddleware, allow_origins=origins, allow_credentials=True,

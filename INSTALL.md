@@ -217,16 +217,19 @@ See `secrets.env.example` in the repo root for the full key list with inline com
 | Key | Where to get it |
 |---|---|
 | `CLAUDE_CODE_OAUTH_TOKEN` | Step 4 (`claude login`) |
+| `SOMA_DOMAIN` | **REQUIRED.** Your base domain — dashboard goes on `soma.<this>` (e.g. `example.com` → dashboard at `soma.example.com`). |
+| `FILES_DOMAIN` | _Optional._ Override the relay subdomain (defaults to `files.<SOMA_DOMAIN>`). |
+| `ACME_EMAIL` | **REQUIRED.** Let's Encrypt registration email — Caddy uses it to obtain TLS certs and ship expiry warnings. |
 | `AUTH_GITHUB_ID` | GitHub OAuth App (Client ID) — see Prerequisites |
 | `AUTH_GITHUB_SECRET` | GitHub OAuth App (Client Secret) — see Prerequisites |
 | `HERMES_ALLOWED_GITHUB_HANDLES` | your GitHub username (comma-separated for multiple) |
 | `NEXTAUTH_SECRET` | `openssl rand -base64 32` |
-| `NEXTAUTH_URL` | `https://soma.<your-domain>` |
+| `NEXTAUTH_URL` | `https://soma.<SOMA_DOMAIN>` (e.g. `https://soma.example.com`) |
 | `TELEGRAM_BOT_TOKEN` | @BotFather — see Prerequisites; then run `setup-telegram.sh` |
 | `HERMES_NOTIFY_CHAT_ID` | auto-detected by `setup-telegram.sh`, or getUpdates chat.id |
 | `TELEGRAM_CHAT_ID` | same value as `HERMES_NOTIFY_CHAT_ID` |
-| `HERMES_API_CORS_ORIGINS` | `https://soma.<your-domain>,http://localhost:3000` |
-| `HERMES_FILES_PASSWORD` | choose a strong password (used for basicauth on files domain) |
+| `HERMES_API_CORS_ORIGINS` | `https://soma.<SOMA_DOMAIN>,http://localhost:3000` |
+| `HERMES_FILES_PASSWORD` | choose a strong password (used for basicauth on `files.<SOMA_DOMAIN>`) |
 
 Optional keys (leave commented out to use defaults):
 
@@ -239,20 +242,20 @@ Optional keys (leave commented out to use defaults):
 
 ## Step 6 — Finalize Caddy site configs
 
-After filling in `SOMA_DOMAIN` and `HERMES_FILES_PASSWORD` (and optionally `FILES_DOMAIN`) in `secrets.env`, run:
+After filling in `SOMA_DOMAIN`, `ACME_EMAIL`, `HERMES_FILES_PASSWORD` (and optionally `FILES_DOMAIN`) in `secrets.env`, **and** verifying the DNS A records for `soma.<SOMA_DOMAIN>` + `files.<SOMA_DOMAIN>` resolve to this VPS (Let's Encrypt cert acquisition fails if they don't), run:
 
 ```bash
 sudo bash /opt/claude-soma/scripts/finalize-caddy.sh
 ```
 
 This script:
-- Reads `SOMA_DOMAIN`, `FILES_DOMAIN`, and `HERMES_FILES_PASSWORD` from `/etc/claude-soma/secrets.env`
+- Reads `SOMA_DOMAIN`, `FILES_DOMAIN`, `ACME_EMAIL`, and `HERMES_FILES_PASSWORD` from `/etc/claude-soma/secrets.env`
 - Generates the bcrypt hash for the Caddy basicauth block automatically
-- Renders `/etc/caddy/Caddyfile` with `soma.<your-domain>` replacing the hardcoded placeholder
-- Renders `/etc/caddy/conf.d/files.caddyfile` with `files.<your-domain>` + the generated hash
+- Renders `/etc/caddy/Caddyfile` by substituting the `__SOMA_DOMAIN__` + `__ACME_EMAIL__` placeholders shipped in the repo
+- Renders `/etc/caddy/conf.d/files.caddyfile` by substituting `__FILES_DOMAIN__` + `__BCRYPT_HASH__`
 - Validates the Caddy config and reloads Caddy
 
-Verify: `curl -sI -u "soma:$HERMES_FILES_PASSWORD" https://files.<your-domain>/ | head -3` — expect HTTP 200.
+Verify: `curl -sI -u "soma:$HERMES_FILES_PASSWORD" https://files.<SOMA_DOMAIN>/ | head -3` — expect HTTP 200.
 
 ---
 
