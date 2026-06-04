@@ -171,17 +171,42 @@ MSG
     fi
 fi
 node --version
+# Pin pnpm to the 10.x major.
+#
+# Why pinned: frontend/pnpm-lock.yaml was generated with pnpm 10. pnpm 11
+# introduced changes that:
+#   1. May silently upgrade the lockfile format (breaks reproducible builds
+#      and our supply-chain policy check).
+#   2. Moved `strict-dep-builds` enforcement into an internal
+#      runDepsStatusCheck that fires inside `pnpm rebuild` and does NOT
+#      honour the `--config.strict-dep-builds=false` flag we pass — so the
+#      ignored-builds recovery path in scripts/build_frontend.sh fails
+#      even after the explicit allow-list is configured.
+#
+# 10.x is the version the live VPS runs and the lockfile was built against;
+# pin until pnpm 11 supports both reproducibly.
+PNPM_PIN_MAJOR=10
+need_pnpm_install=0
 if ! command -v pnpm >/dev/null 2>&1; then
-    if ! sudo npm install -g pnpm; then
+    need_pnpm_install=1
+else
+    _installed_pnpm_major="$(pnpm --version 2>/dev/null | cut -d. -f1)"
+    if [[ "${_installed_pnpm_major}" != "${PNPM_PIN_MAJOR}" ]]; then
+        echo "  pnpm $(pnpm --version) installed; re-installing pinned pnpm@${PNPM_PIN_MAJOR}"
+        need_pnpm_install=1
+    fi
+fi
+if [[ "${need_pnpm_install}" -eq 1 ]]; then
+    if ! sudo npm install -g "pnpm@${PNPM_PIN_MAJOR}"; then
         friendly_halt "pnpm global install failed (step 2)" \
 "$(cat <<MSG
-npm install -g pnpm failed.
+npm install -g pnpm@${PNPM_PIN_MAJOR} failed.
 Common causes:
   1. npm registry unreachable (network issue)
   2. Disk full: check with df -h
 
 Try manually:
-  sudo npm install -g pnpm
+  sudo npm install -g pnpm@${PNPM_PIN_MAJOR}
   pnpm --version
 
 Then re-run (idempotent):
