@@ -522,3 +522,43 @@ These commits closed items that are intentionally absent from the queue above:
 ## New bug (2026-06-02)
 
 - **BUG-RELAY-MARKSERV-NO-SYSTEMD** (P1, S effort) — files.mayankgupta.in markserv backend has no systemd unit. Currently launched via `setsid nohup markserv . --port 18081` from an ad-hoc shell session, so it dies on VPS reboot (and arguably on any unrelated process cleanup). Need a `claude-soma-markserv.service` (Type=simple, ExecStart=`/usr/bin/markserv . --port 18081 --silent`, WorkingDirectory=`/var/lib/claude-soma/relay`, Restart=on-failure, After=network-online.target). This was flagged as a follow-up after FI-DOMAIN shipped but never queued; this user-visible breakage proves it's overdue.
+
+## New bug (2026-06-04)
+
+- **BUG-SESSION-ID-COLLISION** (P2, M effort, **queued behind clean-room install
+  work** per 2026-06-04 user direction) — on respawn, a lead's claude process can
+  refuse to start with `Error: Session ID <uuid> is already in use.` The systemd
+  unit (oneshot) exits 0 so the unit shows `active` while the tmux/claude session
+  is dead — a **false-alive** state. Live witness: `social-manager` lead with
+  session_uuid `4815d81f-e445-4a53-ae63-57ff0b7ae967` died silently this way on
+  2026-06-04. Workaround that worked for the user: `kill_project` + fresh
+  `spawn_project` (got a new uuid `85719708-...`). Related to but distinct from
+  BUG-2: the prior FI-SPAWN-FIX dropped `--continue` from fresh spawns to avoid
+  the `--session-id only with --continue if --fork-session` error — THIS is the
+  inverse symptom (session_uuid is re-used while claude's session store still
+  has it locked/active).
+
+  Fix candidates (pick one or combine):
+    1. **Generate a fresh session_uuid on every clean respawn** — simplest.
+       Treat respawn as a new session, not a resume. Loses session-history
+       continuity but matches operator expectation (`kill → respawn` should
+       feel like a clean slate).
+    2. **Use `--resume` properly for intentional resume** — if the registry
+       flags a respawn as `resume=true`, pass `--resume <uuid>` instead of
+       `--session-id <uuid>` to claude.
+    3. **Add `--fork-session`** — claude allows reusing a session-id when
+       forking; combine with `--session-id` to suppress the in-use error.
+    4. **Liveness check must catch claude-dead-but-unit-active** — registry/
+       healthcheck should poll the claude PID inside the tmux session, not
+       just the systemd unit's `ActiveState`. The current healthcheck is the
+       false-alive's enabler; fixing this is independently valuable regardless
+       of which of 1-3 ships for the session-id collision.
+
+  Acceptance:
+    - Killing a lead and respawning under the same name never produces the
+      `already in use` error (acceptance: 5/5 kill→respawn cycles green).
+    - A claude process that dies inside a still-`active` systemd unit is
+      flagged `NEEDS_RESPAWN` within 60s by the liveness check.
+
+  Priority rationale: workaround exists and is reliable. Clean-room install
+  blocker (2026-06-04 user direction) takes precedence.
