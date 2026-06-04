@@ -591,23 +591,54 @@ step "14/15  OCI iptables (--cloud=oci only)"
 # New ACCEPT rules must be inserted BEFORE that REJECT, not after.
 # Pass --cloud=oci (or export SOMA_CLOUD=oci) to run this step.
 if [ "${SOMA_CLOUD:-}" = "oci" ]; then
-    reject_line=$(sudo iptables -L INPUT --line-numbers -n \
-        | awk '/REJECT.*icmp-host-prohibited/ {print $1; exit}')
-    if [ -n "${reject_line:-}" ]; then
-        insert_at="$reject_line"
-    else
-        insert_at=$(sudo iptables -L INPUT -n --line-numbers | wc -l)
-    fi
-    echo "  REJECT rule at line ${reject_line:-(none)}; inserting ACCEPTs at ${insert_at}"
-    for port in 443 80; do
-        if ! sudo iptables -C INPUT -m state --state NEW -p tcp \
-                --dport "$port" -j ACCEPT 2>/dev/null; then
-            sudo iptables -I INPUT "$insert_at" -m state --state NEW \
-                -p tcp --dport "$port" -j ACCEPT
+    # On a fresh / minimal Ubuntu image iptables + netfilter-persistent
+    # may not be installed. Install just-in-time so this step can't fail
+    # with "command not found".
+    if ! command -v iptables >/dev/null 2>&1 \
+       || ! command -v netfilter-persistent >/dev/null 2>&1; then
+        echo "  installing iptables + netfilter-persistent (missing on this image)"
+        if ! sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
+                iptables iptables-persistent netfilter-persistent; then
+            friendly_warn "Could not install iptables on this image (step 14)" \
+"$(cat <<MSG
+sudo apt-get install -y iptables iptables-persistent netfilter-persistent failed.
+This step is OPTIONAL — only required on Oracle Cloud Free Tier where the
+default INPUT chain rejects new traffic on 80/443.
+
+If you ARE on OCI, install manually and re-run with --cloud=oci:
+  sudo apt-get install -y iptables iptables-persistent netfilter-persistent
+  sudo bash /opt/claude-soma/scripts/bootstrap.sh --cloud=oci
+
+If you are NOT on OCI, ignore this warning — bootstrap will continue.
+MSG
+)"
         fi
-    done
-    sudo iptables -L INPUT -n --line-numbers | head -10
-    sudo netfilter-persistent save 2>&1 | tail -2 || true
+    fi
+    if command -v iptables >/dev/null 2>&1; then
+        reject_line=$(sudo iptables -L INPUT --line-numbers -n \
+            | awk '/REJECT.*icmp-host-prohibited/ {print $1; exit}')
+        if [ -n "${reject_line:-}" ]; then
+            insert_at="$reject_line"
+        else
+            insert_at=$(sudo iptables -L INPUT -n --line-numbers | wc -l)
+        fi
+        echo "  REJECT rule at line ${reject_line:-(none)}; inserting ACCEPTs at ${insert_at}"
+        for port in 443 80; do
+            if ! sudo iptables -C INPUT -m state --state NEW -p tcp \
+                    --dport "$port" -j ACCEPT 2>/dev/null; then
+                sudo iptables -I INPUT "$insert_at" -m state --state NEW \
+                    -p tcp --dport "$port" -j ACCEPT
+            fi
+        done
+        sudo iptables -L INPUT -n --line-numbers | head -10
+        if command -v netfilter-persistent >/dev/null 2>&1; then
+            sudo netfilter-persistent save 2>&1 | tail -2 || true
+        else
+            echo "  netfilter-persistent missing; iptables rules will NOT survive reboot"
+        fi
+    else
+        echo "  iptables still missing; skipping OCI ACCEPT rules"
+    fi
 else
     echo "  skipping OCI iptables; pass --cloud=oci if on Oracle Cloud"
 fi
