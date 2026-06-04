@@ -525,8 +525,8 @@ These commits closed items that are intentionally absent from the queue above:
 
 ## New bug (2026-06-04)
 
-- **BUG-SESSION-ID-COLLISION** (P2, M effort, **queued behind clean-room install
-  work** per 2026-06-04 user direction) — on respawn, a lead's claude process can
+- **BUG-SESSION-ID-COLLISION** (P1, M effort — bumped from P2 on 2026-06-05
+  per user direction; queued behind clean-room install work) — on respawn, a lead's claude process can
   refuse to start with `Error: Session ID <uuid> is already in use.` The systemd
   unit (oneshot) exits 0 so the unit shows `active` while the tmux/claude session
   is dead — a **false-alive** state. Live witness: `social-manager` lead with
@@ -562,3 +562,92 @@ These commits closed items that are intentionally absent from the queue above:
 
   Priority rationale: workaround exists and is reliable. Clean-room install
   blocker (2026-06-04 user direction) takes precedence.
+
+## New bugs (2026-06-05)
+
+- **BUG-DRIP-SILENT-FAILURE** (P1, S effort, **queued behind clean-room install
+  + Heard-echo gate** per 2026-06-05 user direction) — the hourly
+  `claude-soma-engagement-drip.service` ran for hours without delivering its
+  Telegram DMs while logging `drip: Telegram DM sent` UNCONDITIONALLY. Two
+  independent gaps caused this:
+    1. **Missing-secret gap.** `TELEGRAM_BOT_TOKEN` and `HERMES_NOTIFY_CHAT_ID`
+       were absent from `/etc/claude-soma/secrets.env` (the drip service's
+       `EnvironmentFile`). The bot token lives in
+       `~/.claude/channels/telegram/.env`, which the drip does NOT read. So
+       `send_telegram_dm()` early-returned on the empty token/chat_id without
+       sending anything.
+    2. **False-success logging gap.** `scripts/engagement-hourly-drip.py`
+       around line 312-313 logged `drip: Telegram DM sent` regardless of
+       whether the call succeeded — the early return from
+       `send_telegram_dm()` looked identical to a real success in the log.
+       Operators saw `DM sent` lines for hours and assumed the drip was
+       healthy. **Repo fix landed 2026-06-04 (commit `11c234e`):**
+       `send_telegram_dm` now returns `bool`; caller logs `DM sent` only on
+       true result, else `WARNING: Telegram DM skipped — missing in
+       environment: <names>` so the next operator who opens the drip log
+       sees the actionable failure immediately.
+
+  **Remaining work (this BUG-DRIP-SILENT-FAILURE entry tracks):**
+    1. Close the missing-secret gap so a fresh install can't silently end up
+       in this state. Pick one (both are acceptable):
+       (a) Make `scripts/setup-telegram.sh` ensure
+           `TELEGRAM_BOT_TOKEN` is present in `/etc/claude-soma/secrets.env`
+           after pairing (it already writes `HERMES_NOTIFY_CHAT_ID` +
+           `TELEGRAM_CHAT_ID` back; extend it to also persist the bot
+           token from `~/.claude/channels/telegram/.env` when that file
+           has it but `secrets.env` doesn't).
+       (b) Add `EnvironmentFile=-/home/ubuntu/.claude/channels/telegram/.env`
+           to `systemd/claude-soma-engagement-drip.service` so the drip
+           inherits whichever file actually holds the token.
+    2. Add a test in `tests/scripts/test_engagement_drip.py` that asserts:
+       (a) with both `TELEGRAM_BOT_TOKEN` and `HERMES_NOTIFY_CHAT_ID`
+       set, the drip logs `DM sent`; (b) with either empty, the drip logs
+       `WARNING: Telegram DM skipped` naming the missing env. This locks
+       in the truthful-logging contract so it can't drift again.
+    3. Surface this in the smoke verifier (`scripts/smoke_install.sh`):
+       warn if drip's required envs are absent.
+
+  Live status: the production VPS was hand-patched on 2026-06-04 (operator
+  added the missing keys to `/etc/claude-soma/secrets.env`). The repo
+  finalize is what this entry tracks for fresh installs.
+
+- **BUG-CONTEXT-OVERFLOW-IMAGES** (P2, plan-first — DO NOT PATCH without a
+  design pass) — on the main orchestrator (the responsive Telegram channel
+  session), when the conversation grows very long AND has accumulated many
+  in-context images (downloaded screenshots, generated cover art, voice-bot
+  attachments the orchestrator Read-ed into context), the channel starts
+  throwing rate-limit / per-request size errors on every subsequent turn.
+  Manual `/compact` is the only reliable recovery today; the user runs it
+  whenever they notice the symptom. Likely cause: image tokens dominate the
+  context window and push per-request payload size past the API's input
+  ceiling, even when the surrounding text history is modest.
+
+  Symptom: recurring 429 / API-size errors mid-session on the channel-claude
+  process, ONLY in long-running sessions that have ingested many images.
+  Short text-only sessions don't trigger it.
+
+  Current workaround: operator types `/compact` — Claude Code rolls the
+  history into a summary, dropping the inline image blobs.
+
+  Real fix needs careful planning. Candidate directions to evaluate:
+    1. **Proactive image eviction / aggregation** — once an image is "old"
+       (some turn-count or attention threshold), strip it from history and
+       leave a stub `[image previously shared at turn N: <one-line caption>]`
+       behind. Hook in the channel-claude session loop.
+    2. **Auto-compact threshold on image-token budget** — instead of waiting
+       for the user to /compact, watch the running image-token total and
+       trigger an automatic compact when it crosses a configured threshold
+       (e.g. half the input ceiling). Less surgical than (1) but cheaper to
+       implement.
+    3. **Store images by path + lazy-Read** — when the orchestrator Reads
+       an image, immediately rewrite the message to hold the path + caption
+       rather than the inline blob; re-Read on demand if a later turn
+       genuinely needs the pixels. Reduces context cost dramatically but
+       changes the orchestrator's interaction with attachments.
+
+  No fix candidate is obviously right. The user has explicitly flagged this
+  as needing a planning pass — DO NOT auto-pick an option. When the slot
+  opens, produce a short design note that weighs blast radius (channel
+  restart impact, regression risk against the existing /compact flow,
+  effect on the engagement-drip's screenshot review surface) before
+  touching code.
