@@ -615,21 +615,33 @@ MSG
         fi
     fi
     if command -v iptables >/dev/null 2>&1; then
+        # On a real OCI VPS the INPUT chain ends with REJECT all
+        # icmp-host-prohibited, and ACCEPT rules MUST be inserted before
+        # it. On any other system (container, Hetzner, DO, minimal image)
+        # the REJECT line is absent and the chain may be entirely empty —
+        # in that case appending is correct and inserting at a computed
+        # index would fail with "Index of insertion too big."
         reject_line=$(sudo iptables -L INPUT --line-numbers -n \
             | awk '/REJECT.*icmp-host-prohibited/ {print $1; exit}')
         if [ -n "${reject_line:-}" ]; then
-            insert_at="$reject_line"
+            echo "  REJECT rule at line ${reject_line}; inserting ACCEPTs before it"
+            for port in 443 80; do
+                if ! sudo iptables -C INPUT -m state --state NEW -p tcp \
+                        --dport "$port" -j ACCEPT 2>/dev/null; then
+                    sudo iptables -I INPUT "$reject_line" -m state --state NEW \
+                        -p tcp --dport "$port" -j ACCEPT
+                fi
+            done
         else
-            insert_at=$(sudo iptables -L INPUT -n --line-numbers | wc -l)
+            echo "  no REJECT icmp-host-prohibited rule found — appending ACCEPTs"
+            for port in 443 80; do
+                if ! sudo iptables -C INPUT -m state --state NEW -p tcp \
+                        --dport "$port" -j ACCEPT 2>/dev/null; then
+                    sudo iptables -A INPUT -m state --state NEW \
+                        -p tcp --dport "$port" -j ACCEPT
+                fi
+            done
         fi
-        echo "  REJECT rule at line ${reject_line:-(none)}; inserting ACCEPTs at ${insert_at}"
-        for port in 443 80; do
-            if ! sudo iptables -C INPUT -m state --state NEW -p tcp \
-                    --dport "$port" -j ACCEPT 2>/dev/null; then
-                sudo iptables -I INPUT "$insert_at" -m state --state NEW \
-                    -p tcp --dport "$port" -j ACCEPT
-            fi
-        done
         sudo iptables -L INPUT -n --line-numbers | head -10
         if command -v netfilter-persistent >/dev/null 2>&1; then
             sudo netfilter-persistent save 2>&1 | tail -2 || true
