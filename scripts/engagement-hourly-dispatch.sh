@@ -171,8 +171,19 @@ if [[ -z "${CLAUDE_BIN}" ]]; then
     exit 0
 fi
 
-SUBAGENT_STDERR=$(mktemp -t engagement-subagent-XXXXXX.err)
-trap 'rm -f "${SUBAGENT_STDERR}"' EXIT
+# Persist the last subagent stderr to a stable path for forensics
+# (FI-ENGAGEMENT-FRESH-DRIP follow-up #50). Each run overwrites the
+# previous file so disk pressure stays flat; logrotate-style retention
+# of N past runs is a future improvement. Also keep stdout of the
+# subagent (the prompt's final status line + any unrelated noise) so
+# the operator can confirm what the subagent actually printed.
+STDERR_DIR="${HERMES_ENGAGEMENT_SUBAGENT_LOG_DIR:-/var/log/claude-soma}"
+mkdir -p "${STDERR_DIR}" 2>/dev/null || true
+SUBAGENT_STDERR="${STDERR_DIR}/engagement-subagent-last.err"
+SUBAGENT_STDOUT="${STDERR_DIR}/engagement-subagent-last.out"
+# Truncate at the start of each run so the file describes ONLY this run.
+: > "${SUBAGENT_STDERR}" 2>/dev/null || true
+: > "${SUBAGENT_STDOUT}" 2>/dev/null || true
 
 # Reading the prompt fresh each call lets the operator edit the template
 # without redeploying the dispatcher.
@@ -191,7 +202,7 @@ timeout --kill-after=30 "${SUBAGENT_TIMEOUT}" \
         --add-dir "${ENGAGEMENT_DIR}" \
         --output-format text \
         "${SUBAGENT_INSTRUCTION}" \
-    >/dev/null 2>"${SUBAGENT_STDERR}"
+    >"${SUBAGENT_STDOUT}" 2>"${SUBAGENT_STDERR}"
 SUBAGENT_EXIT=$?
 set -e
 
@@ -208,17 +219,19 @@ if [[ "${SUBAGENT_EXIT}" -eq 124 || "${SUBAGENT_EXIT}" -eq 137 ]]; then
 fi
 
 if [[ "${SUBAGENT_EXIT}" -ne 0 ]]; then
+    # SHORT_ERR is just the tail head — the full stderr is in
+    # ${SUBAGENT_STDERR} for the operator to inspect.
     SHORT_ERR=$(tail -c 400 "${SUBAGENT_STDERR}" 2>/dev/null | tr '\n' ' ' | head -c 200)
     _run_drip_fallback "subagent_exit_${SUBAGENT_EXIT}"
     _log_dispatch_line "spawn" "fallback" "${FRESH_COUNT}" \
-        "${LATENCY_MS}" "${SUBAGENT_EXIT}" "subagent_failed:${SHORT_ERR}"
+        "${LATENCY_MS}" "${SUBAGENT_EXIT}" "subagent_failed:${SHORT_ERR}|stderr_log:${SUBAGENT_STDERR}"
     exit 0
 fi
 
 if [[ "${FRESH_COUNT}" -eq 0 ]]; then
     _run_drip_fallback "subagent_produced_zero"
     _log_dispatch_line "spawn" "fallback" 0 \
-        "${LATENCY_MS}" "${SUBAGENT_EXIT}" "zero_fresh_drafts_after_subagent"
+        "${LATENCY_MS}" "${SUBAGENT_EXIT}" "zero_fresh_drafts_after_subagent|stdout_log:${SUBAGENT_STDOUT}|stderr_log:${SUBAGENT_STDERR}"
     exit 0
 fi
 

@@ -538,8 +538,41 @@ def test_subagent_mcp_config_is_minimal() -> None:
     forbidden = {"voice-stt", "voice-tts", "project-orchestrator", "playwright"}
     leaks = servers & forbidden
     assert not leaks, f"unexpected MCP servers in subagent config: {leaks}"
-    # And the two playwright variants the subagent actually needs ARE present.
-    assert {"playwright-x", "playwright-linkedin"} <= servers
+    # After FI-ENGAGEMENT-FRESH-DRIP-AUTH the subagent does NOT use the
+    # playwright MCP for browsing (the MCP-driven path opens a fresh
+    # unauthenticated context in subagent/dispatched contexts and harvests
+    # zero posts — same finding documented in engagement-post-x.js header).
+    # The browse path goes through engagement-browse-x.js / -linkedin.js
+    # driven via Bash, which load the same storageState files the post
+    # scripts use. Only hermes-api remains here.
+    assert "playwright-x" not in servers, (
+        "playwright-x MCP must NOT be in the subagent config — see "
+        "FI-ENGAGEMENT-FRESH-DRIP-AUTH 2026-06-05"
+    )
+    assert "playwright-linkedin" not in servers, (
+        "playwright-linkedin MCP must NOT be in the subagent config — see "
+        "FI-ENGAGEMENT-FRESH-DRIP-AUTH 2026-06-05"
+    )
+    assert "hermes-api" in servers, "hermes-api must remain for queue writes"
+
+
+def test_subagent_prompt_routes_through_node_helpers() -> None:
+    """Subagent prompt must instruct using the Node browse scripts and ban
+    the playwright MCP path."""
+    body = SUBAGENT_PROMPT.read_text()
+    assert "engagement-browse-x.js" in body
+    assert "engagement-browse-linkedin.js" in body
+    # And must explicitly tell the subagent NOT to call playwright MCP tools.
+    assert "DO NOT call any playwright MCP tools" in body or (
+        "NEVER call playwright MCP tools" in body
+    )
+
+
+def test_browse_helpers_exist_and_executable() -> None:
+    for name in ("engagement-browse-x.js", "engagement-browse-linkedin.js"):
+        path = SCRIPTS_DIR / name
+        assert path.is_file(), f"{name} must exist"
+        assert os.access(str(path), os.X_OK), f"{name} must be +x"
 
 
 def test_service_calls_dispatcher_not_drip_directly() -> None:
