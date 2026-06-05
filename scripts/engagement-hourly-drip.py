@@ -187,33 +187,131 @@ def _platform_label(platform: str) -> str:
     return {"x": "X", "linkedin": "LinkedIn"}.get(platform.lower(), platform)
 
 
+# FI-ENGAGEMENT-SCHEMA-V1 (2026-06-06). docs/engagement-schema.md is the
+# single source of truth; this constant pins the renderer's contract.
+SCHEMA_VERSION = "engagement.v1"
+
+# Frozen v1 topic tag set. Anything outside this set renders as
+# "(uncategorized)" and is logged so producer drift is visible.
+TOPIC_TAGS = frozenset({
+    "claude-code",
+    "agents",
+    "mcp",
+    "infra",
+    "dev-tooling",
+    "ai-research",
+    "voice",
+    "other",
+})
+
+
+def _excerpt(entry: dict) -> str:
+    """Read the source excerpt, accepting the v0 legacy field name for one
+    schema version. v1 producers MUST emit `source_excerpt`; the legacy
+    `source_post_excerpt` fallback exists only so historical queue rows
+    still render correctly. Drop in v2."""
+    val = entry.get("source_excerpt")
+    if val:
+        return str(val)
+    legacy = entry.get("source_post_excerpt")
+    if legacy:
+        return str(legacy)
+    return ""
+
+
+def _topic(entry: dict) -> str:
+    val = (entry.get("topic") or "").strip()
+    if val and val in TOPIC_TAGS:
+        return val
+    return ""  # rendered as "(uncategorized)" by the renderer
+
+
+def _sort_key(entry: dict) -> tuple:
+    """Deterministic ordering: oldest queued_at first; ties broken by id
+    lexicographic. Same data → same order, every regen."""
+    return (float(entry.get("queued_at") or 0), str(entry.get("id") or ""))
+
+
+def _render_entry_block(e: dict) -> list[str]:
+    """One entry block, identical layout in both Pending and Queued
+    sections. Order: header → Topic → optional Note → Source → Why engage
+    → Source excerpt → Draft → action hint → divider. Locked by v1
+    schema; missing fields render with neutral placeholders so v0 rows
+    still display but visually flag themselves."""
+    eid = str(e.get("id") or "unknown")
+    plat = _platform_label(str(e.get("platform") or ""))
+    author = str(e.get("source_author") or "")
+    topic = _topic(e) or "(uncategorized)"
+    note = (e.get("relevance_note") or "").strip()
+    source = str(e.get("source_permalink") or "")
+    why = (e.get("why_engage") or "").strip() or "(no rationale)"
+    excerpt = _excerpt(e) or "(no excerpt)"
+    draft = str(e.get("draft_text") or "")
+
+    out: list[str] = []
+    out.append(f"### {eid} · {plat} · {author}")
+    out.append("")
+    out.append(f"- **Topic:** {topic}")
+    if note:
+        out.append(f"- **Note:** {note}")
+    out.append(f"- **Source:** {source}")
+    out.append(f"- **Why engage:** {why}")
+    out.append("- **Source excerpt:**")
+    out.append(f"  > {excerpt}")
+    out.append("- **Draft:**")
+    out.append(f"  > {draft}")
+    out.append("")
+    out.append(f"`approve {eid}` | `decline {eid}`")
+    out.append("")
+    out.append("---")
+    out.append("")
+    return out
+
+
 def regenerate_review_page(
     entries: list[dict], out_path: str | Path, review_url: str
 ) -> None:
-    """FI-REVIEW-DOC-ACTIONABLE-ONLY (2026-06-05): the relay-served review doc
-    lists ONLY drafts that still need the operator's decision — status in
-    (`queued`, `pending_review`). Approved, posted, failed, and declined
-    drafts are deliberately excluded so the doc stays a clean to-do list
-    instead of a growing archive.
+    """FI-ENGAGEMENT-SCHEMA-V1 (2026-06-06) renderer.
 
-    Per-platform counts at the top let the operator see the queue depth
-    at a glance without scrolling.
+    The doc is DETERMINISTIC: same input data → byte-identical output,
+    except for the single "Last regenerated" timestamp pinned to the
+    FOOTER so the top of the doc never churns. The schema is frozen at
+    docs/engagement-schema.md.
+
+    Structure (every regen, every state):
+
+      # Engagement Review
+      _Schema version: engagement.v1_
+      **Actionable totals** ...
+      Reply via Telegram ...
+      ---
+      ## Pending Review (N)
+      <entry blocks, or "_None._">
+      ## Queued (next up — M)
+      <entry blocks, or "_None._">
+      ---
+      _Last regenerated: <iso>_
+
+    FI-REVIEW-DOC-ACTIONABLE-ONLY: only `queued` / `pending_review`
+    entries render. Approved / posted / failed / declined are excluded.
     """
     now_str = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    # Actionable = the only states that need a user decision.
-    pending = [e for e in entries if e.get("status") == "pending_review"]
-    queued = [e for e in entries if e.get("status") == "queued"]
 
-    # Per-platform counts across the actionable surface only.
+    pending = sorted(
+        (e for e in entries if e.get("status") == "pending_review"),
+        key=_sort_key,
+    )
+    queued = sorted(
+        (e for e in entries if e.get("status") == "queued"),
+        key=_sort_key,
+    )
+
     def _counts(rows: list[dict]) -> dict[str, int]:
         out: dict[str, int] = {}
         for e in rows:
-            p = e.get("platform", "?")
+            p = str(e.get("platform") or "?")
             out[p] = out.get(p, 0) + 1
         return out
-
-    pending_counts = _counts(pending)
-    queued_counts = _counts(queued)
 
     def _fmt_counts(d: dict[str, int]) -> str:
         if not d:
@@ -224,8 +322,7 @@ def regenerate_review_page(
             for p in order
             if p in d
         ]
-        # Any platform not in the canonical order list, append at end.
-        for p in d:
+        for p in sorted(d):
             if p not in order:
                 parts.append(f"{_platform_label(p)}: {d[p]}")
         return ", ".join(parts) or "0"
@@ -233,75 +330,47 @@ def regenerate_review_page(
     lines: list[str] = []
     lines.append("# Engagement Review")
     lines.append("")
-    lines.append(f"_Last regenerated: {now_str}_")
+    lines.append(f"_Schema version: {SCHEMA_VERSION}_")
     lines.append("")
     lines.append(
         f"**Actionable totals** — Pending review: {len(pending)} "
-        f"({_fmt_counts(pending_counts)})  ·  Queued: {len(queued)} "
-        f"({_fmt_counts(queued_counts)})"
+        f"({_fmt_counts(_counts(pending))})  ·  Queued: {len(queued)} "
+        f"({_fmt_counts(_counts(queued))})"
     )
     lines.append("")
+    lines.append("Reply via Telegram to act on drafts:")
+    lines.append("- `approve <id>` — approve a single draft")
+    lines.append("- `approve all` — approve every pending_review draft")
+    lines.append("- `decline <id>` — decline a draft (won't post)")
+    lines.append("")
+    lines.append("---")
+    lines.append("")
 
-    if not pending and not queued:
-        lines.append(
-            "No drafts awaiting review at the moment. "
-            "Run the drip script "
-            "(`systemctl start claude-soma-engagement-drip.service`) "
-            "or wait for the next hourly fire."
-        )
+    lines.append(f"## Pending Review ({len(pending)})")
+    lines.append("")
+    if not pending:
+        lines.append("_None._")
+        lines.append("")
     else:
-        lines.append("Reply via Telegram to act on drafts:")
-        lines.append("- `approve <id>` — approve a single draft")
-        lines.append("- `approve all` — approve every pending_review draft")
-        lines.append("- `decline <id>` — decline a draft (won't post)")
-        lines.append("")
-        lines.append("---")
-        lines.append("")
-
-        lines.append(f"## Pending Review ({len(pending)})")
-        lines.append("")
-        if not pending:
-            lines.append("_None._")
-            lines.append("")
         for e in pending:
-            eid = e.get("id", "unknown")
-            plat = _platform_label(e.get("platform", ""))
-            author = e.get("source_author", "")
-            lines.append(f"### #{eid} · {plat} · {author}")
-            lines.append("")
-            lines.append(f"**Source:** {e.get('source_permalink', '')}")
-            lines.append("")
-            lines.append(f"**Why engage:** {e.get('why_engage', '')}")
-            lines.append("")
-            lines.append("**Source excerpt:**")
-            lines.append(f"> {e.get('source_excerpt', '')}")
-            lines.append("")
-            lines.append("**Draft:**")
-            lines.append(f"> {e.get('draft_text', '')}")
-            lines.append("")
-            lines.append(f"`approve {eid}` | `decline {eid}`")
-            lines.append("")
-            lines.append("---")
-            lines.append("")
+            lines.extend(_render_entry_block(e))
 
-        lines.append(f"## Queued (next up — {len(queued)})")
+    lines.append(f"## Queued (next up — {len(queued)})")
+    lines.append("")
+    if not queued:
+        lines.append("_None._")
         lines.append("")
-        if not queued:
-            lines.append("_None._")
-            lines.append("")
+    else:
         for e in queued:
-            eid = e.get("id", "unknown")
-            plat = _platform_label(e.get("platform", ""))
-            author = e.get("source_author", "")
-            lines.append(f"### #{eid} · {plat} · {author}")
-            lines.append("")
-            lines.append(f"**Source:** {e.get('source_permalink', '')}")
-            lines.append("")
-            lines.append("**Draft:**")
-            lines.append(f"> {e.get('draft_text', '')}")
-            lines.append("")
-            lines.append("---")
-            lines.append("")
+            lines.extend(_render_entry_block(e))
+
+    # Footer: the ONLY part that churns between regens (intentionally
+    # pinned to the bottom so the top of the doc is byte-stable for
+    # identical queue contents).
+    lines.append("---")
+    lines.append("")
+    lines.append(f"_Last regenerated: {now_str}_")
+    lines.append("")
 
     content = "\n".join(lines)
     out_path = Path(out_path)
@@ -310,6 +379,78 @@ def regenerate_review_page(
     with open(tmp, "w", encoding="utf-8") as fh:
         fh.write(content)
     os.replace(tmp, out_path)
+
+
+def render_review_body(entries: list[dict]) -> str:
+    """Render the v1 doc body WITHOUT the regen-timestamp footer.
+
+    This is the byte-stable surface. Same `entries` (status/order/fields
+    unchanged) → same string, always. Tests rely on this to verify
+    determinism without needing a clock freeze."""
+    pending = sorted(
+        (e for e in entries if e.get("status") == "pending_review"),
+        key=_sort_key,
+    )
+    queued = sorted(
+        (e for e in entries if e.get("status") == "queued"),
+        key=_sort_key,
+    )
+
+    def _counts(rows: list[dict]) -> dict[str, int]:
+        out: dict[str, int] = {}
+        for e in rows:
+            p = str(e.get("platform") or "?")
+            out[p] = out.get(p, 0) + 1
+        return out
+
+    def _fmt_counts(d: dict[str, int]) -> str:
+        if not d:
+            return "0"
+        order = ["x", "linkedin"]
+        parts = [
+            f"{_platform_label(p)}: {d.get(p, 0)}"
+            for p in order
+            if p in d
+        ]
+        for p in sorted(d):
+            if p not in order:
+                parts.append(f"{_platform_label(p)}: {d[p]}")
+        return ", ".join(parts) or "0"
+
+    lines: list[str] = [
+        "# Engagement Review",
+        "",
+        f"_Schema version: {SCHEMA_VERSION}_",
+        "",
+        (
+            f"**Actionable totals** — Pending review: {len(pending)} "
+            f"({_fmt_counts(_counts(pending))})  ·  Queued: {len(queued)} "
+            f"({_fmt_counts(_counts(queued))})"
+        ),
+        "",
+        "Reply via Telegram to act on drafts:",
+        "- `approve <id>` — approve a single draft",
+        "- `approve all` — approve every pending_review draft",
+        "- `decline <id>` — decline a draft (won't post)",
+        "",
+        "---",
+        "",
+        f"## Pending Review ({len(pending)})",
+        "",
+    ]
+    if not pending:
+        lines.extend(["_None._", ""])
+    else:
+        for e in pending:
+            lines.extend(_render_entry_block(e))
+    lines.append(f"## Queued (next up — {len(queued)})")
+    lines.append("")
+    if not queued:
+        lines.extend(["_None._", ""])
+    else:
+        for e in queued:
+            lines.extend(_render_entry_block(e))
+    return "\n".join(lines)
 
 
 def _emit_empty_dm(cfg: dict, *, banner: str, fallback_reason: str) -> None:

@@ -70,13 +70,14 @@ by a single RESULT line. The RESULT line is one of:
   RESULT:ERROR <message>                     — anything else; emit zero
                                                 drafts for that platform.
 
-Each JSON line has the shape:
+Each JSON line has the shape (engagement.v1 schema —
+docs/engagement-schema.md is the single source of truth):
 
   {
     "platform": "x" | "linkedin",
     "source_author": "@handle or Firstname Lastname",
     "source_permalink": "https://...",
-    "source_post_excerpt": "<first ~280 chars of the post>"
+    "source_excerpt": "<first ~280 chars of the post>"
   }
 
 NOTE: the field is `source_permalink` (NOT `source_post_url`). Use the
@@ -84,6 +85,11 @@ exact field name `source_permalink` in your queue.jsonl appends below —
 the post helper script `engagement-post-x.js` / `engagement-post-li.js`
 looks up the URL by that exact key. A null/missing permalink makes the
 draft un-postable.
+
+NOTE 2: as of engagement.v1 (2026-06-06) the excerpt field is
+`source_excerpt`. The legacy name `source_post_excerpt` is renamed.
+The renderer still reads the legacy name for one schema version, but
+producers MUST emit `source_excerpt`.
 
 Workflow:
 
@@ -102,17 +108,22 @@ Workflow:
      operator's voice: terse, technical, no emoji, no "great post!"
      filler. Add a concrete observation, a related anecdote, or a sharp
      question. Do not just agree.
-  4. Append each X draft as a single JSON line to __QUEUE_PATH__:
+  4. Append each X draft as a single JSON line to __QUEUE_PATH__ in
+     ENGAGEMENT.V1 schema (docs/engagement-schema.md is canonical):
 
      {
-       "id": "eng-x-<unix>-<6hex>",
+       "schema_version": "engagement.v1",
+       "id": "eng-x-<6hex>",
        "platform": "x",
        "status": "queued",
        "queued_at": <unix-epoch-int>,
        "freshly_drafted_at": __START_TS__,
        "source_author": "<from harvest>",
        "source_permalink": "<from harvest — REQUIRED, never null>",
-       "source_post_excerpt": "<from harvest>",
+       "source_excerpt": "<from harvest>",
+       "why_engage": "<1-line concrete rationale, <= 200 chars>",
+       "topic": "<one of: claude-code|agents|mcp|infra|dev-tooling|ai-research|voice|other>",
+       "relevance_note": "",
        "draft_text": "<your humanized comment>"
      }
 
@@ -124,6 +135,22 @@ Workflow:
      empty, or not a real URL), SKIP that post entirely — do not draft
      for it. A null-permalink draft is un-postable and will be rejected
      by the dispatcher.
+
+     FIELD GUIDANCE (engagement.v1):
+       - `id`           — `eng-x-<6hex>` — easy to say aloud, paste-back
+                          in Telegram. NO unix-prefix; NO bare hex.
+       - `why_engage`   — 1 line, concrete angle. Not "great post" or
+                          "love this thread". Name what you'd ADD or
+                          what hooks YOUR audience. Example:
+                          "OSS skill library for Bayesian modeling —
+                           add the guardrails-vs-prompts angle."
+       - `topic`        — pick the closest of the 8 frozen tags. Use
+                          `other` as fallback rather than inventing a
+                          new tag (new tags need a schema-version bump).
+       - `relevance_note` — leave `""` unless you have a sharp 1-liner
+                          that the `topic` tag itself doesn't carry
+                          ("Author wrote the original MCP spec",
+                           "Mayank's last post touched the same theme").
 
   5. After X drafts are appended (or if there were no X drafts), DELEGATE
      LinkedIn to social-manager by calling the project-orchestrator
@@ -151,18 +178,35 @@ Workflow:
        operator's voice (terse, technical, no emoji, no "great post!"
        filler — add a concrete observation, a related anecdote, or a
        sharp question). Then append each draft as a single JSON line
-       to __QUEUE_PATH__ with this schema:
+       to __QUEUE_PATH__ in ENGAGEMENT.V1 schema
+       (docs/engagement-schema.md is canonical):
 
          {
-           "id": "eng-li-<unix>-<6hex>",
+           "schema_version": "engagement.v1",
+           "id": "eng-li-<6hex>",
            "platform": "linkedin",
            "status": "queued",
            "queued_at": <unix-epoch-int>,
            "source_author": "<author display name>",
            "source_permalink": "<canonical https://www.linkedin.com/feed/update/urn:li:activity:<id>/ URL>",
-           "source_post_excerpt": "<first ~280 chars>",
+           "source_excerpt": "<first ~280 chars>",
+           "why_engage": "<1-line concrete rationale, <= 200 chars>",
+           "topic": "<one of: claude-code|agents|mcp|infra|dev-tooling|ai-research|voice|other>",
+           "relevance_note": "",
            "draft_text": "<your humanized comment>"
          }
+
+       FIELD GUIDANCE (engagement.v1):
+         - `id`           — `eng-li-<6hex>` — short, voice-friendly.
+                            Generate via `openssl rand -hex 3`.
+         - `why_engage`   — 1 concrete line; name the ANGLE you'd add
+                            or the sharp question YOUR audience cares
+                            about. Not generic agreement.
+         - `topic`        — closest of the 8 frozen tags
+                            (claude-code, agents, mcp, infra,
+                             dev-tooling, ai-research, voice, other).
+         - `relevance_note` — leave `""` unless you have a 1-liner
+                            that the topic tag doesn't carry.
 
        NOTE: pool drafts, NOT fresh — do NOT set freshly_drafted_at.
        The dispatcher pops LI from the pool (--source=any). Pool depth

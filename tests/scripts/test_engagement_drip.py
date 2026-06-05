@@ -236,8 +236,8 @@ def test_review_page_rendered_with_pending_section(tmp_path: Path) -> None:
     assert review.exists(), "review page must be created"
     content = review.read_text()
     assert "## Pending Review (2)" in content
-    assert "### #x-id" in content
-    assert "### #li-id" in content
+    assert "### x-id" in content
+    assert "### li-id" in content
 
 
 def test_review_page_excludes_posted_approved_failed(tmp_path: Path) -> None:
@@ -267,11 +267,11 @@ def test_review_page_excludes_posted_approved_failed(tmp_path: Path) -> None:
         "https://files.example.test/engagement-review.md",
     )
     content = out.read_text()
-    # SHOWN
-    assert "### #pending-x" in content
-    assert "### #queued-x" in content
-    assert "### #queued-li" in content
-    # NOT shown — the whole point of this change
+    # SHOWN — v1 strips the leading "#" from entry headers (the id IS the id).
+    assert "### pending-x" in content
+    assert "### queued-x" in content
+    assert "### queued-li" in content
+    # NOT shown — the whole point of FI-REVIEW-DOC-ACTIONABLE-ONLY
     assert "posted-x" not in content
     assert "posted-li" not in content
     assert "approved-x" not in content
@@ -281,7 +281,7 @@ def test_review_page_excludes_posted_approved_failed(tmp_path: Path) -> None:
     assert "Recently posted" not in content
     assert "Approved · awaiting post" not in content
     assert "Approved &middot; awaiting post" not in content
-    # New section headings present
+    # New section headings present (v1 always renders both, even at 0).
     assert "## Pending Review (1)" in content
     assert "## Queued (next up — 2)" in content
     # Per-platform counts in the header — pending and queued counted separately
@@ -290,9 +290,10 @@ def test_review_page_excludes_posted_approved_failed(tmp_path: Path) -> None:
     assert "Queued: 2 (X: 1, LinkedIn: 1)" in content
 
 
-def test_review_page_empty_actionable_says_so(tmp_path: Path) -> None:
-    """When nothing is queued or pending_review, the doc says the actionable
-    surface is empty (not just an empty header)."""
+def test_review_page_empty_actionable_still_renders_v1_structure(tmp_path: Path) -> None:
+    """FI-ENGAGEMENT-SCHEMA-V1: even with 0 actionable entries, both
+    `## Pending Review (0)` and `## Queued (next up — 0)` headings render
+    so the doc shape stays identical regardless of queue state."""
     now = time.time()
     cfg = _cfg(tmp_path)
     entries = [
@@ -306,10 +307,15 @@ def test_review_page_empty_actionable_says_so(tmp_path: Path) -> None:
         "https://files.example.test/engagement-review.md",
     )
     content = out.read_text()
-    assert "No drafts awaiting review" in content
+    # Both section headings present with their (0) counts.
+    assert "## Pending Review (0)" in content
+    assert "## Queued (next up — 0)" in content
+    assert "_None._" in content
     # And the actionable-totals line still renders the zeros
     assert "Pending review: 0" in content
     assert "Queued: 0" in content
+    # Schema version footprint at the top
+    assert "_Schema version: engagement.v1_" in content
 
 
 def test_atomic_write_no_partial_on_crash(tmp_path: Path) -> None:
@@ -338,6 +344,210 @@ def test_regen_only_no_queue_mutation(tmp_path: Path) -> None:
     after = _read_queue(cfg["queue_path"])
     assert after[0]["status"] == "pending_review", "regen_only must not mutate queue"
     assert Path(cfg["review_page"]).exists()
+
+
+# ────────────────────────────────────────────────────────────────────────────
+# FI-ENGAGEMENT-SCHEMA-V1 (2026-06-06) — deterministic renderer contract
+# ────────────────────────────────────────────────────────────────────────────
+
+
+def _v1_entry(
+    eid: str,
+    platform: str,
+    *,
+    status: str = "pending_review",
+    queued_at: float = 1000.0,
+    topic: str = "claude-code",
+    why: str = "concrete angle to add",
+    excerpt: str = "source post text",
+    note: str = "",
+    **extra,
+) -> dict:
+    """Build a v1-conformant entry for tests."""
+    base = {
+        "schema_version": "engagement.v1",
+        "id": eid,
+        "platform": platform,
+        "status": status,
+        "queued_at": queued_at,
+        "source_author": f"@{eid}",
+        "source_permalink": f"https://example.test/{eid}",
+        "source_excerpt": excerpt,
+        "why_engage": why,
+        "topic": topic,
+        "relevance_note": note,
+        "draft_text": f"draft for {eid}",
+    }
+    base.update(extra)
+    return base
+
+
+def test_render_review_body_is_byte_stable(tmp_path: Path) -> None:
+    """Same input → same body output, two renders. This is the v1
+    determinism contract: no clock, no random order, no per-call drift.
+    The `render_review_body` helper deliberately excludes the regen-time
+    footer so we can assert byte-equality across calls."""
+    entries = [
+        _v1_entry("eng-x-7k3f2a", "x", queued_at=100.0, topic="agents"),
+        _v1_entry("eng-li-9m2p4d", "linkedin", queued_at=200.0, topic="mcp",
+                  note="Author wrote the original MCP spec"),
+        _v1_entry("eng-x-1a2b3c", "x", status="queued", queued_at=50.0,
+                  topic="claude-code"),
+    ]
+    body_a = _mod.render_review_body(entries)
+    body_b = _mod.render_review_body(entries)
+    assert body_a == body_b, "render_review_body MUST be deterministic"
+
+    # The regenerator wraps the body in a timestamp footer — the body
+    # itself stays byte-stable, the footer is the ONLY churn surface.
+    assert "_Schema version: engagement.v1_" in body_a
+    assert "_Last regenerated:" not in body_a
+
+
+def test_render_review_body_stable_sort(tmp_path: Path) -> None:
+    """Entries within a section must appear in queued_at ascending order,
+    ties broken by id lex. Shuffling the input MUST NOT change the output."""
+    e1 = _v1_entry("eng-x-zz", "x", queued_at=100.0)
+    e2 = _v1_entry("eng-x-aa", "x", queued_at=100.0)  # tie with e1, sorts first
+    e3 = _v1_entry("eng-x-mm", "x", queued_at=50.0)   # older, sorts first
+
+    out_ordered = _mod.render_review_body([e3, e2, e1])
+    out_reversed = _mod.render_review_body([e1, e2, e3])
+    out_arbitrary = _mod.render_review_body([e2, e3, e1])
+    assert out_ordered == out_reversed == out_arbitrary
+
+    # Verify the actual order: eng-x-mm (older) → eng-x-aa (tie, lex first) → eng-x-zz
+    pos_mm = out_ordered.index("eng-x-mm")
+    pos_aa = out_ordered.index("eng-x-aa")
+    pos_zz = out_ordered.index("eng-x-zz")
+    assert pos_mm < pos_aa < pos_zz
+
+
+def test_render_review_body_entry_block_layout(tmp_path: Path) -> None:
+    """Per-entry block layout is FROZEN in v1: header → Topic → Source →
+    Why engage → Source excerpt → Draft → action hint → divider. The
+    `relevance_note` slot inserts a 7th `Note` line between Topic and
+    Source ONLY when non-empty."""
+    e = _v1_entry(
+        "eng-x-abc123", "x", queued_at=100.0,
+        topic="ai-research",
+        why="add the guardrails angle",
+        excerpt="source body here",
+    )
+    body = _mod.render_review_body([e])
+    # Header ordering — must appear in this exact relative order.
+    pos_header = body.index("### eng-x-abc123 · X · @eng-x-abc123")
+    pos_topic = body.index("- **Topic:** ai-research")
+    pos_source = body.index("- **Source:** https://example.test/eng-x-abc123")
+    pos_why = body.index("- **Why engage:** add the guardrails angle")
+    pos_excerpt_label = body.index("- **Source excerpt:**")
+    pos_excerpt_body = body.index("  > source body here")
+    pos_draft_label = body.index("- **Draft:**")
+    pos_action = body.index("`approve eng-x-abc123` | `decline eng-x-abc123`")
+    assert pos_header < pos_topic < pos_source < pos_why
+    assert pos_why < pos_excerpt_label < pos_excerpt_body
+    assert pos_excerpt_body < pos_draft_label < pos_action
+    # No Note line when relevance_note is empty.
+    assert "**Note:**" not in body
+
+
+def test_render_review_body_conditional_note_line(tmp_path: Path) -> None:
+    """When `relevance_note` is non-empty it appears as a 7th line
+    between Topic and Source. Default 5 fields stay in identical order."""
+    e = _v1_entry(
+        "eng-li-noted1", "linkedin", queued_at=100.0,
+        topic="mcp",
+        note="Author wrote the original MCP spec",
+    )
+    body = _mod.render_review_body([e])
+    pos_topic = body.index("- **Topic:** mcp")
+    pos_note = body.index("- **Note:** Author wrote the original MCP spec")
+    pos_source = body.index("- **Source:** https://example.test/eng-li-noted1")
+    assert pos_topic < pos_note < pos_source
+
+
+def test_render_review_body_legacy_excerpt_fallback(tmp_path: Path) -> None:
+    """One-version grace: v0 rows that have `source_post_excerpt` (not
+    the v1 `source_excerpt`) still render their excerpt correctly. v2
+    drops the fallback."""
+    legacy = _v1_entry("eng-x-legacy1", "x", queued_at=100.0,
+                       topic="claude-code", excerpt="")
+    # Pop v1 field, set v0 field instead.
+    legacy.pop("source_excerpt")
+    legacy["source_post_excerpt"] = "legacy excerpt text"
+    body = _mod.render_review_body([legacy])
+    assert "legacy excerpt text" in body
+    assert "(no excerpt)" not in body  # fallback should populate, not stub
+
+
+def test_render_review_body_unknown_topic_renders_as_uncategorized(tmp_path: Path) -> None:
+    """Anything outside the frozen TOPIC_TAGS set renders as
+    `(uncategorized)` so the v1 grid still looks clean and producer
+    drift is visible."""
+    e = _v1_entry("eng-x-rogue1", "x", queued_at=100.0,
+                  topic="completely-made-up-tag")
+    body = _mod.render_review_body([e])
+    assert "- **Topic:** (uncategorized)" in body
+    assert "completely-made-up-tag" not in body
+
+
+def test_render_review_body_v0_entries_render_with_placeholders(tmp_path: Path) -> None:
+    """v0 rows (missing schema_version + why_engage + topic) still render
+    so historical entries don't break the doc. They visually flag as
+    incomplete via the (no rationale) / (uncategorized) placeholders."""
+    v0 = {
+        "id": "v0-row-1",
+        "platform": "x",
+        "status": "pending_review",
+        "queued_at": 100.0,
+        "source_author": "@legacy",
+        "source_permalink": "https://x.com/legacy/status/1",
+        "source_excerpt": "older draft",
+        "draft_text": "old comment",
+    }
+    body = _mod.render_review_body([v0])
+    assert "### v0-row-1 · X · @legacy" in body
+    assert "- **Topic:** (uncategorized)" in body
+    assert "- **Why engage:** (no rationale)" in body
+
+
+def test_regenerate_review_page_byte_stable_above_footer(tmp_path: Path) -> None:
+    """End-to-end byte-stability check on the disk output: render twice,
+    strip the regen-timestamp footer, assert byte-equality. This is the
+    user-visible 'doc shape doesn't change between hours' guarantee."""
+    cfg = _cfg(tmp_path)
+    entries = [
+        _v1_entry("eng-x-7k3f2a", "x", queued_at=100.0, topic="agents"),
+        _v1_entry("eng-li-9m2p4d", "linkedin", queued_at=200.0, topic="mcp"),
+    ]
+    out = tmp_path / "review.md"
+    _mod.regenerate_review_page(
+        entries, str(out),
+        "https://files.example.test/engagement-review.md",
+    )
+    body_a = out.read_text()
+    # Force a second render — the timestamp footer might differ here but
+    # the body above the footer divider MUST be byte-identical.
+    _mod.regenerate_review_page(
+        entries, str(out),
+        "https://files.example.test/engagement-review.md",
+    )
+    body_b = out.read_text()
+
+    def _strip_footer(text: str) -> str:
+        # Footer is the LAST `_Last regenerated:` line + the divider
+        # immediately above it. Strip everything from the final `---\n`
+        # forward so the test is robust to any future footer expansion.
+        # The doc has at most one such footer divider.
+        idx = text.rfind("\n---\n")
+        return text[: idx] if idx != -1 else text
+
+    assert _strip_footer(body_a) == _strip_footer(body_b), (
+        "doc above the regen-footer divider must be byte-stable across renders"
+    )
+    # Schema version footprint at the top, regen timestamp at the bottom.
+    assert "_Schema version: engagement.v1_" in body_a
+    assert body_a.rstrip().endswith("_") or "_Last regenerated:" in body_a
 
 
 # ────────────────────────────────────────────────────────────────────────────

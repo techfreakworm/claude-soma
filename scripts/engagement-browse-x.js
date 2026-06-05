@@ -28,7 +28,8 @@
 // SIDE EFFECTS:
 //   - prints one JSON object per harvested post on stdout BEFORE the RESULT line.
 //     Each object has the QUEUE.JSONL-compatible schema:
-//       platform, source_author, source_permalink, source_post_excerpt
+//       platform, source_author, source_permalink, source_excerpt
+//       (engagement.v1 schema; see docs/engagement-schema.md)
 //     IMPORTANT: the field is `source_permalink` (not `source_post_url`) so the
 //     downstream post helpers (engagement-post-x.js) can find the URL by the
 //     same key the queue.jsonl + post helpers expect.
@@ -135,7 +136,12 @@ const { chromium } = require(PW);
                         // every harvested draft was un-postable because
                         // the post helper looked for the wrong key.
                         source_permalink: url,
-                        source_post_excerpt: text.slice(0, 280),
+                        // FI-ENGAGEMENT-SCHEMA-V1 (2026-06-06): v1
+                        // canonical name is `source_excerpt`. The legacy
+                        // `source_post_excerpt` is renamed here. The
+                        // renderer reads both for one schema version
+                        // (v1→v2 grace); producers go v1-only.
+                        source_excerpt: text.slice(0, 280),
                     });
                 }
                 return out;
