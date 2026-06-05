@@ -651,3 +651,188 @@ These commits closed items that are intentionally absent from the queue above:
   restart impact, regression risk against the existing /compact flow,
   effect on the engagement-drip's screenshot review surface) before
   touching code.
+
+## Design proposal — FI-ENGAGEMENT-FRESH-DRIP (P1, awaiting sign-off)
+
+**User directive 2026-06-05 (verbatim summary):** the hourly engagement
+drip is currently MECHANICAL — it just pops one pre-authored draft per
+platform from `queue.jsonl` into `pending_review` and DMs. Drafts are
+batch-authored only when a `REFILL_NEEDED` flag fires, and nothing
+auto-consumes the flag, so the queue went dry and the hourly DM went
+silent. NEW desired behavior: each hour, WAKE social-manager to BROWSE
+fresh X + LinkedIn feeds, DRAFT humanized comments on those just-seen
+posts, surface for review, and DM the user. Fresh-browse-and-draft
+every hour, not stale-pool replay. User accepts the extra LLM token
+cost for freshness. Keep mechanical pooled-queue path only as a
+fallback if the fresh pass fails. **Implementation gated on user
+sign-off; this entry captures the proposed approach for relay.**
+
+### Architecture (recommended path)
+
+```
+hourly timer
+   │
+   ▼
+scripts/engagement-hourly-dispatch.sh
+   │
+   ├─ health-check the worker route
+   │     ├─ playwright sessions still warm? (state files mtime < 7d)
+   │     └─ X+LinkedIn login banners not present? (smoke-fetch one URL)
+   │
+   ├─ if healthy: spawn a focused BROWSE+DRAFT subagent
+   │     │
+   │     │   claude -p --add-dir /var/lib/claude-soma/engagement \
+   │     │     --mcp-config <subset: playwright + hermes_api> \
+   │     │     --setting-sources project \
+   │     │     "<browse+draft prompt>"
+   │     │
+   │     │   subagent:
+   │     │     1. opens X home + watchlist with playwright (existing
+   │     │        ~/.claude-pw/state-x.json)
+   │     │     2. opens LinkedIn feed with state-linkedin.json
+   │     │     3. picks 3-5 fresh, engagement-worthy posts per platform
+   │     │     4. drafts humanized comments
+   │     │     5. appends to queue.jsonl with status=queued +
+   │     │        freshly_drafted_at=<ts> + source_post_url + author
+   │     │     6. exits
+   │
+   │   timeout: 12 min hard ceiling
+   │
+   ├─ wait for subagent to exit OR timeout
+   │
+   ├─ if exited cleanly AND fresh drafts present (filter
+   │  freshly_drafted_at > dispatch_start_ts):
+   │       → call engagement-hourly-drip.py with --source=fresh
+   │         to pop the freshest 1 per platform into pending_review
+   │         and DM the user with a "FRESH" banner
+   │
+   ├─ if exited unclean OR timeout OR zero fresh drafts:
+   │       → fall back: call engagement-hourly-drip.py --fallback
+   │         to pop from the pooled queue with a "POOLED FALLBACK"
+   │         banner that names the reason
+   │
+   ├─ if the pool is ALSO empty:
+   │       → DM "no drafts this hour (fresh attempt: <reason>; pool: empty)"
+   │         + emit NEEDS_INTERVENTION notify event so the user can
+   │         re-pair playwright / refill manually
+   │
+   └─ always: append one line to dispatch_log.jsonl with method,
+      result, drafts_count, latency_ms, subagent_exit_code
+```
+
+### Why a focused subagent (Option D) over the alternatives
+
+Four trigger mechanisms were considered:
+
+  A. **Sentinel file polled by social-manager.** Requires the lead to
+     have an active poll-and-react loop; claude sessions don't have
+     this natively. Adds idle cost to the lead. **Rejected.**
+  B. **tmux send-keys into social-manager's pane.** Fragile — if the
+     lead is mid-tool-call, mid-subagent, or processing /compact, the
+     keystrokes land in the wrong place. Vector for the
+     poller-hijack-style issues we already hardened against.
+     **Rejected.**
+  C. **Orchestrator `message_project` MCP tool from the dispatcher.**
+     Clean infra reuse, message is queue-able + durable. **But** the
+     orchestrator runs inside the channel-claude session; if that
+     session is down or compacting, the message never gets delivered.
+     **Acceptable second choice — surfaced as the alternative for
+     user sign-off.**
+  D. **Spawn a focused, ephemeral browse+draft subagent each hour.**
+     Independent lifecycle, can't be blocked by social-manager being
+     busy, keeps social-manager's context clean of all the browse
+     output (which is the largest part of the cost). The subagent
+     loads ONLY the MCPs it needs (playwright + a tiny queue-write
+     tool), uses `--add-dir` scoped to
+     `/var/lib/claude-soma/engagement/`, and exits when done.
+     **Recommended.**
+
+The user explicitly asked for the cleanest mechanism that is **robust
+to social-manager being busy or dead**. Option D delivers that
+directly; the others require social-manager to be healthy.
+
+### What stays the same
+
+  * `queue.jsonl` schema (status, platform, source_author, queued_at,
+    released_at, posted_at, post_permalink). Adding ONE field:
+    `freshly_drafted_at`. Drafts without that field came from the
+    pre-existing batch-author path; with the field, they came from
+    the new fresh dispatcher.
+  * `pending_review` lifecycle (operator approves → social-manager
+    posts via post_x.js / post_li.js → status flips to `posted`).
+  * Telegram DM payload format (one line per draft with platform +
+    author + id + review-link).
+  * `engagement-hourly-drip.py` — kept as the FALLBACK path. The new
+    dispatcher invokes it with `--source=fresh` (use freshly_drafted_at
+    drafts only) or `--fallback` (use pooled drafts).
+  * `claude-soma-engagement-drip.timer` schedule (hourly).
+
+### What changes
+
+  * `claude-soma-engagement-drip.service` ExecStart → the new
+    dispatcher (`scripts/engagement-hourly-dispatch.sh`) instead of
+    `python3 scripts/engagement-hourly-drip.py` directly.
+  * New `scripts/engagement-hourly-dispatch.sh` — the orchestrator
+    described above (~120 LOC of shell).
+  * New `scripts/engagement-browse-draft-subagent.txt` — the focused
+    prompt the dispatcher hands to its `claude -p` invocation
+    (instructs: browse X + LinkedIn, pick 3-5 posts each, draft
+    comments, write to queue.jsonl with freshly_drafted_at, exit).
+  * `engagement-hourly-drip.py` gains `--source=fresh` and
+    `--fallback` flags. Without flags it behaves exactly as today
+    (back-compat).
+  * `secrets.env.example` adds optional `HERMES_ENGAGEMENT_FRESH_MODE`
+    (default `on`); set to `off` to make the dispatcher skip the
+    browse subagent and run pooled-only.
+  * `tests/scripts/test_engagement_drip.py` gains tests for the
+    new `--source=fresh` filter and the dispatcher's fall-through
+    decision tree.
+
+### Open implementation questions for sign-off
+
+  1. **Browse depth per platform.** How far to scroll? Default
+     proposal: top 25 posts in the home feed + the watchlist accounts
+     once each. Configurable via `HERMES_ENGAGEMENT_BROWSE_DEPTH`.
+  2. **Time-of-day awareness.** Should the dispatcher skip hours
+     when the user is asleep (e.g. 02:00-07:00 IST)? Default
+     proposal: no (24/7) since engagement-worthy posts can come from
+     any timezone; if user wants quiet hours it's one cron line.
+  3. **Cost cap.** Soft daily token budget; if exceeded, dispatcher
+     falls back to pooled-only for the rest of the day. Default
+     proposal: not implemented in v1; revisit if cost is a surprise.
+  4. **Option C vs D pick.** This proposal recommends D
+     (ephemeral subagent). User may prefer C (orchestrator messaging
+     to social-manager) for the consistency argument. Surface both.
+
+### Acceptance
+
+  * 5/5 successful hourly runs produce a Telegram DM with at least
+    one fresh draft per platform, marked `FRESH` in the banner.
+  * 5/5 simulated-failure runs (playwright state expired) fall back
+    cleanly to pooled mode, DM is sent with `POOLED FALLBACK` banner
+    + actionable reason.
+  * 5/5 simulated empty-pool fall-throughs DM `no drafts this hour`
+    with a NEEDS_INTERVENTION notify event.
+  * No silent hours — every dispatcher run produces exactly one DM
+    (the bug we just fixed in BUG-DRIP-SILENT-FAILURE).
+  * `dispatch_log.jsonl` has one structured entry per hour for
+    auditing.
+
+### Effort + risk
+
+  * Effort: M (subagent prompt iteration is the longest piece;
+    dispatcher shell + drip flag are S each).
+  * Risk: medium. The browse+draft subagent is talking to live
+    X + LinkedIn under the user's session state; mishandled comments
+    could embarrass. Mitigation: drafts ALWAYS go through pending_review
+    before posting — there is no auto-post path.
+  * Restart impact: channel restart NOT required (the timer + service
+    file change are the only systemd touches). `daemon-reload` +
+    `systemctl restart claude-soma-engagement-drip.timer` suffices.
+
+### Status
+
+Plan only. Awaiting user sign-off on (a) Option D vs Option C trigger
+choice and (b) the four open implementation questions. After sign-off,
+implement with sonnet + `--effort max` + sequential-thinking MCP
+subagents.
