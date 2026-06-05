@@ -182,3 +182,131 @@ def test_publish_defaults_lead_to_general_when_env_unset(tmp_path: Path) -> None
     assert result2.returncode == 0, result2.stderr
     url = result2.stdout.strip()
     assert "/general/" in url
+
+
+# ────────────────────────────────────────────────────────────────────────────
+# FI-DOMAIN-REGRESSION (2026-06-05): _resolve_relay_domain must honor a
+# SOMA_RELAY_DOMAIN= line in secrets.env, not just the env var. Live witness:
+# operator appended SOMA_RELAY_DOMAIN=files.mayankgupta.in to
+# /etc/claude-soma/secrets.env and soma-publish still errored until they
+# `export SOMA_RELAY_DOMAIN` inline — because the prior _resolve_relay_domain
+# only checked FILES_DOMAIN + SOMA_DOMAIN in the file.
+# ────────────────────────────────────────────────────────────────────────────
+
+
+def _make_secrets(tmp_path: Path, content: str) -> Path:
+    secrets = tmp_path / "secrets.env"
+    secrets.write_text(content)
+    secrets.chmod(0o600)
+    return secrets
+
+
+def test_resolve_picks_up_soma_relay_domain_from_secrets(tmp_path: Path) -> None:
+    """The exact regression case: SOMA_RELAY_DOMAIN= entry in secrets.env."""
+    secrets = _make_secrets(tmp_path, "SOMA_RELAY_DOMAIN=files.example.test\n")
+    relay_root = tmp_path / "relay"
+    relay_root.mkdir()
+    src = tmp_path / "x.txt"
+    src.write_text("hi")
+    env = {k: v for k, v in os.environ.items() if k != "SOMA_RELAY_DOMAIN"}
+    env.update({
+        "SOMA_SECRETS_FILE": str(secrets),
+        "SOMA_RELAY_ROOT": str(relay_root),
+        "HERMES_LEAD_NAME": "general",
+    })
+    result = subprocess.run(
+        ["bash", str(SCRIPT), "publish", str(src)],
+        capture_output=True, text=True, env=env,
+    )
+    assert result.returncode == 0, result.stderr
+    assert "files.example.test" in result.stdout
+
+
+def test_resolve_files_domain_in_secrets(tmp_path: Path) -> None:
+    secrets = _make_secrets(tmp_path, "FILES_DOMAIN=cdn.example.test\n")
+    relay_root = tmp_path / "relay"
+    relay_root.mkdir()
+    src = tmp_path / "x.txt"
+    src.write_text("hi")
+    env = {k: v for k, v in os.environ.items() if k != "SOMA_RELAY_DOMAIN"}
+    env.update({
+        "SOMA_SECRETS_FILE": str(secrets),
+        "SOMA_RELAY_ROOT": str(relay_root),
+        "HERMES_LEAD_NAME": "general",
+    })
+    result = subprocess.run(
+        ["bash", str(SCRIPT), "publish", str(src)],
+        capture_output=True, text=True, env=env,
+    )
+    assert result.returncode == 0, result.stderr
+    assert "cdn.example.test" in result.stdout
+
+
+def test_resolve_derives_files_from_soma_domain(tmp_path: Path) -> None:
+    secrets = _make_secrets(tmp_path, "SOMA_DOMAIN=example.test\n")
+    relay_root = tmp_path / "relay"
+    relay_root.mkdir()
+    src = tmp_path / "x.txt"
+    src.write_text("hi")
+    env = {k: v for k, v in os.environ.items() if k != "SOMA_RELAY_DOMAIN"}
+    env.update({
+        "SOMA_SECRETS_FILE": str(secrets),
+        "SOMA_RELAY_ROOT": str(relay_root),
+        "HERMES_LEAD_NAME": "general",
+    })
+    result = subprocess.run(
+        ["bash", str(SCRIPT), "publish", str(src)],
+        capture_output=True, text=True, env=env,
+    )
+    assert result.returncode == 0, result.stderr
+    assert "files.example.test" in result.stdout
+
+
+def test_resolve_precedence_env_beats_secrets(tmp_path: Path) -> None:
+    """Exported env var must override an explicit secrets entry."""
+    secrets = _make_secrets(tmp_path, "SOMA_RELAY_DOMAIN=secrets.example.test\n")
+    relay_root = tmp_path / "relay"
+    relay_root.mkdir()
+    src = tmp_path / "x.txt"
+    src.write_text("hi")
+    env = {k: v for k, v in os.environ.items()}
+    env.update({
+        "SOMA_SECRETS_FILE": str(secrets),
+        "SOMA_RELAY_DOMAIN": "env.example.test",
+        "SOMA_RELAY_ROOT": str(relay_root),
+        "HERMES_LEAD_NAME": "general",
+    })
+    result = subprocess.run(
+        ["bash", str(SCRIPT), "publish", str(src)],
+        capture_output=True, text=True, env=env,
+    )
+    assert result.returncode == 0, result.stderr
+    assert "env.example.test" in result.stdout
+    assert "secrets.example.test" not in result.stdout
+
+
+def test_resolve_precedence_relay_beats_files_beats_soma(tmp_path: Path) -> None:
+    """SOMA_RELAY_DOMAIN > FILES_DOMAIN > SOMA_DOMAIN within secrets.env."""
+    secrets = _make_secrets(
+        tmp_path,
+        "SOMA_DOMAIN=base.example.test\n"
+        "FILES_DOMAIN=files.example.test\n"
+        "SOMA_RELAY_DOMAIN=relay.example.test\n",
+    )
+    relay_root = tmp_path / "relay"
+    relay_root.mkdir()
+    src = tmp_path / "x.txt"
+    src.write_text("hi")
+    env = {k: v for k, v in os.environ.items() if k != "SOMA_RELAY_DOMAIN"}
+    env.update({
+        "SOMA_SECRETS_FILE": str(secrets),
+        "SOMA_RELAY_ROOT": str(relay_root),
+        "HERMES_LEAD_NAME": "general",
+    })
+    result = subprocess.run(
+        ["bash", str(SCRIPT), "publish", str(src)],
+        capture_output=True, text=True, env=env,
+    )
+    assert result.returncode == 0, result.stderr
+    assert "relay.example.test" in result.stdout
+    assert "files.example.test" not in result.stdout

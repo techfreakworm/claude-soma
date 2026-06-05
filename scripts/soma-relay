@@ -11,9 +11,12 @@
 #
 # Environment:
 #   HERMES_LEAD_NAME    lead namespace (default: general)
-#   SOMA_RELAY_DOMAIN   relay domain (default: read from FILES_DOMAIN in
-#                       /etc/claude-soma/secrets.env, fall back to
-#                       files.<SOMA_DOMAIN>; required if neither is set)
+#   SOMA_RELAY_DOMAIN   relay domain. Precedence:
+#                       (1) explicit env var (this var, exported),
+#                       (2) SOMA_RELAY_DOMAIN= in /etc/claude-soma/secrets.env,
+#                       (3) FILES_DOMAIN= in secrets.env,
+#                       (4) files.<SOMA_DOMAIN> derived from secrets.env.
+#                       Required if none of the above resolve.
 #   SOMA_RELAY_ROOT     relay root directory (default: /var/lib/claude-soma/relay)
 
 set -euo pipefail
@@ -21,27 +24,55 @@ set -euo pipefail
 LEAD="${HERMES_LEAD_NAME:-general}"
 ROOT="${SOMA_RELAY_ROOT:-/var/lib/claude-soma/relay}"
 
-# Resolve relay domain. Precedence: explicit env > FILES_DOMAIN from
-# secrets.env > files.<SOMA_DOMAIN>. Sourcing the secrets file is best-effort
-# (it's root-owned 600 in the canonical deploy; non-root callers fall through).
+# Resolve relay domain. Sourcing the secrets file is best-effort (it's 0600
+# owned by ubuntu in the canonical deploy; non-ubuntu callers fall through).
+#
+# Regression note (2026-06-05): an earlier version only checked FILES_DOMAIN
+# and SOMA_DOMAIN in secrets.env — it ignored an SOMA_RELAY_DOMAIN= entry in
+# the file, so operators who added `SOMA_RELAY_DOMAIN=foo` to secrets.env
+# saw soma-publish error out until they `export SOMA_RELAY_DOMAIN` inline.
+# Adding the secrets-file SOMA_RELAY_DOMAIN lookup makes the static config
+# path work as documented.
+# SOMA_SECRETS_FILE lets tests + non-canonical deployments override the
+# secrets-file path. Production stays on the canonical /etc/claude-soma/secrets.env.
+SOMA_SECRETS_FILE="${SOMA_SECRETS_FILE:-/etc/claude-soma/secrets.env}"
+
+_read_secrets_var() {
+    local name="$1" secrets="${2:-${SOMA_SECRETS_FILE}}"
+    [[ -r "${secrets}" ]] || return 0
+    # Strip surrounding double quotes from the value if present; ignore
+    # comment-only lines. `tail -1` honors the last definition (operators
+    # sometimes append a fix below a stale value).
+    grep -E "^${name}=" "${secrets}" \
+        | sed 's/^[^=]*=//' \
+        | sed 's/^"\(.*\)"$/\1/' \
+        | tail -1
+}
+
 _resolve_relay_domain() {
+    # (1) Already-exported env var wins.
     if [[ -n "${SOMA_RELAY_DOMAIN:-}" ]]; then
         echo "${SOMA_RELAY_DOMAIN}"; return
     fi
-    local secrets=/etc/claude-soma/secrets.env
-    if [[ -r "${secrets}" ]]; then
-        # shellcheck disable=SC1090
-        local _files _soma
-        _files="$(grep -E '^FILES_DOMAIN=' "${secrets}" | tail -1 | cut -d= -f2- | tr -d '"')"
-        if [[ -n "${_files}" ]]; then echo "${_files}"; return; fi
-        _soma="$(grep -E '^SOMA_DOMAIN=' "${secrets}" | tail -1 | cut -d= -f2- | tr -d '"')"
-        if [[ -n "${_soma}" ]]; then echo "files.${_soma#soma.}"; return; fi
-    fi
+    local v
+    # (2) Explicit SOMA_RELAY_DOMAIN entry in secrets.env.
+    v="$(_read_secrets_var SOMA_RELAY_DOMAIN)"
+    if [[ -n "${v}" ]]; then echo "${v}"; return; fi
+    # (3) FILES_DOMAIN entry.
+    v="$(_read_secrets_var FILES_DOMAIN)"
+    if [[ -n "${v}" ]]; then echo "${v}"; return; fi
+    # (4) Derive from SOMA_DOMAIN.
+    v="$(_read_secrets_var SOMA_DOMAIN)"
+    if [[ -n "${v}" ]]; then echo "files.${v#soma.}"; return; fi
 }
 DOMAIN="$(_resolve_relay_domain)"
 if [[ -z "${DOMAIN}" ]]; then
-    echo "ERROR: relay domain not resolvable. Set SOMA_RELAY_DOMAIN, or" >&2
-    echo "       SOMA_DOMAIN/FILES_DOMAIN in /etc/claude-soma/secrets.env." >&2
+    echo "ERROR: relay domain not resolvable. Set ONE of these in" >&2
+    echo "       /etc/claude-soma/secrets.env:" >&2
+    echo "         SOMA_RELAY_DOMAIN=files.<your-domain>   (explicit override)" >&2
+    echo "         FILES_DOMAIN=files.<your-domain>        (the canonical key)" >&2
+    echo "         SOMA_DOMAIN=<your-domain>               (the base; derives files.<this>)" >&2
+    echo "       Or export SOMA_RELAY_DOMAIN inline for a one-shot run." >&2
     exit 2
 fi
 
