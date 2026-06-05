@@ -95,3 +95,58 @@ def test_browse_script_skips_cards_without_urn() -> None:
     # The `continue` statement inside the per-card loop is the skip mechanism
     assert "continue" in body
     assert "urnMatch" in body or "urn:li:activity" in body
+
+
+# ────────────────────────────────────────────────────────────────────────────
+# FI-NO-POST-WITHOUT-APPROVAL (2026-06-05): the post helpers MUST default to
+# dry-run + only click submit when explicitly approved. The bot / subagent
+# cannot set the approval flag itself.
+# ────────────────────────────────────────────────────────────────────────────
+
+
+def test_li_post_script_dry_run_by_default() -> None:
+    body = SCRIPT.read_text()
+    assert "DRY_RUN-READY" in body, (
+        "post_li.js must emit RESULT:DRY_RUN-READY by default"
+    )
+    assert "--i-have-user-approval" in body, (
+        "post_li.js must require --i-have-user-approval (or "
+        "HERMES_POST_APPROVAL=yes) to actually submit"
+    )
+    assert "HERMES_POST_APPROVAL" in body
+    # And the approval flag must gate the submit click — assert the deny
+    # branch precedes the click()
+    pre_click_section = body.split("await post.click()")[0]
+    assert "!APPROVED" in pre_click_section, (
+        "the !APPROVED dry-run branch must run BEFORE the submit click"
+    )
+
+
+def test_x_post_script_dry_run_by_default() -> None:
+    x_script = REPO_ROOT / "scripts" / "engagement-post-x.js"
+    body = x_script.read_text()
+    assert "DRY_RUN-READY" in body
+    assert "--i-have-user-approval" in body
+    assert "HERMES_POST_APPROVAL" in body
+    pre_click_section = body.split("await btn.click()")[0]
+    assert "!APPROVED" in pre_click_section, (
+        "the !APPROVED dry-run branch must run BEFORE the submit click"
+    )
+
+
+def test_post_scripts_help_text_mentions_dry_run_default() -> None:
+    """The usage message must tell the caller what the default is."""
+    for name in ("engagement-post-linkedin.js", "engagement-post-x.js"):
+        body = (REPO_ROOT / "scripts" / name).read_text()
+        # Usage block must mention dry-run + the approval flag
+        assert "DEFAULT MODE: dry-run" in body, (
+            f"{name} usage must surface the dry-run default"
+        )
+
+
+def test_system_prompt_has_absolute_hard_rule_block() -> None:
+    """responsive_bot.md must carry the #1-priority rule at the top."""
+    body = (REPO_ROOT / "system_prompts" / "responsive_bot.md").read_text()
+    assert "ABSOLUTE HARD RULE — outbound public actions require explicit per-action approval" in body
+    # And the cross-reference in Hard prohibitions
+    assert "NEVER take an outbound public action without explicit per-action" in body

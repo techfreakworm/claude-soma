@@ -77,14 +77,33 @@ const PW = process.env.HERMES_PW_NODE_MODULE
 const EXEC = process.env.HERMES_PW_EXEC || "/usr/local/bin/playwright-chromium";
 const DEFAULT_STATE = path.join(os.homedir(), ".claude-pw", "state-linkedin.json");
 
-const permalink = process.argv[2];
-const textfile = process.argv[3];
-const stateArg = process.argv[4];
+// FI-NO-POST-WITHOUT-APPROVAL (2026-06-05): script DEFAULTS to dry-run.
+// The whole pipeline runs (warm-up, navigate, classify, click Comment,
+// type text, locate submit button, confirm enabled) but STOPS before
+// clicking submit and emits RESULT:DRY_RUN-READY with diagnostic info.
+//
+// To actually click submit, the operator MUST pass --i-have-user-approval
+// OR set HERMES_POST_APPROVAL=yes in the env. The bot / subagent MUST NOT
+// set those itself "to verify the fix" — that's the violation this guard
+// exists to prevent (live witness: 2026-06-05 unauthorized LinkedIn
+// comment on urn:li:activity:7468493321980801024).
+const ARGS = process.argv.slice(2);
+const APPROVED = ARGS.includes("--i-have-user-approval")
+    || (process.env.HERMES_POST_APPROVAL || "").toLowerCase() === "yes";
+const POSITIONAL = ARGS.filter((a) => !a.startsWith("-"));
+const permalink = POSITIONAL[0];
+const textfile = POSITIONAL[1];
+const stateArg = POSITIONAL[2];
 const STATE = stateArg || process.env.HERMES_PW_LI_STATE || DEFAULT_STATE;
 const VERIFY_NAME = process.env.HERMES_LI_VERIFY_NAME || "";
 
 if (!permalink || !textfile) {
-    console.error("usage: engagement-post-linkedin.js <permalink> <textfile> [storage-state-path]");
+    console.error("usage: engagement-post-linkedin.js [--i-have-user-approval] <permalink> <textfile> [storage-state-path]");
+    console.error("");
+    console.error("DEFAULT MODE: dry-run. Pipeline runs through every step EXCEPT the final");
+    console.error("submit click; emits RESULT:DRY_RUN-READY with diagnostic info. Use the");
+    console.error("flag (or HERMES_POST_APPROVAL=yes) ONLY when the operator has explicitly");
+    console.error("approved THIS specific post.");
     process.exit(2);
 }
 if (!fs.existsSync(STATE)) {
@@ -187,14 +206,36 @@ const { chromium } = require(PW);
         await page.keyboard.insertText(text);
         await page.waitForTimeout(2500);
 
-        // Submit: see GOTCHA #1 for the durable selector.
+        // Submit: see GOTCHA #1 for the durable selector. Locate + confirm
+        // enabled REGARDLESS of dry-run vs real — the dry-run path needs to
+        // prove to the caller that posting WOULD work if approved.
         const post = page.locator('button[class*="comments-comment-box__submit-button"]').first();
         await post.waitFor({ state: "visible", timeout: 15000 });
+        let submitEnabled = false;
         for (let i = 0; i < 12; i++) {
             const dis = await post.isDisabled().catch(() => false);
-            if (!dis) break;
+            if (!dis) { submitEnabled = true; break; }
             await page.waitForTimeout(500);
         }
+
+        // FI-NO-POST-WITHOUT-APPROVAL: STOP HERE unless approved.
+        if (!APPROVED) {
+            const previewText = text.length > 200 ? text.slice(0, 200) + "…" : text;
+            console.log(
+                `RESULT:DRY_RUN-READY submit_enabled=${submitEnabled} `
+                + `url=${page.url()} text_chars=${text.length} `
+                + `preview=${JSON.stringify(previewText)}`
+            );
+            console.log(
+                "DRY-RUN guard: this script does NOT submit unless invoked with "
+                + "--i-have-user-approval OR HERMES_POST_APPROVAL=yes. Submit "
+                + "selector + composer were validated; the post would land if "
+                + "approved. The bot / subagent MUST NOT set the approval flag "
+                + "itself — that's the violation this guard exists to prevent."
+            );
+            await browser.close(); return;
+        }
+
         await post.click();
         await page.waitForTimeout(7000);
 

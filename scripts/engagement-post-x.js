@@ -35,14 +35,30 @@ const PW = process.env.HERMES_PW_NODE_MODULE
 const EXEC = process.env.HERMES_PW_EXEC || "/usr/local/bin/playwright-chromium";
 const DEFAULT_STATE = path.join(os.homedir(), ".claude-pw", "state-x.json");
 
-const permalink = process.argv[2];
-const textfile = process.argv[3];
-const stateArg = process.argv[4];
+// FI-NO-POST-WITHOUT-APPROVAL (2026-06-05): same dry-run-by-default contract
+// as engagement-post-linkedin.js. The script runs the entire pipeline
+// (navigate, classify, reveal composer, type, locate + confirm submit
+// button enabled) but STOPS before clicking submit and emits
+// RESULT:DRY_RUN-READY. To actually click submit, pass
+// --i-have-user-approval or set HERMES_POST_APPROVAL=yes. The bot /
+// subagent MUST NOT set those itself "to verify the fix".
+const ARGS = process.argv.slice(2);
+const APPROVED = ARGS.includes("--i-have-user-approval")
+    || (process.env.HERMES_POST_APPROVAL || "").toLowerCase() === "yes";
+const POSITIONAL = ARGS.filter((a) => !a.startsWith("-"));
+const permalink = POSITIONAL[0];
+const textfile = POSITIONAL[1];
+const stateArg = POSITIONAL[2];
 const STATE = stateArg || process.env.HERMES_PW_X_STATE || DEFAULT_STATE;
 const VERIFY_HANDLE = process.env.HERMES_X_VERIFY_HANDLE || "";
 
 if (!permalink || !textfile) {
-    console.error("usage: engagement-post-x.js <permalink> <textfile> [storage-state-path]");
+    console.error("usage: engagement-post-x.js [--i-have-user-approval] <permalink> <textfile> [storage-state-path]");
+    console.error("");
+    console.error("DEFAULT MODE: dry-run. Pipeline runs through every step EXCEPT the final");
+    console.error("submit click; emits RESULT:DRY_RUN-READY with diagnostic info. Use the");
+    console.error("flag (or HERMES_POST_APPROVAL=yes) ONLY when the operator has explicitly");
+    console.error("approved THIS specific post.");
     process.exit(2);
 }
 if (!fs.existsSync(STATE)) {
@@ -98,11 +114,31 @@ const { chromium } = require(PW);
         if (!(await btn.count())) btn = page.locator('[data-testid="tweetButton"]').first();
         await btn.waitFor({ state: "visible", timeout: 15000 });
         // Poll aria-disabled to confirm the button is ready (X spinners aren't deterministic).
+        let submitEnabled = false;
         for (let i = 0; i < 10; i++) {
             const dis = await btn.getAttribute("aria-disabled");
-            if (dis !== "true") break;
+            if (dis !== "true") { submitEnabled = true; break; }
             await page.waitForTimeout(500);
         }
+
+        // FI-NO-POST-WITHOUT-APPROVAL: STOP HERE unless approved.
+        if (!APPROVED) {
+            const previewText = text.length > 200 ? text.slice(0, 200) + "…" : text;
+            console.log(
+                `RESULT:DRY_RUN-READY submit_enabled=${submitEnabled} `
+                + `url=${page.url()} text_chars=${text.length} `
+                + `preview=${JSON.stringify(previewText)}`
+            );
+            console.log(
+                "DRY-RUN guard: this script does NOT submit unless invoked with "
+                + "--i-have-user-approval OR HERMES_POST_APPROVAL=yes. Submit "
+                + "selector + composer were validated; the post would land if "
+                + "approved. The bot / subagent MUST NOT set the approval flag "
+                + "itself — that's the violation this guard exists to prevent."
+            );
+            await browser.close(); return;
+        }
+
         await btn.click();
         await page.waitForTimeout(6000);
 
