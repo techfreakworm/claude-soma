@@ -836,3 +836,99 @@ Plan only. Awaiting user sign-off on (a) Option D vs Option C trigger
 choice and (b) the four open implementation questions. After sign-off,
 implement with sonnet + `--effort max` + sequential-thinking MCP
 subagents.
+
+**SIGN-OFF 2026-06-05** — user confirmed Option D + recommended
+defaults. Implemented + verified at commit `1b79603` (initial dispatcher
+shipped, FRESH path GREEN on dispatcher invocation flow). Auth fix
+`c54a55e` (FI-ENGAGEMENT-FRESH-DRIP-AUTH) deployed live to /opt on
+2026-06-05. X fresh-harvest works end-to-end (n=5 real posts, auth
+confirmed). LinkedIn fresh-harvest does NOT yet work — see follow-up
+below.
+
+## FI-ENGAGEMENT-LI-HEADLESS — LinkedIn fresh-harvest blocked under headless (2026-06-05)
+
+**Status:** OPEN, queued behind whatever the user prioritizes next.
+LinkedIn drafts still flow via the pooled queue / social-manager
+manual refills until this lands.
+
+**Symptom:** `node /opt/claude-soma/scripts/engagement-browse-linkedin.js`
+authenticates successfully (storageState loads; the auth-proof PNG at
+`/var/log/claude-soma/engagement-browse-linkedin-proof.png` shows the
+operator's signed-in nav + profile sidebar + "Today's news" sidebar),
+but **zero feed-post DOM nodes materialize** in the rendered page.
+`document.querySelectorAll('a[href*="urn:li:activity"]')` returns 0,
+`document.querySelectorAll('div[class*="feed-shared-update"]')` returns 0,
+`document.querySelectorAll('article')` returns 0. The main element
+contains 5,868 characters of nav + profile + news + footer but no feed
+posts.
+
+The script gracefully returns `RESULT:OK n=0 auth=true` so the
+dispatcher's fallback chain continues (subagent ships X drafts; the
+drip pops 1 X into pending_review, LinkedIn falls back to the pool for
+that hour). It is NOT a crash — it is a silent zero-harvest that means
+the FRESH path effectively never works for LinkedIn drafts.
+
+**What was already tried** (so the next attempt doesn't repeat):
+  - storageState loads cleanly (proof: sidebar shows the operator's
+    profile + 157 viewers + 1,921 impressions).
+  - Realistic Chrome 127 user-agent — no change.
+  - Stealth shims via `addInitScript`: hide `navigator.webdriver`,
+    fake `window.chrome`, fake `navigator.plugins`,
+    `--disable-blink-features=AutomationControlled` Chromium flag — no
+    change (n=0 with or without).
+  - `waitUntil: 'networkidle'` — times out (LinkedIn never goes idle).
+  - 15s post-load wait + 8 scrolls of 0.9 viewport each + 2.5s sleep
+    between scrolls — no change.
+  - DOM probe: searched for any anchor pointing at `urn:li:activity`,
+    walked `closest()` for various wrapper class patterns — zero hits.
+
+**Candidate next directions** (pick one for the eventual fix):
+
+  1. **Run non-headless via Xvfb.** Spawn `Xvfb :99` before the
+     dispatcher's subagent, set `DISPLAY=:99`, drop `headless: true`
+     from `chromium.launch`. Heavier (~150 MB chromium proc + Xvfb)
+     but reliable — the proven post_linkedin.js runs headless and
+     handles a single permalink fine; the suppression is specific to
+     the home-feed render path which clearly cares about display.
+     Tradeoff: every hourly tick now allocates a chromium graphical
+     stack; the VPS already runs claude+playwright many times so the
+     marginal cost is bounded.
+
+  2. **Swap the harvest URL.** Don't load `/feed/`. Instead iterate
+     a curated set of `/in/<watchlist-handle>/recent-activity/posts/`
+     URLs (those serve the post DOM to headless reliably — confirmed
+     by the proven post script which navigates direct permalinks) and
+     scrape posts from each. Loses "home feed serendipity" but gives
+     the operator deterministic harvest from the people they actually
+     want to engage with.
+
+  3. **Use LinkedIn search/content endpoint.** `/search/results/content/?keywords=<topic>`
+     serves results to headless. Build a small keyword list (AI infra,
+     claude-code, agent architecture, MCP, voice bots, OCI deployment
+     — same topics the existing engagement filter prefers), query each,
+     harvest the result cards. Loses the "what's the feed showing right
+     now" signal but adds topical breadth.
+
+  4. **Combine 2+3.** Watchlist posts AS the primary harvest, search
+     results as a top-up. Closest to what social-manager does manually
+     today.
+
+**Effort:** S (option 2 or 3 alone) to M (option 1 with Xvfb wiring
+into the dispatcher's subagent invocation).
+
+**Acceptance:**
+  - `node /opt/claude-soma/scripts/engagement-browse-linkedin.js`
+    returns `RESULT:OK n>0 auth=true` against the live VPS.
+  - 5/5 hourly ticks produce at least one fresh LinkedIn draft in
+    `pending_review` with `freshly_drafted_at` set.
+  - The X fresh path stays green (no regression).
+
+**Until shipped:** LinkedIn drafts continue to depend on social-manager
+manual refills (or the pooled queue surviving). The dispatcher will
+pop 0 LinkedIn / 1 X each hour and DM the operator with `FRESH` banner
+for X + nothing for LinkedIn; that part of the hour is effectively the
+old POOLED behavior for LinkedIn.
+
+Priority: P2 — X path delivers real freshness now, LinkedIn falls back
+gracefully, no silent hour (the BUG-DRIP-SILENT-FAILURE contract still
+holds because the X drafts produce the DM).
