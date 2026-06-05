@@ -14,8 +14,17 @@
 // OUTPUT (last line, parseable by callers):
 //   RESULT:POSTED      mine=<bool> url=<url>
 //   RESULT:UNVERIFIED  mine=<bool> url=<url>
-//   RESULT:AUTHFAIL
-//   RESULT:UNREACHABLE
+//   RESULT:NEEDS_REAUTH                          — true auth failure (authwall
+//                                                   redirect / Sign-Up title);
+//                                                   operator must re-run
+//                                                   pw-login on VNC then
+//                                                   pw-export.js.
+//   RESULT:UNREACHABLE                           — post is gone / private to
+//                                                   viewer (DIFFERENT from
+//                                                   auth failure — your
+//                                                   session is fine, the
+//                                                   target is just
+//                                                   inaccessible to you).
 //   RESULT:ERROR <message>
 //
 // LINKEDIN GOTCHAS (baked into this script):
@@ -24,7 +33,9 @@
 //      `button[class*="comments-comment-box__submit-button"]` with visible text
 //      "Comment" — NOT "Post". The class carries a --cr Lighthouse suffix that
 //      makes a plain `button:has-text("Post")` selector miss. The class-contains
-//      match below is the durable selector.
+//      match below is the durable selector. Confirmed 2026-06-05 still valid
+//      (FI-LI-POST-AUTHFAIL diagnostic): exact class is
+//      `comments-comment-box__submit-button--cr`.
 //
 //   2. VERIFICATION VIA innerText, NEVER SCREENSHOTS: LinkedIn's font-loading
 //      step hangs the playwright screenshot tool indefinitely on some pages.
@@ -34,7 +45,24 @@
 //      widths. The wider+taller viewport keeps the editor + submit button on
 //      the same render pass.
 //
-//   4. WHY THIS SCRIPT EXISTS: the playwright-linkedin MCP tools are hard-gated
+//   4. /feed/ WARM-UP IS REQUIRED. Direct navigation to a
+//      `/feed/update/urn:li:activity:.../` URL with valid cookies still
+//      renders LinkedIn's GUEST UI (Sign Up title, no authenticated nav)
+//      until /feed/ has been loaded once in this context. The cookies in
+//      storageState alone aren't enough — LinkedIn refreshes some
+//      session-scoped token on /feed/ load that subsequent urn-permalink
+//      navigations need. So this script ALWAYS visits /feed/ first.
+//      Confirmed 2026-06-05 (FI-LI-POST-AUTHFAIL): the prior version
+//      returned RESULT:AUTHFAIL on every draft because of this.
+//
+//   5. AUTHFAIL vs UNREACHABLE: a post that's been removed / set to
+//      connections-only / hidden by author renders the same guest UI as a
+//      true auth failure. Distinguish by FINAL URL (authwall redirect =
+//      true auth failure) and TITLE ("Sign Up | LinkedIn" = guest land
+//      page, "Post | Feed | LinkedIn" = authenticated post page, anything
+//      with the post-author name = accessible).
+//
+//   6. WHY THIS SCRIPT EXISTS: the playwright-linkedin MCP tools are hard-gated
 //      in subagent/dispatched contexts (reject direct calls demanding an Agent
 //      dispatch even when no Agent tool is exposed → deadlock). Driving the
 //      storageState directly via Node here bypasses the gate and is reliable +
@@ -77,19 +105,71 @@ const { chromium } = require(PW);
     const context = await browser.newContext({
         storageState: STATE,
         viewport: { width: 1400, height: 1600 },  // see GOTCHA #3
+        userAgent: "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36",
     });
+    await context.addInitScript(() => {
+        Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+        Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
+        window.chrome = { runtime: {}, app: {} };
+    });
+
+    // GOTCHA #4: warm up /feed/ first. Without this, direct urn-permalink
+    // navigation renders LinkedIn's GUEST UI even with valid cookies and the
+    // script wrongly emits AUTHFAIL.
+    try {
+        const warmPage = await context.newPage();
+        await warmPage.goto("https://www.linkedin.com/feed/", {
+            waitUntil: "domcontentloaded",
+            timeout: 60000,
+        });
+        await warmPage.waitForTimeout(7000);
+        await warmPage.close();
+    } catch (e) {
+        // Warm-up failure is itself a real signal — if /feed/ won't load with
+        // these cookies, the urn permalink certainly won't either.
+        console.log("RESULT:NEEDS_REAUTH");
+        await browser.close();
+        return;
+    }
+
     const page = await context.newPage();
     try {
         await page.goto(permalink, { waitUntil: "domcontentloaded", timeout: 60000 });
         await page.waitForTimeout(6000);
 
+        // GOTCHA #5: classify the page. Three distinct states; pick by the
+        // most-reliable signal available (final URL + title), then fall back
+        // to head500 text matches.
+        const finalUrl = page.url();
+        const docTitle = await page.evaluate(() => document.title);
         const head = (await page.evaluate(() => document.body.innerText)).slice(0, 500);
-        if (/Sign in|Join now|Welcome Back/i.test(head) && !/Comment/i.test(head)) {
-            console.log("RESULT:AUTHFAIL");
+
+        const isAuthwallUrl = /\/authwall|\/checkpoint/.test(finalUrl);
+        const isGuestTitle = /^Sign Up|^Sign In|^Join LinkedIn/.test(docTitle);
+        if (isAuthwallUrl || isGuestTitle) {
+            console.log("RESULT:NEEDS_REAUTH");
             await browser.close(); return;
         }
-        if (/page doesn.t exist|isn.t available|removed this post|Something went wrong/i.test(head)) {
+
+        // UNREACHABLE catches the "post unavailable / removed / private" set.
+        // LinkedIn's exact wording rotates; pattern stays permissive.
+        const unreachablePatterns = /This post is unavailable|page doesn.t exist|isn.t available|removed this post|Something went wrong|cannot be displayed/i;
+        if (unreachablePatterns.test(head)) {
             console.log("RESULT:UNREACHABLE");
+            await browser.close(); return;
+        }
+
+        // Auth-confirm via authenticated-nav text. If we're past authwall
+        // and not on an unreachable page, the operator's profile chrome
+        // should be visible somewhere in the body.
+        const isAuthed = /\bnotifications total\b|\bProfile viewers\b/i.test(
+            await page.evaluate(() => document.body.innerText.slice(0, 2000))
+        );
+        if (!isAuthed) {
+            // Authenticated nav missing — treat as needs-reauth so the
+            // operator sees a clean signal (rather than failing later in
+            // the editor-wait with a generic timeout).
+            console.log("RESULT:NEEDS_REAUTH");
             await browser.close(); return;
         }
 

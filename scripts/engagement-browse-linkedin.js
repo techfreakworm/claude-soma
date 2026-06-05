@@ -16,12 +16,13 @@
 //     3. From each card extract: first /in/<slug>/ profile link (author);
 //        author display name from text head; visible body text. Direct
 //        post-permalink anchors are NOT exposed in plain `<a href>` on
-//        cards anymore — the dispatcher's downstream needs the permalink,
-//        so we derive a stable browser URL from the author handle:
-//        https://www.linkedin.com/in/<slug>/recent-activity/all/ — that
-//        is what the engagement post helper navigates to anyway when
-//        permalink resolution is needed, and it's enough for operator
-//        review of the draft.
+//        most cards, but LinkedIn DOES embed the urn:li:activity ID in
+//        the card's innerHTML (in tracking attributes / share-link refs).
+//        We extract that ID via regex and construct the canonical post
+//        URL `https://www.linkedin.com/feed/update/urn:li:activity:<id>/`.
+//        Cards without a urn (promoted-page injections, suggested
+//        content, LinkedIn Learning cards) are SKIPPED — they are not
+//        real posts the operator can deep-link to via a comment.
 //
 // OUTPUT (stdout, last line, machine-parseable):
 //   RESULT:OK n=<count> auth=<bool> url=<final-url>
@@ -195,12 +196,24 @@ const { chromium } = require(PW);
                     excerpt = lines.filter(ln => !noise.has(ln)).join(" ");
                 }
 
-                // Permalink: the post's actual urn isn't reliably exposed
-                // in the rendered DOM. Use the author's recent-activity
-                // page as a stable, browser-navigable permalink proxy —
-                // the operator can find the specific post there, and the
-                // post helper script accepts post URLs of either pattern.
-                const permalink = `https://www.linkedin.com/in/${handle}/recent-activity/all/`;
+                // Permalink: extract the post's actual urn:li:activity ID
+                // from the card's innerHTML. LinkedIn embeds it in tracking
+                // attributes / share-link refs / aria-described-by IDs even
+                // though it's rarely exposed as a plain anchor href.
+                // Validated 2026-06-05 (FI-LI-POST-AUTHFAIL diagnostic) —
+                // the prior profile-activity URLs bounced to authwall on
+                // direct navigation even with valid cookies, so they were
+                // unusable as post-comment targets.
+                const urnMatch = (card.innerHTML.match(/urn:li:activity:\d+/) || [])[0];
+                let permalink;
+                if (urnMatch) {
+                    permalink = `https://www.linkedin.com/feed/update/${urnMatch}/`;
+                } else {
+                    // No urn in this card — promoted-page injection, suggested
+                    // content, LinkedIn Learning card, etc. Skip; not a real
+                    // post the operator can engage with via a permalink.
+                    continue;
+                }
 
                 out.push({
                     platform: "linkedin",
