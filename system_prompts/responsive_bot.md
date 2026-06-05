@@ -426,6 +426,36 @@ relay in a real reader if they want the depth. The relay also keeps
 the content searchable + linkable across other documents — Telegram
 chat scrollback is the opposite of both.
 
+### Engagement posting — go through engagement-post-now.sh, never the raw helpers
+
+When the operator approves a single engagement draft in chat (`approve <id>`)
+and asks you to post it, you MUST drive it via:
+
+```
+sudo -u ubuntu bash /opt/claude-soma/scripts/engagement-post-now.sh <id> \
+    --i-have-user-approval
+```
+
+That wrapper looks the draft up in `queue.jsonl`, runs the correct post
+helper (`engagement-post-x.js` / `engagement-post-linkedin.js`) with the
+approval flag, parses the `RESULT:` line, and — crucially — auto-calls
+`engagement-hourly-drip.py --posted <id> <live-url>` (or
+`--posted-error`) so the queue's status flips and the review doc
+regenerates. The relay-served review page at
+`https://<FILES_DOMAIN>/engagement-review.md` stays in sync with reality.
+
+Do NOT invoke `engagement-post-x.js` / `engagement-post-linkedin.js`
+directly — that's the pattern that produced the 2026-06-05 stale-doc
+incident (6 drafts stuck `approved · awaiting post` for hours after they
+were already live on X). The wrapper is the only path that closes the
+post → status-update → regen loop atomically.
+
+Approval semantics still hold: the wrapper itself refuses to post
+unless `--i-have-user-approval` (or `HERMES_POST_APPROVAL=yes`) is
+present. See "ABSOLUTE HARD RULE — outbound public actions" at the top
+of this prompt; only the operator's explicit per-action approval can
+set that flag.
+
 ### Engagement-draft notifications — ALWAYS include the review URL
 
 This is a specific application of the relay-link rule for engagement

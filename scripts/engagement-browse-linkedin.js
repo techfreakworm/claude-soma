@@ -118,27 +118,40 @@ const { chromium } = require(PW);
             return;
         }
 
-        // Also detect "authenticated but feed completely empty" — that's
-        // the FI-ENGAGEMENT-LI-HEADLESS pre-fix symptom. If mainFeed never
-        // materializes after settle + scroll, the session is either
-        // shadow-banned or auth is partially valid. Treat as NEEDS_REAUTH
-        // so the operator gets an explicit signal.
+        // Scroll the LazyColumn just enough to materialize a workable
+        // batch of posts. LinkedIn's anti-bot triggers an interstitial
+        // /checkpoint/challenge/ flow when the scroll is too aggressive
+        // (live witness: bumping this to 24 scrolls tripped the challenge
+        // and the script returned NEEDS_REAUTH).
+        //
+        // FI-LI-HARVEST-ROBUSTNESS (2026-06-05): keep the 6-scroll cadence
+        // (the original safe baseline), but ADD a retry that re-checks for
+        // mainFeed after a longer wait if it didn't materialize the first
+        // pass. The retry doesn't scroll more — it just gives LinkedIn's
+        // async render another beat.
         await page.evaluate(() => window.scrollBy(0, window.innerHeight * 0.7));
         await page.waitForTimeout(3000);
         for (let i = 0; i < 6; i++) {
             await page.evaluate(() => window.scrollBy(0, window.innerHeight * 0.7));
             await page.waitForTimeout(2500);
         }
-        // Settle.
         await page.waitForTimeout(4000);
 
-        const mainFeedExists = await page.evaluate(
+        let mainFeedExists = await page.evaluate(
             () => !!document.querySelector('[data-testid="mainFeed"]')
         );
+        // Retry without more scrolling — the LazyColumn sometimes lags.
+        for (let r = 0; r < 2 && !mainFeedExists; r++) {
+            await page.waitForTimeout(5000);
+            mainFeedExists = await page.evaluate(
+                () => !!document.querySelector('[data-testid="mainFeed"]')
+            );
+        }
         if (!mainFeedExists) {
             // We're authenticated (no login wall) but mainFeed didn't
-            // render — likely an anti-bot soft-block or a LinkedIn revision
-            // that broke the testid contract. Flag distinctly.
+            // render after 4 scroll-wait passes. Likely an anti-bot
+            // soft-block or a LinkedIn revision that broke the testid
+            // contract. Distinct signal so the operator can investigate.
             console.log(`RESULT:ERROR mainFeed-container-missing url=${finalUrl}`);
             await browser.close();
             return;
