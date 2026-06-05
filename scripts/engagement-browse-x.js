@@ -18,11 +18,20 @@
 //
 // OUTPUT (stdout, last line, machine-parseable):
 //   RESULT:OK n=<count> auth=<bool> url=<final-url>
-//   RESULT:AUTHFAIL url=<final-url>
+//   RESULT:NEEDS_REAUTH url=<final-url>      — storageState rejected / login wall;
+//                                              operator must re-run pw-login on the
+//                                              VNC desktop. Distinct from a generic
+//                                              error so the operator sees an
+//                                              actionable signal, not silence.
 //   RESULT:ERROR <message>
 //
 // SIDE EFFECTS:
 //   - prints one JSON object per harvested post on stdout BEFORE the RESULT line.
+//     Each object has the QUEUE.JSONL-compatible schema:
+//       platform, source_author, source_permalink, source_post_excerpt
+//     IMPORTANT: the field is `source_permalink` (not `source_post_url`) so the
+//     downstream post helpers (engagement-post-x.js) can find the URL by the
+//     same key the queue.jsonl + post helpers expect.
 //   - writes an auth-proof PNG to ${HERMES_ENGAGEMENT_BROWSE_OUT_DIR}/engagement-browse-x-proof.png
 //     so the operator can confirm the loaded session by eye.
 
@@ -86,12 +95,11 @@ const { chromium } = require(PW);
         }
 
         const finalUrl = page.url();
+        const bodyHead200 = (await page.evaluate(() => document.body.innerText)).slice(0, 200);
         const isLogin = /\/(login|i\/flow\/login|i\/flow\/signup)\b/.test(finalUrl)
-            || /Log in|Sign in to X/i.test(
-                (await page.evaluate(() => document.body.innerText)).slice(0, 200)
-            );
+            || /Log in|Sign in to X/i.test(bodyHead200);
         if (isLogin) {
-            console.log(`RESULT:AUTHFAIL url=${finalUrl}`);
+            console.log(`RESULT:NEEDS_REAUTH url=${finalUrl}`);
             await browser.close();
             return;
         }
@@ -121,7 +129,12 @@ const { chromium } = require(PW);
                     out.push({
                         platform: "x",
                         source_author: author,
-                        source_post_url: url,
+                        // Field MUST be `source_permalink` to match the
+                        // queue.jsonl schema + engagement-post-x.js arg —
+                        // a prior version emitted `source_post_url` and
+                        // every harvested draft was un-postable because
+                        // the post helper looked for the wrong key.
+                        source_permalink: url,
                         source_post_excerpt: text.slice(0, 280),
                     });
                 }
@@ -129,12 +142,12 @@ const { chromium } = require(PW);
             }
         );
 
-        // Dedup by URL, cap to N.
+        // Dedup by permalink, cap to N.
         const seen = new Set();
         const unique = [];
         for (const p of posts) {
-            if (seen.has(p.source_post_url)) continue;
-            seen.add(p.source_post_url);
+            if (seen.has(p.source_permalink)) continue;
+            seen.add(p.source_permalink);
             unique.push(p);
             if (unique.length >= N) break;
         }

@@ -73,9 +73,49 @@ _run_drip_fallback() {
     "${PYTHON}" "${DRIP_PY}" --fallback --fallback-reason "${reason}"
 }
 
+_purge_null_permalink_drafts() {
+    # FI-FRESH-DRIP (2026-06-05): the subagent has occasionally appended
+    # fresh drafts with a null/empty source_permalink — those are
+    # un-postable (engagement-post-x.js / engagement-post-li.js need a
+    # permalink) so they should never reach pending_review. Rewrite the
+    # queue file atomically, dropping any FRESH draft (this run only)
+    # whose source_permalink is missing.
+    "${PYTHON}" - "${QUEUE_PATH}" "${START_TS}" <<'PY' 2>/dev/null || true
+import json, sys, os
+path, start_ts = sys.argv[1], float(sys.argv[2])
+kept, dropped = [], 0
+try:
+    with open(path, encoding="utf-8") as fh:
+        for raw in fh:
+            raw = raw.strip()
+            if not raw: continue
+            try: e = json.loads(raw)
+            except Exception:
+                # Preserve anything we can't parse so we don't accidentally
+                # drop existing pending_review / posted history rows.
+                kept.append(raw); continue
+            if (
+                e.get("status") == "queued"
+                and float(e.get("freshly_drafted_at") or 0) >= start_ts
+                and not (isinstance(e.get("source_permalink"), str) and e["source_permalink"].strip())
+            ):
+                dropped += 1
+                continue
+            kept.append(json.dumps(e, separators=(",", ":")))
+except FileNotFoundError:
+    pass
+tmp = path + ".tmp"
+with open(tmp, "w", encoding="utf-8") as fh:
+    for line in kept: fh.write(line + "\n")
+os.replace(tmp, path)
+sys.stderr.write(f"dispatcher: purged {dropped} null-permalink fresh draft(s)\n")
+PY
+}
+
 _count_fresh_drafts() {
     # Read queue.jsonl and count entries with status=queued AND
-    # freshly_drafted_at >= START_TS.
+    # freshly_drafted_at >= START_TS AND a usable source_permalink (so
+    # un-postable drafts can't masquerade as fresh).
     "${PYTHON}" - "${QUEUE_PATH}" "${START_TS}" <<'PY' 2>/dev/null
 import json, sys
 path, start_ts = sys.argv[1], float(sys.argv[2])
@@ -93,10 +133,14 @@ try:
             if e.get("status") != "queued":
                 continue
             try:
-                if float(e.get("freshly_drafted_at") or 0) >= start_ts:
-                    n += 1
+                if float(e.get("freshly_drafted_at") or 0) < start_ts:
+                    continue
             except Exception:
-                pass
+                continue
+            sp = e.get("source_permalink")
+            if not (isinstance(sp, str) and sp.strip()):
+                continue
+            n += 1
 except FileNotFoundError:
     pass
 print(n)
@@ -220,6 +264,10 @@ timeout --kill-after=30 "${SUBAGENT_TIMEOUT}" \
 SUBAGENT_EXIT=$?
 set -e
 
+# Purge any null-permalink fresh drafts the subagent produced before
+# the count drives the decision tree. This is defense in depth — the
+# subagent prompt also tells it not to write null-permalink rows.
+_purge_null_permalink_drafts
 FRESH_COUNT=$(_count_fresh_drafts)
 END_TS=$(date +%s)
 LATENCY_MS=$(( (END_TS - START_TS) * 1000 ))

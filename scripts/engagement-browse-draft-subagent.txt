@@ -37,15 +37,32 @@ logged-in feeds and write an auth-proof PNG you can verify.
     node /opt/claude-soma/scripts/engagement-browse-linkedin.js --n 25
 
 Both scripts stream one JSON line per harvested post to stdout, followed
-by a single `RESULT:OK n=<count> auth=<bool> url=<final-url>` line.
+by a single RESULT line. The RESULT line is one of:
+
+  RESULT:OK n=<count> auth=<bool> url=<final-url>
+  RESULT:NEEDS_REAUTH url=<final-url>        — storageState rejected /
+                                                login wall. The operator
+                                                must re-run pw-login on
+                                                the VNC desktop. Emit
+                                                zero drafts for that
+                                                platform and continue.
+  RESULT:ERROR <message>                     — anything else; emit zero
+                                                drafts for that platform.
+
 Each JSON line has the shape:
 
   {
     "platform": "x" | "linkedin",
     "source_author": "@handle or Firstname Lastname",
-    "source_post_url": "https://...",
+    "source_permalink": "https://...",
     "source_post_excerpt": "<first ~280 chars of the post>"
   }
+
+NOTE: the field is `source_permalink` (NOT `source_post_url`). Use the
+exact field name `source_permalink` in your queue.jsonl appends below —
+the post helper script `engagement-post-x.js` / `engagement-post-li.js`
+looks up the URL by that exact key. A null/missing permalink makes the
+draft un-postable.
 
 Workflow:
 
@@ -75,7 +92,7 @@ Workflow:
        "queued_at": <unix-epoch-int>,
        "freshly_drafted_at": __START_TS__,
        "source_author": "<from harvest>",
-       "source_post_url": "<from harvest>",
+       "source_permalink": "<from harvest — REQUIRED, never null>",
        "source_post_excerpt": "<from harvest>",
        "draft_text": "<your humanized comment>"
      }
@@ -83,6 +100,11 @@ Workflow:
      Use Bash to append one line at a time:
        printf '%s\n' '<the json>' >> __QUEUE_PATH__
      Generate the hex with `openssl rand -hex 3`.
+
+     If a harvested post lacks a usable `source_permalink` (null, empty,
+     or not a real URL), SKIP that post entirely — do not draft for it.
+     A null-permalink draft is un-postable and will be rejected by the
+     dispatcher.
 
 ============================================================
 Hard rules

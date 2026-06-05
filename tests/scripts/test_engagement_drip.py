@@ -590,6 +590,68 @@ def test_dispatcher_passes_bypass_permissions_to_subagent() -> None:
     )
 
 
+def test_browse_helpers_emit_source_permalink_field() -> None:
+    """Browse helpers must emit the queue-compatible field name
+    `source_permalink` (the post helpers look up the URL by THAT key).
+    Live witness: 14:00 IST drafts had source_permalink=null and were
+    un-postable until the field-name fix."""
+    for name in ("engagement-browse-x.js", "engagement-browse-linkedin.js"):
+        body = (SCRIPTS_DIR / name).read_text()
+        assert "source_permalink" in body, (
+            f"{name} must emit source_permalink — was source_post_url, "
+            "and post helpers can't find the URL by the wrong key"
+        )
+        assert "source_post_url" not in body or (
+            # ok if it only appears in a comment explicitly contrasting it
+            "NOT `source_post_url`" in body or "not `source_post_url`" in body
+        ), (
+            f"{name} must NOT emit source_post_url (legacy field name); "
+            "rename to source_permalink"
+        )
+
+
+def test_browse_helpers_emit_needs_reauth_signal() -> None:
+    """Both browse helpers must emit a distinctive RESULT:NEEDS_REAUTH
+    line when the storageState is rejected / login wall, NOT silently
+    return RESULT:OK n=0 (the prior behavior masked an expired auth as a
+    'feed is empty' state)."""
+    for name in ("engagement-browse-x.js", "engagement-browse-linkedin.js"):
+        body = (SCRIPTS_DIR / name).read_text()
+        assert "RESULT:NEEDS_REAUTH" in body, (
+            f"{name} must surface RESULT:NEEDS_REAUTH on login-wall detection"
+        )
+
+
+def test_li_browse_uses_new_mainFeed_selector() -> None:
+    """The browse helper must target the new data-testid='mainFeed' wrapper
+    (LinkedIn rotated CSS-modules class names so every legacy selector is
+    dead). Root-cause documented 2026-06-05 from /var/log/claude-soma/li-diag/."""
+    body = (SCRIPTS_DIR / "engagement-browse-linkedin.js").read_text()
+    assert "data-testid=\"mainFeed\"" in body or 'data-testid="mainFeed"' in body, (
+        "LinkedIn harvest must scope to [data-testid='mainFeed'] — legacy "
+        "feed-shared-update / occludable-update class selectors are dead "
+        "after LinkedIn's CSS-modules migration"
+    )
+    assert "Feed post" in body, (
+        "LinkedIn cards are identified by innerText prefix 'Feed post ' "
+        "(a11y contract); harvest must filter by that"
+    )
+
+
+def test_dispatcher_purges_null_permalink_drafts() -> None:
+    """The dispatcher must purge any fresh draft with a null/empty
+    source_permalink before counting + popping. Defense in depth on top of
+    the subagent prompt — un-postable drafts must never reach pending_review."""
+    body = DISPATCH_SCRIPT.read_text()
+    assert "_purge_null_permalink_drafts" in body, (
+        "dispatcher must define _purge_null_permalink_drafts"
+    )
+    assert "source_permalink" in body, (
+        "dispatcher must reference source_permalink (the queue field name) "
+        "in its purge + count logic"
+    )
+
+
 def test_dispatch_log_lines_are_newline_terminated(tmp_path: Path) -> None:
     """Each run must append a full line, not a fragment that concatenates
     with the previous run's JSON (live witness: pre-fix logs were one
