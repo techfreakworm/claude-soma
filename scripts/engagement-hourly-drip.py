@@ -190,24 +190,63 @@ def _platform_label(platform: str) -> str:
 def regenerate_review_page(
     entries: list[dict], out_path: str | Path, review_url: str
 ) -> None:
+    """FI-REVIEW-DOC-ACTIONABLE-ONLY (2026-06-05): the relay-served review doc
+    lists ONLY drafts that still need the operator's decision — status in
+    (`queued`, `pending_review`). Approved, posted, failed, and declined
+    drafts are deliberately excluded so the doc stays a clean to-do list
+    instead of a growing archive.
+
+    Per-platform counts at the top let the operator see the queue depth
+    at a glance without scrolling.
+    """
     now_str = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    # Actionable = the only states that need a user decision.
     pending = [e for e in entries if e.get("status") == "pending_review"]
-    approved = [e for e in entries if e.get("status") == "approved"]
-    posted = sorted(
-        [e for e in entries if e.get("status") == "posted"],
-        key=lambda e: e.get("posted_at") or 0,
-    )[-10:]
+    queued = [e for e in entries if e.get("status") == "queued"]
+
+    # Per-platform counts across the actionable surface only.
+    def _counts(rows: list[dict]) -> dict[str, int]:
+        out: dict[str, int] = {}
+        for e in rows:
+            p = e.get("platform", "?")
+            out[p] = out.get(p, 0) + 1
+        return out
+
+    pending_counts = _counts(pending)
+    queued_counts = _counts(queued)
+
+    def _fmt_counts(d: dict[str, int]) -> str:
+        if not d:
+            return "0"
+        order = ["x", "linkedin"]
+        parts = [
+            f"{_platform_label(p)}: {d.get(p, 0)}"
+            for p in order
+            if p in d
+        ]
+        # Any platform not in the canonical order list, append at end.
+        for p in d:
+            if p not in order:
+                parts.append(f"{_platform_label(p)}: {d[p]}")
+        return ", ".join(parts) or "0"
 
     lines: list[str] = []
     lines.append("# Engagement Review")
     lines.append("")
     lines.append(f"_Last regenerated: {now_str}_")
     lines.append("")
+    lines.append(
+        f"**Actionable totals** — Pending review: {len(pending)} "
+        f"({_fmt_counts(pending_counts)})  ·  Queued: {len(queued)} "
+        f"({_fmt_counts(queued_counts)})"
+    )
+    lines.append("")
 
-    if not pending and not approved:
+    if not pending and not queued:
         lines.append(
             "No drafts awaiting review at the moment. "
-            "Run the drip script (`systemctl start claude-soma-engagement-drip.service`) "
+            "Run the drip script "
+            "(`systemctl start claude-soma-engagement-drip.service`) "
             "or wait for the next hourly fire."
         )
     else:
@@ -218,8 +257,12 @@ def regenerate_review_page(
         lines.append("")
         lines.append("---")
         lines.append("")
+
         lines.append(f"## Pending Review ({len(pending)})")
         lines.append("")
+        if not pending:
+            lines.append("_None._")
+            lines.append("")
         for e in pending:
             eid = e.get("id", "unknown")
             plat = _platform_label(e.get("platform", ""))
@@ -241,18 +284,15 @@ def regenerate_review_page(
             lines.append("---")
             lines.append("")
 
-        lines.append(f"## Approved · awaiting post ({len(approved)})")
+        lines.append(f"## Queued (next up — {len(queued)})")
         lines.append("")
-        for e in approved:
+        if not queued:
+            lines.append("_None._")
+            lines.append("")
+        for e in queued:
             eid = e.get("id", "unknown")
             plat = _platform_label(e.get("platform", ""))
             author = e.get("source_author", "")
-            approved_at = e.get("approved_at")
-            approved_str = (
-                datetime.fromtimestamp(approved_at, tz=timezone.utc).strftime("%H:%M")
-                if approved_at
-                else "—"
-            )
             lines.append(f"### #{eid} · {plat} · {author}")
             lines.append("")
             lines.append(f"**Source:** {e.get('source_permalink', '')}")
@@ -260,26 +300,8 @@ def regenerate_review_page(
             lines.append("**Draft:**")
             lines.append(f"> {e.get('draft_text', '')}")
             lines.append("")
-            lines.append(f"_Approved at {approved_str}_")
-            lines.append("")
             lines.append("---")
             lines.append("")
-
-    lines.append("")
-    lines.append("## Recently posted (showing last 10)")
-    lines.append("")
-    if posted:
-        lines.append("| ID | Platform | Posted at | Permalink |")
-        lines.append("|---|---|---|---|")
-        for e in posted:
-            eid = e.get("id", "unknown")
-            plat = _platform_label(e.get("platform", ""))
-            posted_str = _fmt_ts(e.get("posted_at"))
-            permalink = e.get("post_permalink") or "—"
-            lines.append(f"| {eid} | {plat} | {posted_str} | {permalink} |")
-    else:
-        lines.append("_No posts yet._")
-    lines.append("")
 
     content = "\n".join(lines)
     out_path = Path(out_path)

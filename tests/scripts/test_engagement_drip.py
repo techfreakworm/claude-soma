@@ -240,27 +240,76 @@ def test_review_page_rendered_with_pending_section(tmp_path: Path) -> None:
     assert "### #li-id" in content
 
 
-def test_review_page_recently_posted_table(tmp_path: Path) -> None:
+def test_review_page_excludes_posted_approved_failed(tmp_path: Path) -> None:
+    """FI-REVIEW-DOC-ACTIONABLE-ONLY (2026-06-05): the review doc must show
+    ONLY drafts that still need the operator's decision (queued or
+    pending_review). Posted, approved, failed, declined drafts MUST NOT
+    appear — the doc is a to-do list, not an archive."""
+    now = time.time()
     cfg = _cfg(tmp_path)
     entries = [
-        _entry(
-            "post-id",
-            "x",
-            status="posted",
-            posted_at=time.time() - 100,
-            post_permalink="https://x.com/handle/status/999",
-        ),
-        _entry("q1", "x", queued_at=1000.0),
+        _entry("posted-x", "x", status="posted", posted_at=now - 100,
+               post_permalink="https://x.com/h/status/999"),
+        _entry("posted-li", "linkedin", status="posted", posted_at=now - 200,
+               post_permalink="https://www.linkedin.com/feed/update/urn:li:activity:1/"),
+        _entry("approved-x", "x", status="approved", approved_at=now - 50),
+        _entry("failed-x", "x", status="failed", post_error="some error"),
+        _entry("declined-li", "linkedin", status="declined", decline_reason="meh"),
+        _entry("pending-x", "x", status="pending_review", released_at=now),
+        _entry("queued-x", "x", queued_at=now - 10),
+        _entry("queued-li", "linkedin", queued_at=now - 5),
     ]
     _write_queue(cfg["queue_path"], entries)
+    # Render directly (don't go through drip, which would mutate queued)
+    out = tmp_path / "review.md"
+    _mod.regenerate_review_page(
+        entries, str(out),
+        "https://files.example.test/engagement-review.md",
+    )
+    content = out.read_text()
+    # SHOWN
+    assert "### #pending-x" in content
+    assert "### #queued-x" in content
+    assert "### #queued-li" in content
+    # NOT shown — the whole point of this change
+    assert "posted-x" not in content
+    assert "posted-li" not in content
+    assert "approved-x" not in content
+    assert "failed-x" not in content
+    assert "declined-li" not in content
+    # And the removed section headings
+    assert "Recently posted" not in content
+    assert "Approved · awaiting post" not in content
+    assert "Approved &middot; awaiting post" not in content
+    # New section headings present
+    assert "## Pending Review (1)" in content
+    assert "## Queued (next up — 2)" in content
+    # Per-platform counts in the header — pending and queued counted separately
+    assert "Actionable totals" in content
+    assert "Pending review: 1 (X: 1)" in content
+    assert "Queued: 2 (X: 1, LinkedIn: 1)" in content
 
-    result = _mod.drip(cfg)
 
-    assert result == 0
-    content = Path(cfg["review_page"]).read_text()
-    assert "## Recently posted" in content
-    assert "https://x.com/handle/status/999" in content
-    assert "| post-id |" in content
+def test_review_page_empty_actionable_says_so(tmp_path: Path) -> None:
+    """When nothing is queued or pending_review, the doc says the actionable
+    surface is empty (not just an empty header)."""
+    now = time.time()
+    cfg = _cfg(tmp_path)
+    entries = [
+        _entry("p1", "x", status="posted", posted_at=now),
+        _entry("a1", "x", status="approved", approved_at=now),
+    ]
+    _write_queue(cfg["queue_path"], entries)
+    out = tmp_path / "review.md"
+    _mod.regenerate_review_page(
+        entries, str(out),
+        "https://files.example.test/engagement-review.md",
+    )
+    content = out.read_text()
+    assert "No drafts awaiting review" in content
+    # And the actionable-totals line still renders the zeros
+    assert "Pending review: 0" in content
+    assert "Queued: 0" in content
 
 
 def test_atomic_write_no_partial_on_crash(tmp_path: Path) -> None:
