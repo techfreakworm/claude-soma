@@ -361,6 +361,72 @@ _PHOTO_EXTS = {'.jpg', '.jpeg', '.png', '.gif', '.webp'}
 # larger than this fall back to a placeholder line in the message text.
 _MAX_ATTACHMENT_BYTES = 50 * 1024 * 1024  # 50 MB
 
+# FI-DM-SAFE-ATTACH (2026-06-06). Lead COMPLETED events occasionally put
+# internal data files (queue.jsonl, refill_*.py, log paths) into payload
+# paths[]. The proactive-DM pipeline must defend regardless: never attach
+# anything that is not a recognized user-facing artifact. Two layers:
+#
+#   1. Extension allowlist — only known operator-readable types pass.
+#   2. Path-prefix denylist — internal trees never pass, with a single
+#      carve-out for the relay render directory (which is exactly where
+#      user-facing markdown / PNG outputs live).
+_USER_FACING_EXTENSIONS = frozenset({
+    # documents
+    '.pdf', '.docx', '.doc', '.pptx', '.ppt', '.odt', '.odp', '.ods',
+    '.xlsx', '.xls', '.csv', '.tsv',
+    # rendered text
+    '.md', '.txt', '.rtf',
+    # images
+    '.png', '.jpg', '.jpeg', '.gif', '.webp', '.heic', '.bmp', '.svg',
+    # audio
+    '.mp3', '.m4a', '.ogg', '.opus', '.oga', '.wav', '.flac', '.aac',
+    # video
+    '.mp4', '.mov', '.webm', '.mkv', '.avi',
+    # archives (acceptable as deliverables)
+    '.zip', '.tar', '.gz', '.7z',
+    # ebooks
+    '.epub', '.mobi',
+})
+
+_INTERNAL_PATH_PREFIXES = (
+    '/var/lib/',
+    '/var/log/',
+    '/tmp/',
+    '/opt/claude-soma/',
+    '/etc/',
+    '/home/ubuntu/.claude/',
+    '/home/ubuntu/.claude-soma/',
+    '/proc/',
+    '/sys/',
+    '/dev/',
+)
+
+# Carve-out under /var/lib that DOES hold user-visible rendered documents
+# (markdown reviews, PNGs) published via the files relay.
+_RELAY_ALLOW_PREFIX = '/var/lib/claude-soma/relay/'
+
+
+def _is_user_facing_attachment(path_str: str) -> bool:
+    """Return True iff the path is safe to attach to an operator DM.
+
+    Defense against leads that put internal data files (queue.jsonl,
+    refill.py, ...) in their COMPLETED paths[]. Filter is:
+
+      - Extension must be in the user-facing allowlist.
+      - Path must not start with an internal prefix, UNLESS the path
+        sits under /var/lib/claude-soma/relay/ (rendered outputs).
+    """
+    p = Path(path_str)
+    if p.suffix.lower() not in _USER_FACING_EXTENSIONS:
+        return False
+    norm = str(p)
+    if norm.startswith(_RELAY_ALLOW_PREFIX):
+        return True
+    for prefix in _INTERNAL_PATH_PREFIXES:
+        if norm.startswith(prefix):
+            return False
+    return True
+
 
 @mcp.tool()
 def send_tg_reply(
@@ -449,11 +515,13 @@ def _notify_chat_id() -> str:
 def _classify_attachments(paths: list[str]) -> tuple[list[str], list[str]]:
     """Split a list of file paths into (sendable, oversized).
 
-    sendable: paths that exist, are regular files, and are <= the 50 MB cap.
-    oversized: existing regular files > 50 MB — these get rendered as
+    sendable: paths that exist, are regular files, pass the safety filter
+              (user-facing extension + not under an internal tree), AND
+              are <= the 50 MB cap.
+    oversized: same filters as sendable, but > 50 MB — rendered as
                placeholder lines in the message text instead of attached.
-    Missing or non-regular paths are silently dropped (belt-and-suspenders;
-    _format_completed_dm also filters before calling this).
+    Missing, non-regular, or non-user-facing paths are silently dropped
+    (the rejection is logged to hermes-notify.log for audit).
     """
     sendable: list[str] = []
     oversized: list[str] = []
@@ -464,6 +532,9 @@ def _classify_attachments(paths: list[str]) -> tuple[list[str], list[str]]:
                 continue
             size = p.stat().st_size
         except OSError:
+            continue
+        if not _is_user_facing_attachment(fp):
+            _log_notify_error(f"attachment filtered (not user-facing): {fp}")
             continue
         if size <= _MAX_ATTACHMENT_BYTES:
             sendable.append(fp)

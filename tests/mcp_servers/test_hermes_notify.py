@@ -669,6 +669,9 @@ def test_classify_attachments_splits_by_size(tmp_path: Path, monkeypatch) -> Non
 
     # Cap at 10 bytes so 5-byte file is sendable and 20-byte file is oversized.
     monkeypatch.setattr(ha_server, "_MAX_ATTACHMENT_BYTES", 10)
+    # Disable the FI-DM-SAFE-ATTACH path-prefix denylist for this size-only
+    # test — pytest's tmp_path lives under /tmp/ which is normally denied.
+    monkeypatch.setattr(ha_server, "_INTERNAL_PATH_PREFIXES", ())
 
     sendable, oversized = ha_server._classify_attachments([str(small), str(large)])
     assert sendable == [str(small)]
@@ -679,7 +682,8 @@ def test_classify_attachments_drops_missing_paths(monkeypatch) -> None:
     from claude_soma.mcp_servers.hermes_api import server as ha_server
 
     monkeypatch.setattr(ha_server, "_MAX_ATTACHMENT_BYTES", 50 * 1024 * 1024)
-    sendable, oversized = ha_server._classify_attachments(["/nonexistent/path/xyz_abc123.cpp"])
+    monkeypatch.setattr(ha_server, "_INTERNAL_PATH_PREFIXES", ())
+    sendable, oversized = ha_server._classify_attachments(["/nonexistent/path/xyz_abc123.pdf"])
     assert sendable == []
     assert oversized == []
 
@@ -688,10 +692,119 @@ def test_classify_attachments_drops_directories(tmp_path: Path, monkeypatch) -> 
     from claude_soma.mcp_servers.hermes_api import server as ha_server
 
     monkeypatch.setattr(ha_server, "_MAX_ATTACHMENT_BYTES", 50 * 1024 * 1024)
+    monkeypatch.setattr(ha_server, "_INTERNAL_PATH_PREFIXES", ())
     # tmp_path itself is a directory — is_file() returns False
     sendable, oversized = ha_server._classify_attachments([str(tmp_path)])
     assert sendable == []
     assert oversized == []
+
+
+# ------------------------------------------------------------------ FI-DM-SAFE-ATTACH (2026-06-06)
+
+def test_safe_attach_filter_drops_jsonl(tmp_path: Path, monkeypatch) -> None:
+    """Lead COMPLETED paths with queue.jsonl must never reach Telegram."""
+    from claude_soma.mcp_servers.hermes_api import server as ha_server
+
+    # Realistic harness file the engagement subagent occasionally lists.
+    queue_jsonl = tmp_path / "queue.jsonl"
+    queue_jsonl.write_text('{"id":"eng-x-1","status":"queued"}\n')
+    monkeypatch.setattr(ha_server, "_INTERNAL_PATH_PREFIXES", ())
+
+    sendable, oversized = ha_server._classify_attachments([str(queue_jsonl)])
+
+    assert sendable == []
+    assert oversized == []
+
+
+def test_safe_attach_filter_drops_python_and_shell(tmp_path: Path, monkeypatch) -> None:
+    """Source files must never reach Telegram even when leads include them."""
+    from claude_soma.mcp_servers.hermes_api import server as ha_server
+
+    py = tmp_path / "refill_fresh.py"
+    py.write_text("print('hello')\n")
+    sh = tmp_path / "deploy.sh"
+    sh.write_text("#!/bin/bash\necho hi\n")
+    log = tmp_path / "drip.log"
+    log.write_text("2026-06-06 drip ran\n")
+    monkeypatch.setattr(ha_server, "_INTERNAL_PATH_PREFIXES", ())
+
+    sendable, oversized = ha_server._classify_attachments(
+        [str(py), str(sh), str(log)]
+    )
+    assert sendable == []
+    assert oversized == []
+
+
+def test_safe_attach_filter_allows_user_facing_pdf(tmp_path: Path, monkeypatch) -> None:
+    from claude_soma.mcp_servers.hermes_api import server as ha_server
+
+    pdf = tmp_path / "report.pdf"
+    pdf.write_bytes(b"%PDF-1.4 fake content")
+    monkeypatch.setattr(ha_server, "_INTERNAL_PATH_PREFIXES", ())
+
+    sendable, oversized = ha_server._classify_attachments([str(pdf)])
+    assert sendable == [str(pdf)]
+    assert oversized == []
+
+
+def test_safe_attach_filter_blocks_internal_path_prefix() -> None:
+    """Even a .pdf is blocked when it lives under /var/lib/ or /var/log/."""
+    from claude_soma.mcp_servers.hermes_api import server as ha_server
+
+    assert ha_server._is_user_facing_attachment("/var/lib/claude-soma/queue.pdf") is False
+    assert ha_server._is_user_facing_attachment("/var/log/claude-soma/notify.pdf") is False
+    assert ha_server._is_user_facing_attachment("/tmp/scratch.pdf") is False
+    assert ha_server._is_user_facing_attachment("/opt/claude-soma/secrets.pdf") is False
+    assert ha_server._is_user_facing_attachment("/etc/claude-soma/x.pdf") is False
+    assert ha_server._is_user_facing_attachment("/home/ubuntu/.claude/out.pdf") is False
+    assert ha_server._is_user_facing_attachment("/home/ubuntu/.claude-soma/out.pdf") is False
+
+
+def test_safe_attach_filter_allows_relay_carveout() -> None:
+    """The relay-render dir is the one explicitly user-facing /var/lib subtree."""
+    from claude_soma.mcp_servers.hermes_api import server as ha_server
+
+    assert ha_server._is_user_facing_attachment(
+        "/var/lib/claude-soma/relay/engagement-review.md"
+    ) is True
+    assert ha_server._is_user_facing_attachment(
+        "/var/lib/claude-soma/relay/charts/usage.png"
+    ) is True
+
+
+def test_safe_attach_filter_blocks_unknown_extension() -> None:
+    from claude_soma.mcp_servers.hermes_api import server as ha_server
+
+    # No extension
+    assert ha_server._is_user_facing_attachment("/home/ubuntu/Makefile") is False
+    # Internal data format
+    assert ha_server._is_user_facing_attachment("/home/ubuntu/dump.sqlite") is False
+    assert ha_server._is_user_facing_attachment("/home/ubuntu/state.json") is False
+    assert ha_server._is_user_facing_attachment("/home/ubuntu/config.yaml") is False
+
+
+def test_completed_dm_drops_internal_paths_silently(tmp_path: Path) -> None:
+    """A lead COMPLETED with paths=[queue.jsonl, refill.py] must not attach them."""
+    from claude_soma.mcp_servers.hermes_api import server as ha_server
+
+    queue = tmp_path / "queue.jsonl"
+    queue.write_text('{"id":"x"}\n')
+    refill = tmp_path / "refill.py"
+    refill.write_text("# nothing\n")
+
+    text, sendable = ha_server._format_completed_dm(
+        "fi-engagement-drip",
+        {
+            "summary": "drip ran",
+            "urls": [],
+            "paths": [str(queue), str(refill)],
+        },
+    )
+
+    assert sendable == []
+    # Filtered paths must not leak into the message body either.
+    assert "queue.jsonl" not in text
+    assert "refill.py" not in text
 
 
 def test_completed_dm_with_oversized_file_renders_placeholder(
@@ -699,11 +812,12 @@ def test_completed_dm_with_oversized_file_renders_placeholder(
 ) -> None:
     from claude_soma.mcp_servers.hermes_api import server as ha_server
 
-    bigfile = tmp_path / "output.bin"
+    bigfile = tmp_path / "output.pdf"
     bigfile.write_bytes(b"x" * 30)
 
     # Cap at 10 bytes so 30-byte file is oversized.
     monkeypatch.setattr(ha_server, "_MAX_ATTACHMENT_BYTES", 10)
+    monkeypatch.setattr(ha_server, "_INTERNAL_PATH_PREFIXES", ())
 
     text, sendable = ha_server._format_completed_dm(
         "hello-test",
@@ -719,13 +833,14 @@ def test_completed_dm_with_oversized_file_renders_placeholder(
 def test_completed_dm_with_mixed_sizes(tmp_path: Path, monkeypatch) -> None:
     from claude_soma.mcp_servers.hermes_api import server as ha_server
 
-    small = tmp_path / "small.c"
+    small = tmp_path / "small.pdf"
     small.write_bytes(b"x" * 5)
-    large = tmp_path / "large.bin"
+    large = tmp_path / "large.pdf"
     large.write_bytes(b"x" * 20)
 
     # Cap at 10 bytes — small is sendable, large is oversized.
     monkeypatch.setattr(ha_server, "_MAX_ATTACHMENT_BYTES", 10)
+    monkeypatch.setattr(ha_server, "_INTERNAL_PATH_PREFIXES", ())
 
     text, sendable = ha_server._format_completed_dm(
         "hello-test",
@@ -747,6 +862,7 @@ def test_completed_dm_includes_summary_links_and_placeholder_in_order(
     bigfile.write_bytes(b"x" * 30)
 
     monkeypatch.setattr(ha_server, "_MAX_ATTACHMENT_BYTES", 10)
+    monkeypatch.setattr(ha_server, "_INTERNAL_PATH_PREFIXES", ())
 
     text, _ = ha_server._format_completed_dm(
         "alpha",
@@ -796,6 +912,8 @@ def test_per_attachment_isolation_continues_after_failure(
     monkeypatch.setattr(ha_server, "_tg_post_multipart", fake_multipart)
     monkeypatch.setattr(ha_server, "_log_notify_error", fake_log)
     monkeypatch.setenv("TELEGRAM_CHAT_ID", "12345")
+    # _send_proactive_dm dispatches by extension directly (no _classify_attachments call),
+    # so the safety filter doesn't apply here — the test exercises per-attachment isolation.
 
     result = ha_server._send_proactive_dm("hello", [str(file1), str(file2)])
 
