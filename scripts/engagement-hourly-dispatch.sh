@@ -53,12 +53,15 @@ mkdir -p "${ENGAGEMENT_DIR}" 2>/dev/null || true
 
 _log_dispatch_line() {
     # _log_dispatch_line method result drafts_count latency_ms subagent_exit reason
+    # NOTE: `$()` strips trailing newlines from captured output, so emit the
+    # final \n with the redirect's printf (not the captured one) — that's why
+    # the dispatch log was previously one long unbroken concatenation.
     local method="$1" result="$2" drafts="$3" latency_ms="$4" exit_code="$5" reason="${6:-}"
-    local line
-    line=$(printf '{"ts":"%s","start_ts":%s,"method":"%s","result":"%s","drafts_count":%s,"latency_ms":%s,"subagent_exit_code":%s,"reason":%s}\n' \
-        "${START_ISO}" "${START_TS}" "${method}" "${result}" "${drafts}" "${latency_ms}" "${exit_code}" \
-        "$(printf '%s' "${reason}" | python3 -c 'import json,sys;print(json.dumps(sys.stdin.read()))')")
-    printf '%s' "${line}" >> "${DISPATCH_LOG}" 2>/dev/null || true
+    local reason_json
+    reason_json=$(printf '%s' "${reason}" | python3 -c 'import json,sys;print(json.dumps(sys.stdin.read()))')
+    printf '{"ts":"%s","start_ts":%s,"method":"%s","result":"%s","drafts_count":%s,"latency_ms":%s,"subagent_exit_code":%s,"reason":%s}\n' \
+        "${START_ISO}" "${START_TS}" "${method}" "${result}" "${drafts}" "${latency_ms}" "${exit_code}" "${reason_json}" \
+        >> "${DISPATCH_LOG}" 2>/dev/null || true
 }
 
 _run_drip_fresh() {
@@ -194,12 +197,23 @@ SUBAGENT_INSTRUCTION="${SUBAGENT_INSTRUCTION//__START_TS__/${START_TS}}"
 
 # `timeout --kill-after` so an exotic subagent hang (claude not responding
 # to SIGTERM) eventually dies with SIGKILL after a 30s grace period.
+# --permission-mode bypassPermissions: in `claude -p` headless mode, every
+# Bash tool call defaults to "ask for approval" — but there is no human on
+# the other end of a dispatched subagent, so node/openssl/printf all hang as
+# permission-denied. Bypass that here so the subagent can actually run the
+# harvest helpers + queue-append it was instructed to. SAFETY: the
+# orchestrator_gate.sh PreToolUse hook still fires for every Bash call
+# (the gate blocks claude/codex/pip/apt/network curl etc.); the MCP set is
+# tight (only hermes-api); --add-dir scopes file access to
+# /var/lib/claude-soma/engagement; the prompt is sealed (don't post, don't
+# touch arbitrary FS). Bypass is bounded by those layers.
 set +e
 timeout --kill-after=30 "${SUBAGENT_TIMEOUT}" \
     "${CLAUDE_BIN}" -p \
         --mcp-config "${SUBAGENT_MCP}" \
         --setting-sources project \
         --add-dir "${ENGAGEMENT_DIR}" \
+        --permission-mode bypassPermissions \
         --output-format text \
         "${SUBAGENT_INSTRUCTION}" \
     >"${SUBAGENT_STDOUT}" 2>"${SUBAGENT_STDERR}"

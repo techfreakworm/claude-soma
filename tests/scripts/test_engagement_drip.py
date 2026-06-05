@@ -575,6 +575,55 @@ def test_browse_helpers_exist_and_executable() -> None:
         assert os.access(str(path), os.X_OK), f"{name} must be +x"
 
 
+def test_dispatcher_passes_bypass_permissions_to_subagent() -> None:
+    """In `claude -p` headless mode the default permission gate makes every
+    Bash call hang on approval, so node/openssl/printf are denied. The
+    dispatcher must pass --permission-mode bypassPermissions; the
+    orchestrator_gate.sh PreToolUse hook still enforces the denylist."""
+    body = DISPATCH_SCRIPT.read_text()
+    assert "--permission-mode bypassPermissions" in body, (
+        "claude -p subagent must use --permission-mode bypassPermissions; "
+        "otherwise every Bash tool call hangs on approval and the "
+        "harvest+queue-append workflow can't run (live witness: "
+        "2026-06-05T07:30Z run, subagent exited 0 with errors="
+        "bash-permission-denied)"
+    )
+
+
+def test_dispatch_log_lines_are_newline_terminated(tmp_path: Path) -> None:
+    """Each run must append a full line, not a fragment that concatenates
+    with the previous run's JSON (live witness: pre-fix logs were one
+    unbroken blob until 2026-06-05T07:48 fix)."""
+    # Drive the fast-path skip branch three times and assert wc -l == 3.
+    dlog = tmp_path / "dispatch.jsonl"
+    qpath = tmp_path / "queue.jsonl"
+    qpath.touch()
+    env = {
+        **os.environ,
+        "HERMES_ENGAGEMENT_FRESH_MODE": "off",  # fast-path → no subagent
+        "HERMES_ENGAGEMENT_QUEUE": str(qpath),
+        "HERMES_ENGAGEMENT_DISPATCH_LOG": str(dlog),
+        "HERMES_ENGAGEMENT_LOG": str(tmp_path / "drip.log"),
+        "HERMES_ENGAGEMENT_PYTHON": sys.executable,
+        "TELEGRAM_BOT_TOKEN": "",
+        "HERMES_NOTIFY_CHAT_ID": "",
+    }
+    for _ in range(3):
+        subprocess.run(
+            ["bash", str(DISPATCH_SCRIPT)],
+            env=env,
+            capture_output=True,
+            check=False,
+        )
+    lines = dlog.read_text().splitlines()
+    assert len(lines) == 3, (
+        f"expected 3 separate JSON-per-line entries, got {len(lines)}; "
+        f"newline-strip bug in _log_dispatch_line regressed"
+    )
+    for line in lines:
+        json.loads(line)  # each line must parse as its own JSON object
+
+
 def test_service_calls_dispatcher_not_drip_directly() -> None:
     content = SERVICE_FILE.read_text()
     assert "engagement-hourly-dispatch.sh" in content, (
