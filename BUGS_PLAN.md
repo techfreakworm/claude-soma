@@ -983,3 +983,188 @@ DRY_RUN-READY line + diagnostic info; submit is not clicked.
 
 **No remediation needed for the violation itself** beyond the operator
 deleting the posted comment + this entry.
+
+## Design proposal — FI-ENGAGEMENT-HYBRID (P1, awaiting sign-off)
+
+**Operator insight 2026-06-05 (verbatim summary):** the OLD architecture
+(social-manager harvests LinkedIn drafts into a pool with its warm,
+persistent playwright-linkedin MCP session; the hourly drip pops from
+the pool) had ZERO LinkedIn problems for months. The NEW
+FI-ENGAGEMENT-FRESH-DRIP architecture (hourly dispatcher cold-starts an
+ephemeral headless browser via state-linkedin.json) keeps getting
+flagged by LinkedIn: challenges, /checkpoint/challenge/ interstitials,
+0 LI drafts per tick despite X working great. Live-confirmed 2026-06-05
+15:30 IST = 5 X + 0 LI; same pattern recurring. The cold-start headless
+pattern is what LinkedIn punishes; the warm-session pattern was what
+LinkedIn tolerated. X tolerates cold-start headless; only LinkedIn
+punishes it.
+
+Operator directive: go HYBRID. Keep the fresh ephemeral subagent for X
+(works great), revert LinkedIn to the proven warm-path. **Plan for
+sign-off BEFORE building. NO CODE this turn.**
+
+### Three options weighed
+
+1. **Delegate LI to social-manager via project-orchestrator messaging.**
+   Dispatcher's hourly subagent harvests X as today, then sends a
+   `mcp__project_orchestrator__message_project` call to social-manager:
+   "browse LinkedIn /feed/ with your warm session, draft 3-5 engagement
+   comments, append to queue.jsonl with status=queued (no
+   freshly_drafted_at — these are pool drafts)." social-manager
+   processes the message reactively on its own cadence, uses its WARM
+   playwright-linkedin MCP, drafts, appends. Drip's hourly tick pops
+   1 X (fresh) + 1 LI (pool).
+2. **New persistent warm-LI daemon.** A new `claude-soma-li-browser.service`
+   keeps a `chromium.launchPersistentContext()` open continuously,
+   listens on a Unix socket; dispatcher's subagent calls into it. Same
+   warmness benefit, but written from scratch + adds a new systemd
+   unit + ~250 MB persistent chromium RAM. Essentially reinventing
+   what social-manager's playwright MCP already does.
+3. **Xvfb headful.** Run `engagement-browse-linkedin.js` under Xvfb
+   with `headless: false`. Robust against LinkedIn anti-bot fingerprint
+   in theory. But (a) still cold-starts per tick — doesn't fix the
+   warmness signal that the empirical evidence (social-manager's old
+   path) suggests is the actual root cause; (b) requires apt installing
+   xvfb + per-tick start/stop infrastructure; (c) not yet proven on
+   this VPS.
+
+### Recommendation: option 1
+
+**Reuses the empirically-proven reliable path.** social-manager's
+warm playwright-linkedin MCP session demonstrably tolerated LinkedIn's
+fingerprinting for months pre-FI-ENGAGEMENT-FRESH-DRIP. Option 2 is
+roughly an over-engineered option 1 (same warmness benefit, more code).
+Option 3 targets a different signal (fingerprint vs warmness) that the
+empirical evidence suggests is the wrong root cause.
+
+Option 1 also preserves the win we have on X — the fresh-ephemeral
+subagent that works great stays unchanged.
+
+### Architecture (option 1)
+
+```
+hourly timer
+   │
+   ▼
+engagement-hourly-dispatch.sh
+   │
+   ▼
+spawn ephemeral subagent (`claude -p`)
+   │
+   ├─ harvest X via engagement-browse-x.js (no change — works)
+   ├─ draft + append X comments to queue.jsonl with freshly_drafted_at
+   │
+   ├─ send mcp__project_orchestrator__message_project(
+   │       project="social-manager",
+   │       body="It's the engagement-drip hour. Please browse LinkedIn
+   │             /feed/ via your warm playwright-linkedin MCP, pick 3-5
+   │             engagement-worthy posts, draft humanized comments,
+   │             append to /var/lib/claude-soma/engagement/queue.jsonl
+   │             as status=queued JSON lines (pool drafts, no
+   │             freshly_drafted_at). DO NOT POST anything — drafts
+   │             only. FI-NO-POST-WITHOUT-APPROVAL applies."
+   │    )
+   │
+   └─ exit (don't wait for LI — social-manager processes async)
+   ▼
+dispatcher runs drip TWICE:
+   ▼
+   engagement-hourly-drip.py --source=fresh --platforms=x   → pops 1 X
+   engagement-hourly-drip.py --source=any   --platforms=linkedin → pops 1 LI
+   ▼
+DM operator with both popped drafts + review URL (FI-DRIP-REVIEW-LINK)
+```
+
+Meanwhile, social-manager (long-running lead):
+- Receives the message_project call via FI-NOTIFY
+- Uses `mcp__playwright-linkedin__browser_navigate` to open /feed/
+- Drafts 3-5 humanized LI comments using its warm session
+- Appends to queue.jsonl with status=queued (pool draft, no
+  freshly_drafted_at)
+- Processes other tasks before/after as needed
+
+### What stays the same
+
+- `engagement-hourly-dispatch.sh` shell flow (X path, dispatch log,
+  empty-DM fallback chain).
+- `engagement-browse-x.js` + X harvest (unchanged).
+- `queue.jsonl` schema. New entries from social-manager just lack
+  `freshly_drafted_at`.
+- `engagement-post-now.sh` operator-approval wrapper (commit `6ab9b49`).
+- FI-NO-POST-WITHOUT-APPROVAL guards.
+- All drip status-change paths + relay-served review doc.
+
+### What changes
+
+- `config/claude/engagement-subagent-mcp.json`: add
+  `mcp__project_orchestrator` server entry so the subagent can call
+  `message_project`.
+- `scripts/engagement-browse-draft-subagent.txt`: rewrite the LI
+  section to "send a message_project call instead of harvesting
+  directly."
+- `scripts/engagement-hourly-drip.py`: add `--platforms=x|linkedin`
+  filter so the dispatcher can pop per-platform.
+- `scripts/engagement-hourly-dispatch.sh`: call drip twice (X fresh,
+  LI pool), aggregate the popped drafts into a single DM.
+- `agents/social-manager.md` (or the lead brief / spawn template
+  social-manager uses): add a section "When you receive an
+  engagement-drip refill request, here's the workflow: open LinkedIn
+  /feed/ via mcp__playwright-linkedin, scroll a few times, pick 3-5
+  engagement-worthy posts, draft humanized comments, append to
+  queue.jsonl with status=queued. NEVER POST anything — drafts only
+  (FI-NO-POST-WITHOUT-APPROVAL)."
+- `scripts/engagement-browse-linkedin.js`: kept as a documented
+  fallback (operator can manually invoke if social-manager is down).
+
+### Open questions for sign-off
+
+1. **Stale-LI tolerance.** LI drafts may be 30-90 min old by the time
+   they land in `pending_review` (social-manager processes the message
+   + browses + drafts at its own cadence). User indicated this is
+   fine — confirm before building.
+2. **social-manager dead-detection.** If social-manager is down for
+   N consecutive hours and the LI pool runs dry, should the dispatcher
+   (a) DM the operator with a "LI refill stalled — check social-manager"
+   warning, (b) silently emit empty-LI in the hourly DM (which is the
+   current FI-DRIP-SILENT-FAILURE fix already), or (c) auto-spawn
+   social-manager via project-orchestrator? Default proposal: (a) +
+   the existing (b). (c) is over-eager.
+3. **Refill cadence.** Do we want social-manager to refill the LI pool
+   on EVERY drip-hour message, or only when the pool drops below N?
+   Default proposal: every hour the dispatcher sends the message; social-manager
+   decides whether to act (it can skip if its own self-check says the
+   pool is plenty deep — e.g. > 6 pending LI drafts).
+4. **Keep the fresh-LI Node helper?** `engagement-browse-linkedin.js`
+   stays committed as documented operator-debug fallback (`node ... --n 5`
+   manual invocation when social-manager is down). Removing it is one
+   line. Default proposal: KEEP for manual operator use.
+
+### Acceptance
+
+- 5/5 successful hourly runs produce both 1 X draft (fresh) AND 1 LI
+  draft (from pool) — even when LinkedIn would otherwise have
+  challenged a cold-headless harvest.
+- 5/5 simulated social-manager-dead runs produce 1 X + 0 LI + a
+  "LI refill stalled" warning in the same DM.
+- `engagement-review.md` shows both platforms' drafts as expected.
+- No regression on X path (still fresh, still ~5 drafts/hour).
+
+### Effort + risk
+
+- Effort: **M**. Mostly prompt + script edits + adding the orchestrator
+  MCP to the subagent config. Tests + 1 channel restart (already
+  pending for other prompt changes).
+- Risk: **low**. The warm-MCP path is empirically proven; this
+  proposal restores it. No new daemon, no Xvfb. The subagent's
+  MCP surface grows by one (manageable).
+- Restart impact: channel restart needed (one consolidated restart
+  covers this + all other pending prompt changes).
+
+### Status
+
+Plan only. Awaiting operator sign-off on:
+(a) the recommendation (option 1 vs surfaced alternatives), and
+(b) the four open implementation questions above.
+
+After sign-off, implementation is a single bundle commit + channel
+restart.
