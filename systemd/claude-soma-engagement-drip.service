@@ -1,11 +1,23 @@
 [Unit]
-Description=Hourly engagement-draft drip (mechanical; zero LLM tokens)
+Description=Hourly engagement-draft dispatcher (FI-ENGAGEMENT-FRESH-DRIP)
 After=network.target
 
 [Service]
 Type=oneshot
 User=ubuntu
+# Source the live secrets first so HERMES_ENGAGEMENT_FRESH_MODE,
+# TELEGRAM_BOT_TOKEN, HERMES_NOTIFY_CHAT_ID, etc. are visible. The
+# ~/.claude/channels/telegram/.env line is best-effort (the bot token
+# canonically lives in secrets.env after env-copilot; this is the
+# belt-and-suspenders mentioned in BUG-DRIP-SILENT-FAILURE).
 EnvironmentFile=-/etc/claude-soma/secrets.env
-ExecStart=/opt/claude-soma/scripts/engagement-hourly-drip.py
+EnvironmentFile=-/home/ubuntu/.claude/channels/telegram/.env
+# Dispatcher (FI-ENGAGEMENT-FRESH-DRIP). Health-checks playwright state,
+# spawns the browse+draft subagent (claude -p), then calls
+# engagement-hourly-drip.py with the appropriate --source / --fallback
+# flag. ALWAYS produces exactly one DM per hour (silent-hour is a
+# contract violation). Set HERMES_ENGAGEMENT_FRESH_MODE=off in
+# /etc/claude-soma/secrets.env to skip the subagent and run pooled-only.
+ExecStart=/opt/claude-soma/scripts/engagement-hourly-dispatch.sh
 StandardOutput=journal
 StandardError=journal

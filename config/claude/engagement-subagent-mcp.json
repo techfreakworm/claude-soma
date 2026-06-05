@@ -1,0 +1,37 @@
+{
+  "_comment": "Minimal MCP-config for the FI-ENGAGEMENT-FRESH-DRIP hourly browse+draft subagent. Loads ONLY the playwright variants needed for X + LinkedIn (they each carry the right storage-state path) plus the hermes-api server for queue writes. NO voice, NO project-orchestrator, NO general-purpose playwright — keeps the subagent's tool surface tight and its context cheap.",
+  "mcpServers": {
+    "playwright-x": {
+      "type": "stdio",
+      "command": "/usr/bin/playwright-mcp",
+      "args": [
+        "--headless",
+        "--isolated",
+        "--storage-state", "/home/ubuntu/.claude-pw/state-x.json",
+        "--executable-path", "/usr/local/bin/playwright-chromium"
+      ],
+      "alwaysLoad": true
+    },
+    "playwright-linkedin": {
+      "type": "stdio",
+      "command": "/usr/bin/playwright-mcp",
+      "args": [
+        "--headless",
+        "--isolated",
+        "--storage-state", "/home/ubuntu/.claude-pw/state-linkedin.json",
+        "--executable-path", "/usr/local/bin/playwright-chromium"
+      ],
+      "alwaysLoad": true
+    },
+    "hermes-api": {
+      "type": "stdio",
+      "command": "/opt/claude-soma/.venv/bin/python",
+      "args": ["-m", "claude_soma.mcp_servers.hermes_api.server"],
+      "env": {
+        "HERMES_API_SOCKET": "/tmp/claude-soma-api.sock",
+        "HERMES_ACTIVITY_LOG": "/home/ubuntu/.claude-soma/activity.jsonl"
+      },
+      "alwaysLoad": true
+    }
+  }
+}

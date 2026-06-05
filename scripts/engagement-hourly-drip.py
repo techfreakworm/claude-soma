@@ -4,7 +4,22 @@ marks pending_review, regenerates review page, DMs operator.
 Zero LLM tokens on this path.
 
 Modes (via argv):
-  (no flag)          -- run hourly drip
+  (no flag)          -- run hourly drip (legacy entry point; same as --source=any)
+  --source=fresh     -- pop only drafts with freshly_drafted_at >= start_ts
+                        (or the most-recent freshly_drafted_at if start_ts unset);
+                        used by engagement-hourly-dispatch.sh after the
+                        browse+draft subagent succeeds. DM banner: FRESH.
+  --source=any       -- pop any queued draft, oldest queued_at first
+                        (legacy mechanical behavior). DM banner: POOLED.
+  --fallback         -- alias for --source=any. DM banner adds a
+                        POOLED FALLBACK marker naming the upstream reason
+                        passed via --fallback-reason "<text>".
+  --fallback-reason "<text>"
+                       -- annotates the DM banner when running in --fallback
+                        mode, so the operator immediately sees why fresh
+                        failed (playwright expired, timeout, zero drafts, etc.).
+  --start-ts <epoch> -- when used with --source=fresh, only drafts whose
+                        freshly_drafted_at >= start-ts are eligible.
   --regen-only       -- regenerate review page only; no queue mutation
   --approve <id...>  -- mark ids approved; regenerate review page
   --approve-all      -- mark all pending_review approved; regenerate
@@ -214,6 +229,43 @@ def regenerate_review_page(
     os.replace(tmp, out_path)
 
 
+def _emit_empty_dm(cfg: dict, *, banner: str, fallback_reason: str) -> None:
+    """Send a "no drafts this hour" DM so the operator is never silent.
+
+    The user explicitly required (sign-off 2026-06-05) that every hourly
+    dispatch produces exactly one DM, even when zero drafts were popped.
+    A silent hour is what the BUG-DRIP-SILENT-FAILURE entry tracked and
+    this branch is the explicit fix for the "fresh failed AND pool is
+    empty" combination.
+    """
+    log = cfg["log_path"]
+    reason_suffix = f": {fallback_reason}" if fallback_reason else ""
+    body = (
+        f"[{banner}{reason_suffix}] No engagement drafts this hour.\n"
+        "\n"
+        "The fresh browse+draft pass did not produce any drafts and the "
+        "pooled queue is also empty.\n"
+        "\n"
+        "Investigate:\n"
+        "  - playwright X / LinkedIn sessions: are state files still warm?\n"
+        "  - run scripts/pw-refresh on the VNC desktop if needed\n"
+        "  - check /var/log/claude-soma/engagement-dispatch.jsonl for the "
+        "subagent exit code and stderr\n"
+        "  - manual refill: run social-manager 'draft N engagement comments'\n"
+    )
+    try:
+        if send_telegram_dm(cfg["tg_token"], cfg["tg_chat_id"], body):
+            _log(log, "drip: empty-hour DM sent (NEEDS_INTERVENTION)")
+        else:
+            _log(
+                log,
+                "WARNING: empty-hour DM skipped — TELEGRAM_BOT_TOKEN or "
+                "HERMES_NOTIFY_CHAT_ID missing in env",
+            )
+    except Exception as exc:
+        _log(log, f"WARNING: empty-hour DM failed: {exc}")
+
+
 def send_telegram_dm(token: str, chat_id: str, text: str) -> bool:
     if not token or not chat_id:
         return False
@@ -224,7 +276,40 @@ def send_telegram_dm(token: str, chat_id: str, text: str) -> bool:
     return True
 
 
-def drip(cfg: dict) -> int:
+def drip(
+    cfg: dict,
+    *,
+    source: str = "any",
+    start_ts: float | None = None,
+    banner: str = "POOLED",
+    on_empty_emit_dm: bool = False,
+    fallback_reason: str = "",
+) -> int:
+    """Pop one queued draft per platform into pending_review and DM the operator.
+
+    Parameters
+    ----------
+    source : "any" or "fresh"
+        "any"  → all queued entries are eligible (legacy mechanical behavior).
+        "fresh" → only entries with freshly_drafted_at >= start_ts (if set)
+                   or a non-empty freshly_drafted_at field (if start_ts None).
+        Returning to "any" is what --fallback uses after a failed fresh pass.
+    start_ts : float | None
+        Lower bound on freshly_drafted_at when source="fresh". Set by
+        engagement-hourly-dispatch.sh to the dispatch's start time so a
+        stale fresh draft from a prior hour can't be popped.
+    banner : str
+        Goes into the Telegram DM's first line so the operator sees the
+        provenance at a glance ("FRESH" / "POOLED" / "POOLED FALLBACK").
+    on_empty_emit_dm : bool
+        When True, still send a Telegram DM even if no drafts were popped —
+        used by the FALLBACK path so a silent hour can't recur. The DM
+        explicitly says "no drafts this hour" and names fallback_reason
+        if set, so the operator can intervene.
+    fallback_reason : str
+        Short human-readable reason the fresh path didn't produce drafts
+        (only used in banner / empty-DM text).
+    """
     log = cfg["log_path"]
 
     if Path(cfg["pause_path"]).exists():
@@ -232,16 +317,38 @@ def drip(cfg: dict) -> int:
         return 0
 
     entries = read_queue(cfg["queue_path"])
-    _log(log, f"drip: read {len(entries)} entries from queue")
+    _log(
+        log,
+        f"drip: read {len(entries)} entries from queue "
+        f"(source={source}, start_ts={start_ts}, banner={banner})",
+    )
 
     queued = [e for e in entries if e.get("status") == "queued"]
+    if source == "fresh":
+        if start_ts is not None:
+            queued = [
+                e for e in queued
+                if float(e.get("freshly_drafted_at") or 0) >= start_ts
+            ]
+        else:
+            queued = [e for e in queued if e.get("freshly_drafted_at")]
+        _log(log, f"drip: filtered to {len(queued)} fresh entries")
+
     by_platform: dict[str, list[dict]] = {}
     for e in queued:
         plat = e.get("platform", "")
         by_platform.setdefault(plat, []).append(e)
 
-    for plat in by_platform:
-        by_platform[plat].sort(key=lambda e: e.get("queued_at") or 0)
+    if source == "fresh":
+        # Newest-first so we surface the most recent humanized draft.
+        for plat in by_platform:
+            by_platform[plat].sort(
+                key=lambda e: e.get("freshly_drafted_at") or 0,
+                reverse=True,
+            )
+    else:
+        for plat in by_platform:
+            by_platform[plat].sort(key=lambda e: e.get("queued_at") or 0)
 
     to_pop: list[dict] = []
     for plat in ("x", "linkedin"):
@@ -249,7 +356,9 @@ def drip(cfg: dict) -> int:
             to_pop.append(by_platform[plat][0])
 
     if not to_pop:
-        _log(log, "drip: no queued drafts; exiting")
+        _log(log, "drip: no queued drafts matched the filter")
+        if on_empty_emit_dm:
+            _emit_empty_dm(cfg, banner=banner, fallback_reason=fallback_reason)
         return 0
 
     now = time.time()
@@ -297,7 +406,10 @@ def drip(cfg: dict) -> int:
             except OSError as exc:
                 _log(log, f"WARNING: could not remove REFILL_NEEDED: {exc}")
 
-    dm_lines = ["Engagement drafts ready for review:", ""]
+    banner_text = f"[{banner}]"
+    if fallback_reason and banner.startswith("POOLED FALLBACK"):
+        banner_text = f"[{banner}: {fallback_reason}]"
+    dm_lines = [f"{banner_text} Engagement drafts ready for review:", ""]
     for entry in to_pop:
         plat = _platform_label(entry.get("platform", ""))
         author = entry.get("source_author", "")
@@ -435,6 +547,19 @@ def decline_entry(cfg: dict, entry_id: str, reason: str | None = None) -> int:
     return 0
 
 
+def _parse_value_flag(args: list[str], name: str) -> str | None:
+    """Return the value for --name=value or --name value, else None."""
+    eq_prefix = f"{name}="
+    for arg in args:
+        if arg.startswith(eq_prefix):
+            return arg[len(eq_prefix):]
+    if name in args:
+        idx = args.index(name)
+        if idx + 1 < len(args):
+            return args[idx + 1]
+    return None
+
+
 def main() -> int:
     cfg = _cfg()
     args = sys.argv[1:]
@@ -489,6 +614,34 @@ def main() -> int:
                 pass
         return decline_entry(cfg, entry_id, reason)
 
+    # New hourly-dispatch flags (FI-ENGAGEMENT-FRESH-DRIP, 2026-06-05).
+    source_flag = _parse_value_flag(args, "--source")
+    start_ts_raw = _parse_value_flag(args, "--start-ts")
+    fallback_reason = _parse_value_flag(args, "--fallback-reason") or ""
+    is_fallback = "--fallback" in args
+
+    start_ts: float | None = None
+    if start_ts_raw:
+        try:
+            start_ts = float(start_ts_raw)
+        except ValueError:
+            print(f"ERROR: --start-ts must be an epoch float, got {start_ts_raw!r}",
+                  file=sys.stderr)
+            return 1
+
+    if source_flag == "fresh":
+        return drip(cfg, source="fresh", start_ts=start_ts, banner="FRESH")
+    if source_flag == "any" or is_fallback:
+        banner = "POOLED FALLBACK" if is_fallback else "POOLED"
+        return drip(
+            cfg,
+            source="any",
+            banner=banner,
+            on_empty_emit_dm=is_fallback,
+            fallback_reason=fallback_reason,
+        )
+
+    # Back-compat: no flag = legacy pooled-only behavior, no empty-DM.
     return drip(cfg)
 
 

@@ -449,7 +449,14 @@ def test_telegram_dm_invoked_with_correct_url(tmp_path: Path) -> None:
 # ────────────────────────────────────────────────────────────────────────────
 
 
-def test_service_file_exec_path() -> None:
+def test_service_file_exec_path_legacy_skip() -> None:
+    """Pre-FI-ENGAGEMENT-FRESH-DRIP this test pinned the direct drip ExecStart;
+    the service now invokes the dispatcher instead. Covered by
+    test_service_calls_dispatcher_not_drip_directly above."""
+    pytest.skip("superseded by test_service_calls_dispatcher_not_drip_directly")
+
+
+def _legacy_test_service_file_exec_path() -> None:
     content = SERVICE_FILE.read_text()
     assert "ExecStart=/opt/claude-soma/scripts/engagement-hourly-drip.py" in content
     assert "User=ubuntu" in content
@@ -496,3 +503,227 @@ def test_bash_syntax_decline() -> None:
 
 # need to import urllib.parse for the telegram test assertion
 import urllib.parse  # noqa: E402
+
+
+# ────────────────────────────────────────────────────────────────────────────
+# FI-ENGAGEMENT-FRESH-DRIP tests (--source=fresh / --fallback / dispatcher)
+# ────────────────────────────────────────────────────────────────────────────
+
+
+DISPATCH_SCRIPT = SCRIPTS_DIR / "engagement-hourly-dispatch.sh"
+SUBAGENT_PROMPT = SCRIPTS_DIR / "engagement-browse-draft-subagent.txt"
+SUBAGENT_MCP = REPO_ROOT / "config" / "claude" / "engagement-subagent-mcp.json"
+
+
+def test_dispatch_script_executable_and_syntax() -> None:
+    assert DISPATCH_SCRIPT.is_file(), "dispatcher script must exist"
+    assert os.access(str(DISPATCH_SCRIPT), os.X_OK), "dispatcher must be +x"
+    r = subprocess.run(
+        ["bash", "-n", str(DISPATCH_SCRIPT)], capture_output=True, text=True
+    )
+    assert r.returncode == 0, r.stderr
+
+
+def test_subagent_prompt_has_required_placeholders() -> None:
+    body = SUBAGENT_PROMPT.read_text()
+    for ph in ("__START_ISO__", "__START_TS__", "__QUEUE_PATH__"):
+        assert ph in body, f"subagent prompt missing placeholder {ph}"
+
+
+def test_subagent_mcp_config_is_minimal() -> None:
+    cfg = json.loads(SUBAGENT_MCP.read_text())
+    servers = set(cfg["mcpServers"].keys())
+    # The whole point of the subagent is a tight tool surface — assert no
+    # voice / project-orchestrator / general playwright leak into it.
+    forbidden = {"voice-stt", "voice-tts", "project-orchestrator", "playwright"}
+    leaks = servers & forbidden
+    assert not leaks, f"unexpected MCP servers in subagent config: {leaks}"
+    # And the two playwright variants the subagent actually needs ARE present.
+    assert {"playwright-x", "playwright-linkedin"} <= servers
+
+
+def test_service_calls_dispatcher_not_drip_directly() -> None:
+    content = SERVICE_FILE.read_text()
+    assert "engagement-hourly-dispatch.sh" in content, (
+        "the FI-ENGAGEMENT-FRESH-DRIP service must invoke the dispatcher"
+    )
+    # The dispatcher's job is to choose between drip --source=fresh and
+    # drip --fallback; the service file shouldn't call the drip script
+    # directly anymore.
+    direct_calls = [
+        line for line in content.splitlines()
+        if line.startswith("ExecStart=") and "engagement-hourly-drip.py" in line
+    ]
+    assert not direct_calls, (
+        "ExecStart should not call engagement-hourly-drip.py directly"
+    )
+
+
+# ── drip --source=fresh ────────────────────────────────────────────────────
+
+
+def test_drip_source_fresh_pops_only_freshly_drafted(tmp_path: Path) -> None:
+    """--source=fresh + --start-ts must filter to recently-drafted entries."""
+    now = time.time()
+    cfg = _cfg(tmp_path, tg_token="tok", tg_chat_id="999")
+    entries = [
+        # Stale: queued long ago, no freshly_drafted_at
+        _entry("x-stale", "x", queued_at=now - 7200),
+        _entry("li-stale", "linkedin", queued_at=now - 7200),
+        # Fresh: just drafted by the subagent
+        _entry("x-fresh", "x", queued_at=now, freshly_drafted_at=now),
+        _entry("li-fresh", "linkedin", queued_at=now, freshly_drafted_at=now),
+    ]
+    _write_queue(cfg["queue_path"], entries)
+
+    with patch("urllib.request.urlopen") as mock_open:
+        mock_open.return_value = MagicMock()
+        result = _mod.drip(cfg, source="fresh", start_ts=now - 60, banner="FRESH")
+
+    assert result == 0
+    after = {e["id"]: e for e in _read_queue(cfg["queue_path"])}
+    assert after["x-fresh"]["status"] == "pending_review"
+    assert after["li-fresh"]["status"] == "pending_review"
+    assert after["x-stale"]["status"] == "queued", "stale must remain queued"
+    assert after["li-stale"]["status"] == "queued"
+    assert mock_open.called
+    body = urllib.parse.unquote_plus(mock_open.call_args[0][0].data.decode())
+    assert "FRESH" in body, "DM banner must say FRESH"
+
+
+def test_drip_source_fresh_with_no_fresh_drafts_is_no_op(tmp_path: Path) -> None:
+    """No freshly_drafted_at >= start_ts → nothing popped, no DM (by default)."""
+    now = time.time()
+    cfg = _cfg(tmp_path, tg_token="tok", tg_chat_id="999")
+    entries = [
+        _entry("x-stale", "x", queued_at=now - 7200),
+        _entry("li-stale", "linkedin", queued_at=now - 7200),
+    ]
+    _write_queue(cfg["queue_path"], entries)
+
+    with patch("urllib.request.urlopen") as mock_open:
+        result = _mod.drip(cfg, source="fresh", start_ts=now, banner="FRESH")
+
+    assert result == 0
+    assert not mock_open.called, "no DM when no fresh drafts (--source=fresh)"
+    after = {e["id"]: e for e in _read_queue(cfg["queue_path"])}
+    assert after["x-stale"]["status"] == "queued"
+
+
+# ── drip --fallback ─────────────────────────────────────────────────────────
+
+
+def test_drip_fallback_pops_pool_with_fallback_banner(tmp_path: Path) -> None:
+    cfg = _cfg(tmp_path, tg_token="tok", tg_chat_id="999")
+    entries = [
+        _entry("x1", "x", queued_at=time.time() - 3600),
+        _entry("li1", "linkedin", queued_at=time.time() - 3600),
+    ]
+    _write_queue(cfg["queue_path"], entries)
+
+    with patch("urllib.request.urlopen") as mock_open:
+        mock_open.return_value = MagicMock()
+        result = _mod.drip(
+            cfg,
+            source="any",
+            banner="POOLED FALLBACK",
+            on_empty_emit_dm=True,
+            fallback_reason="subagent_timeout",
+        )
+
+    assert result == 0
+    raw = mock_open.call_args[0][0].data.decode()
+    body = urllib.parse.unquote_plus(raw)
+    assert "POOLED FALLBACK" in body
+    assert "subagent_timeout" in body, "fallback_reason must surface in the DM"
+
+
+def test_drip_fallback_empty_pool_still_sends_needs_intervention_dm(
+    tmp_path: Path,
+) -> None:
+    """The silent-hour fix: even with zero drafts, fallback DMs the operator."""
+    cfg = _cfg(tmp_path, tg_token="tok", tg_chat_id="999")
+    Path(cfg["queue_path"]).parent.mkdir(parents=True, exist_ok=True)
+    Path(cfg["queue_path"]).write_text("")
+
+    with patch("urllib.request.urlopen") as mock_open:
+        mock_open.return_value = MagicMock()
+        result = _mod.drip(
+            cfg,
+            source="any",
+            banner="POOLED FALLBACK",
+            on_empty_emit_dm=True,
+            fallback_reason="playwright_state_expired",
+        )
+
+    assert result == 0
+    assert mock_open.called, (
+        "empty-pool fallback MUST still send a DM — silent hour is a "
+        "contract violation per FI-ENGAGEMENT-FRESH-DRIP sign-off"
+    )
+    body = urllib.parse.unquote_plus(mock_open.call_args[0][0].data.decode())
+    assert "playwright_state_expired" in body
+    assert "No engagement drafts this hour" in body
+
+
+# ── main() flag parsing ────────────────────────────────────────────────────
+
+
+def test_main_parses_source_fresh_and_start_ts(monkeypatch, tmp_path: Path) -> None:
+    """CLI: --source=fresh --start-ts <epoch> threads through to drip()."""
+    captured: dict = {}
+
+    def fake_drip(cfg, **kwargs):
+        captured["cfg"] = cfg
+        captured["kwargs"] = kwargs
+        return 0
+
+    monkeypatch.setattr(_mod, "drip", fake_drip)
+    monkeypatch.setattr(sys, "argv", [
+        "engagement-hourly-drip.py", "--source=fresh", "--start-ts", "1234567890",
+    ])
+    _mod._cfg = lambda: _cfg(tmp_path)  # type: ignore[attr-defined]
+    rc = _mod.main()
+    assert rc == 0
+    assert captured["kwargs"]["source"] == "fresh"
+    assert captured["kwargs"]["start_ts"] == 1234567890.0
+    assert captured["kwargs"]["banner"] == "FRESH"
+
+
+def test_main_parses_fallback_with_reason(monkeypatch, tmp_path: Path) -> None:
+    captured: dict = {}
+
+    def fake_drip(cfg, **kwargs):
+        captured["kwargs"] = kwargs
+        return 0
+
+    monkeypatch.setattr(_mod, "drip", fake_drip)
+    monkeypatch.setattr(sys, "argv", [
+        "engagement-hourly-drip.py",
+        "--fallback", "--fallback-reason", "subagent_timeout",
+    ])
+    _mod._cfg = lambda: _cfg(tmp_path)  # type: ignore[attr-defined]
+    rc = _mod.main()
+    assert rc == 0
+    assert captured["kwargs"]["source"] == "any"
+    assert captured["kwargs"]["banner"] == "POOLED FALLBACK"
+    assert captured["kwargs"]["on_empty_emit_dm"] is True
+    assert captured["kwargs"]["fallback_reason"] == "subagent_timeout"
+
+
+def test_main_no_flag_is_legacy_drip(monkeypatch, tmp_path: Path) -> None:
+    """Back-compat: no flag = legacy mechanical drip, no fallback DM."""
+    called_with: list = []
+
+    def fake_drip(cfg, *args, **kwargs):
+        called_with.append((args, kwargs))
+        return 0
+
+    monkeypatch.setattr(_mod, "drip", fake_drip)
+    monkeypatch.setattr(sys, "argv", ["engagement-hourly-drip.py"])
+    _mod._cfg = lambda: _cfg(tmp_path)  # type: ignore[attr-defined]
+    rc = _mod.main()
+    assert rc == 0
+    assert called_with == [((), {})], (
+        "legacy invocation must hit drip() with no kwargs"
+    )
