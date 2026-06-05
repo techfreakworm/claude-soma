@@ -26,17 +26,38 @@ How to browse — ONLY via the proven Node scripts
 DO NOT call any playwright MCP tools. They use a fresh unauthenticated
 browser context in subagent/dispatched contexts and harvest zero posts.
 
-Use these committed scripts via the Bash tool. They load the same
-storageState files that the post scripts use, so they see the real
-logged-in feeds and write an auth-proof PNG you can verify.
+============================================================
+FI-ENGAGEMENT-HYBRID (2026-06-05): X via fresh Node helper;
+LinkedIn DELEGATED to social-manager's warm playwright MCP
+============================================================
+
+X stays on the proven fresh-ephemeral path: shell out to
+`engagement-browse-x.js` via Bash, harvest, draft, append. The
+ephemeral headless context is what LinkedIn punishes but X tolerates,
+so we keep using it on X.
+
+LinkedIn is DIFFERENT. The OLD architecture (social-manager's warm
+playwright-linkedin MCP session, kept alive in the responsive lead
+process) had ZERO LinkedIn problems for months. The NEW cold-start
+ephemeral headless context gets flagged with /checkpoint/challenge
+interstitials and yields 0 posts most hours. Empirical evidence is
+overwhelming.
+
+So: for LinkedIn, you DO NOT call browse-linkedin.js. Instead, you
+send a `mcp__project-orchestrator__send_to_project` call to
+social-manager asking it to do the LI browse+draft pass with its
+warm session. social-manager appends LI drafts to queue.jsonl on
+its own cadence; the dispatcher's hourly drip pops one LI from the
+pool. LI drafts may be 30-90 min stale by the time they land in
+pending_review — that's accepted, the user signed off.
+
+Use the X harvest helper via the Bash tool. It loads the same
+storageState the post scripts use and sees the real logged-in feed.
 
   X harvest:
     node /opt/claude-soma/scripts/engagement-browse-x.js --n 25
 
-  LinkedIn harvest:
-    node /opt/claude-soma/scripts/engagement-browse-linkedin.js --n 25
-
-Both scripts stream one JSON line per harvested post to stdout, followed
+The script streams one JSON line per harvested post to stdout, followed
 by a single RESULT line. The RESULT line is one of:
 
   RESULT:OK n=<count> auth=<bool> url=<final-url>
@@ -68,26 +89,24 @@ Workflow:
 
   1. Run the X harvest. Capture stdout to a temp file (e.g. /tmp/eng-x.jsonl).
      Read the file. If the last line is `RESULT:OK n=<n>` with n>0, great.
-     If `RESULT:AUTHFAIL` or `RESULT:ERROR ...`, emit zero X drafts and
-     move on to LinkedIn — do not retry.
-  2. Repeat for LinkedIn. (Known limitation as of 2026-06-05: LinkedIn's
-     anti-headless rendering can return n=0 even when authenticated.
-     That's expected; ship what you have.)
-  3. From the harvested posts (skip the RESULT line), pick 3-5 per
-     platform that are worth a genuine comment. Skip:
+     If `RESULT:NEEDS_REAUTH` or `RESULT:ERROR ...`, emit zero X drafts and
+     proceed to step 4 anyway (so the LinkedIn delegation still fires).
+     Do not retry the X harvest.
+  2. From the harvested X posts (skip the RESULT line), pick 3-5 that are
+     worth a genuine comment. Skip:
      - retweets / reposts with no original content
      - posts already swamped with replies
      - low-quality engagement-bait
      - controversial framings that don't fit the operator's voice
-  4. For each pick, draft a 1-3 sentence humanized comment in the
+  3. For each pick, draft a 1-3 sentence humanized comment in the
      operator's voice: terse, technical, no emoji, no "great post!"
      filler. Add a concrete observation, a related anecdote, or a sharp
      question. Do not just agree.
-  5. Append each draft as a single JSON line to __QUEUE_PATH__:
+  4. Append each X draft as a single JSON line to __QUEUE_PATH__:
 
      {
-       "id": "eng-x-<unix>-<6hex>" | "eng-li-<unix>-<6hex>",
-       "platform": "x" | "linkedin",
+       "id": "eng-x-<unix>-<6hex>",
+       "platform": "x",
        "status": "queued",
        "queued_at": <unix-epoch-int>,
        "freshly_drafted_at": __START_TS__,
@@ -101,10 +120,68 @@ Workflow:
        printf '%s\n' '<the json>' >> __QUEUE_PATH__
      Generate the hex with `openssl rand -hex 3`.
 
-     If a harvested post lacks a usable `source_permalink` (null, empty,
-     or not a real URL), SKIP that post entirely — do not draft for it.
-     A null-permalink draft is un-postable and will be rejected by the
-     dispatcher.
+     If a harvested X post lacks a usable `source_permalink` (null,
+     empty, or not a real URL), SKIP that post entirely — do not draft
+     for it. A null-permalink draft is un-postable and will be rejected
+     by the dispatcher.
+
+  5. After X drafts are appended (or if there were no X drafts), DELEGATE
+     LinkedIn to social-manager by calling the project-orchestrator
+     MCP tool `send_to_project`:
+
+       mcp__project-orchestrator__send_to_project(
+         name="social-manager",
+         message="<the LinkedIn refill message — exact body below>"
+       )
+
+     LinkedIn refill message body (use this verbatim, substituting
+     __QUEUE_PATH__):
+
+       ENGAGEMENT-DRIP LinkedIn refill (FI-ENGAGEMENT-HYBRID).
+
+       Please browse https://www.linkedin.com/feed/ using your warm
+       playwright-linkedin MCP session (browser_navigate, etc.). Scroll
+       a few times to materialize the LazyColumn. Pick 3-5
+       engagement-worthy posts that pass your usual quality filter
+       (skip retweets, low-quality bait, controversial framings; prefer
+       technical posts in claude-code / AI infra / MCP / agent
+       architecture / OCI deployment / dev tooling adjacency).
+
+       For each pick, draft a 1-3 sentence humanized comment in the
+       operator's voice (terse, technical, no emoji, no "great post!"
+       filler — add a concrete observation, a related anecdote, or a
+       sharp question). Then append each draft as a single JSON line
+       to __QUEUE_PATH__ with this schema:
+
+         {
+           "id": "eng-li-<unix>-<6hex>",
+           "platform": "linkedin",
+           "status": "queued",
+           "queued_at": <unix-epoch-int>,
+           "source_author": "<author display name>",
+           "source_permalink": "<canonical https://www.linkedin.com/feed/update/urn:li:activity:<id>/ URL>",
+           "source_post_excerpt": "<first ~280 chars>",
+           "draft_text": "<your humanized comment>"
+         }
+
+       NOTE: pool drafts, NOT fresh — do NOT set freshly_drafted_at.
+       The dispatcher pops LI from the pool (--source=any). Pool depth
+       check: if __QUEUE_PATH__ already has > 6 LinkedIn entries with
+       status=queued, SKIP this refill (write nothing; just exit). The
+       pool is plenty deep already.
+
+       NEVER POST. FI-NO-POST-WITHOUT-APPROVAL applies. You are
+       drafting only. The operator approves + posts via
+       engagement-post-now.sh.
+
+       NEVER mark drafts with freshly_drafted_at — these are pool
+       drafts, not "this exact hour fresh."
+
+     After the send_to_project call returns (success or error), exit
+     cleanly. DO NOT wait for social-manager to respond — LinkedIn
+     drafts land in the queue async on social-manager's cadence and
+     get popped on a SUBSEQUENT drip-hour. The dispatcher's drip step
+     will pop whatever LI is in the pool at drip-time.
 
 ============================================================
 Hard rules
@@ -137,7 +214,14 @@ On exit
 
 Print a single status line as your final stdout, format:
 
-  ENGAGEMENT-DRAFTS x=<n> linkedin=<n> errors=<short-text-or-none>
+  ENGAGEMENT-DRAFTS x=<n> linkedin=delegated errors=<short-text-or-none>
+
+`linkedin=delegated` means you sent the refill request to social-manager
+and exited; the actual LI draft count lands in the queue
+asynchronously and is counted by the dispatcher at drip-time, not by
+you. If the send_to_project call ITSELF failed (social-manager not
+running, MCP error), report it as `linkedin=delegation-error: <reason>`
+so the operator sees the signal.
 
 Then stop. The dispatcher inspects the queue file directly to determine
 how many fresh drafts landed; the status line is for the operator log.

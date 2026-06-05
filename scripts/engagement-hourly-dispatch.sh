@@ -65,7 +65,13 @@ _log_dispatch_line() {
 }
 
 _run_drip_fresh() {
-    "${PYTHON}" "${DRIP_PY}" --source=fresh --start-ts "${START_TS}"
+    # FI-ENGAGEMENT-HYBRID (2026-06-05): switched from single-source
+    # --source=fresh to --hybrid. The hybrid pops X (--source=fresh) AND
+    # LinkedIn (--source=any pool drafts, refilled by social-manager's warm
+    # playwright-linkedin MCP via send_to_project), aggregating into ONE
+    # Telegram DM. See drip_hybrid in engagement-hourly-drip.py and the
+    # FI-ENGAGEMENT-HYBRID entry in BUGS_PLAN for the why.
+    "${PYTHON}" "${DRIP_PY}" --hybrid --start-ts "${START_TS}"
 }
 
 _run_drip_fallback() {

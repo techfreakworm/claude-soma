@@ -1,5 +1,5 @@
 {
-  "_comment": "Minimal MCP-config for the FI-ENGAGEMENT-FRESH-DRIP hourly browse+draft subagent. After FI-ENGAGEMENT-FRESH-DRIP-AUTH (2026-06-05): NO playwright MCPs. The MCP-driven playwright opens a fresh unauthenticated browser context in subagent/dispatched contexts (see engagement-post-x.js header for the same finding on posting). The subagent instead drives /opt/claude-soma/scripts/engagement-browse-{x,linkedin}.js via Bash — those load the same storageState files the proven post scripts use and see the real authenticated feeds. Only hermes-api remains, for queue writes via send_tg_reply-adjacent tooling.",
+  "_comment": "MCP-config for the FI-ENGAGEMENT-HYBRID hourly browse+draft subagent. (FI-ENGAGEMENT-FRESH-DRIP-AUTH 2026-06-05: no playwright MCPs — the MCP-driven playwright opens a fresh unauthenticated browser context in subagent contexts.) hermes-api remains for queue writes. NEW for FI-ENGAGEMENT-HYBRID 2026-06-05: project-orchestrator added so the subagent can call send_to_project to delegate the LinkedIn browse+draft pass to social-manager's warm playwright-linkedin MCP session — empirical evidence (months of OLD-path stability) is that LinkedIn tolerates the warm long-running session and punishes cold ephemeral headless. X stays fresh via the Node helper; LinkedIn gets warm via social-manager.",
   "mcpServers": {
     "hermes-api": {
       "type": "stdio",
@@ -8,6 +8,16 @@
       "env": {
         "HERMES_API_SOCKET": "/tmp/claude-soma-api.sock",
         "HERMES_ACTIVITY_LOG": "/home/ubuntu/.claude-soma/activity.jsonl"
+      },
+      "alwaysLoad": true
+    },
+    "project-orchestrator": {
+      "type": "stdio",
+      "command": "/opt/claude-soma/.venv/bin/python",
+      "args": ["-m", "claude_soma.mcp_servers.project_orchestrator.server"],
+      "env": {
+        "HERMES_ORCH_DB": "/opt/claude-soma/registry.sqlite",
+        "HERMES_PROJECTS_ROOT": "/home/ubuntu/projects"
       },
       "alwaysLoad": true
     }

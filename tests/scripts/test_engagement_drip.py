@@ -534,8 +534,10 @@ def test_subagent_mcp_config_is_minimal() -> None:
     cfg = json.loads(SUBAGENT_MCP.read_text())
     servers = set(cfg["mcpServers"].keys())
     # The whole point of the subagent is a tight tool surface — assert no
-    # voice / project-orchestrator / general playwright leak into it.
-    forbidden = {"voice-stt", "voice-tts", "project-orchestrator", "playwright"}
+    # voice / general playwright leak into it. (project-orchestrator IS
+    # present in the FI-ENGAGEMENT-HYBRID era so the subagent can call
+    # send_to_project to delegate LinkedIn to social-manager's warm MCP.)
+    forbidden = {"voice-stt", "voice-tts", "playwright"}
     leaks = servers & forbidden
     assert not leaks, f"unexpected MCP servers in subagent config: {leaks}"
     # After FI-ENGAGEMENT-FRESH-DRIP-AUTH the subagent does NOT use the
@@ -556,13 +558,17 @@ def test_subagent_mcp_config_is_minimal() -> None:
     assert "hermes-api" in servers, "hermes-api must remain for queue writes"
 
 
-def test_subagent_prompt_routes_through_node_helpers() -> None:
-    """Subagent prompt must instruct using the Node browse scripts and ban
-    the playwright MCP path."""
+def test_subagent_prompt_routes_x_through_node_helper() -> None:
+    """Subagent prompt must instruct using the X Node browse script (still the
+    fresh-ephemeral path; LinkedIn is delegated to social-manager — see
+    test_subagent_prompt_delegates_li_to_social_manager) and ban the
+    playwright MCP path for X."""
     body = SUBAGENT_PROMPT.read_text()
     assert "engagement-browse-x.js" in body
-    assert "engagement-browse-linkedin.js" in body
-    # And must explicitly tell the subagent NOT to call playwright MCP tools.
+    # LinkedIn helper is NO LONGER invoked by the subagent — it's delegated.
+    # The script is still committed as an operator-debug fallback (per the
+    # FI-ENGAGEMENT-HYBRID open-question #4 default) but the subagent
+    # doesn't call it. So we DON'T assert it's in the prompt here.
     assert "DO NOT call any playwright MCP tools" in body or (
         "NEVER call playwright MCP tools" in body
     )
@@ -931,6 +937,175 @@ def test_drip_fallback_empty_pool_dm_includes_review_link(tmp_path: Path) -> Non
         "open the pending-review doc"
     )
     assert "Review queue" in body or "Review:" in body
+
+
+# ────────────────────────────────────────────────────────────────────────────
+# FI-ENGAGEMENT-HYBRID (2026-06-05) — drip_hybrid: X-fresh + LI-pool, 1 DM
+# ────────────────────────────────────────────────────────────────────────────
+
+
+def test_hybrid_pops_one_x_fresh_and_one_li_pool(tmp_path: Path) -> None:
+    """The signature contract: one X (fresh-only) + one LI (from pool) per
+    invocation. Both go into a single pending_review batch."""
+    now = time.time()
+    cfg = _cfg(tmp_path, tg_token="tok", tg_chat_id="999",
+               review_url="https://files.example.test/engagement-review.md")
+    entries = [
+        # X drafts: one stale (pool), one fresh this hour
+        _entry("x-stale", "x", queued_at=now - 7200),
+        _entry("x-fresh", "x", queued_at=now, freshly_drafted_at=now),
+        # LI drafts: pool-only, no freshly_drafted_at
+        _entry("li-pool-1", "linkedin", queued_at=now - 1800),
+        _entry("li-pool-2", "linkedin", queued_at=now - 3600),
+    ]
+    _write_queue(cfg["queue_path"], entries)
+
+    with patch("urllib.request.urlopen") as mock_open:
+        mock_open.return_value = MagicMock()
+        result = _mod.drip_hybrid(cfg, start_ts=now - 60)
+
+    assert result == 0
+    after = {e["id"]: e for e in _read_queue(cfg["queue_path"])}
+    # Fresh X must pop, stale X must stay queued (pool not eligible for X)
+    assert after["x-fresh"]["status"] == "pending_review"
+    assert after["x-stale"]["status"] == "queued"
+    # OLDEST LI from pool pops first (FIFO: oldest pool draft surfaces first
+    # so it doesn't get stale). li-pool-2 was queued at now-3600, older than
+    # li-pool-1 at now-1800, so li-pool-2 pops.
+    assert after["li-pool-2"]["status"] == "pending_review"
+    assert after["li-pool-1"]["status"] == "queued"
+    # Single DM call
+    assert mock_open.call_count == 1
+    body = urllib.parse.unquote_plus(mock_open.call_args[0][0].data.decode())
+    assert "FRESH-X + POOL-LI" in body
+    assert "x-fresh" in body
+    assert "li-pool-2" in body
+    assert "https://files.example.test/engagement-review.md" in body
+
+
+def test_hybrid_with_only_x_fresh_still_sends_one_dm(tmp_path: Path) -> None:
+    """X fresh present, LI pool empty → one DM with the X entry + a stalled
+    warning ('No LinkedIn drafts have ever been queued')."""
+    now = time.time()
+    cfg = _cfg(tmp_path, tg_token="tok", tg_chat_id="999",
+               review_url="https://files.example.test/engagement-review.md")
+    entries = [_entry("x-fresh", "x", queued_at=now, freshly_drafted_at=now)]
+    _write_queue(cfg["queue_path"], entries)
+
+    with patch("urllib.request.urlopen") as mock_open:
+        mock_open.return_value = MagicMock()
+        result = _mod.drip_hybrid(cfg, start_ts=now - 60)
+
+    assert result == 0
+    body = urllib.parse.unquote_plus(mock_open.call_args[0][0].data.decode())
+    assert "x-fresh" in body
+    # No LI ever queued → stalled warning fires
+    assert "No LinkedIn drafts have ever been queued" in body
+    assert "social-manager" in body
+
+
+def test_hybrid_li_stalled_warning_fires_after_threshold(tmp_path: Path) -> None:
+    """LI was queued 5 hours ago + nothing since → 'LI refill stalled' warning
+    rides on the same DM as the popped X."""
+    now = time.time()
+    cfg = _cfg(tmp_path, tg_token="tok", tg_chat_id="999",
+               review_url="https://files.example.test/engagement-review.md")
+    entries = [
+        _entry("x-fresh", "x", queued_at=now, freshly_drafted_at=now),
+        # LI from 5h ago, already posted (so pool is dry)
+        _entry("li-old-posted", "linkedin", queued_at=now - 5 * 3600,
+               status="posted"),
+    ]
+    _write_queue(cfg["queue_path"], entries)
+
+    with patch("urllib.request.urlopen") as mock_open:
+        mock_open.return_value = MagicMock()
+        result = _mod.drip_hybrid(cfg, start_ts=now - 60, li_stalled_hours=3.0)
+
+    assert result == 0
+    body = urllib.parse.unquote_plus(mock_open.call_args[0][0].data.decode())
+    assert "x-fresh" in body
+    assert "LinkedIn drafts have been queued" in body
+    assert "stalled" in body.lower()
+
+
+def test_hybrid_no_drafts_at_all_falls_through_to_empty_dm(tmp_path: Path) -> None:
+    """Neither X fresh nor LI pool → empty-DM (the silent-hour contract holds)."""
+    now = time.time()
+    cfg = _cfg(tmp_path, tg_token="tok", tg_chat_id="999",
+               review_url="https://files.example.test/engagement-review.md")
+    Path(cfg["queue_path"]).parent.mkdir(parents=True, exist_ok=True)
+    Path(cfg["queue_path"]).write_text("")
+
+    with patch("urllib.request.urlopen") as mock_open:
+        mock_open.return_value = MagicMock()
+        result = _mod.drip_hybrid(cfg, start_ts=now - 60)
+
+    assert result == 0
+    assert mock_open.called
+    body = urllib.parse.unquote_plus(mock_open.call_args[0][0].data.decode())
+    assert "No engagement drafts this hour" in body
+
+
+def test_hybrid_old_drip_path_still_works(tmp_path: Path) -> None:
+    """Back-compat: --source=fresh / --source=any single-source mode still
+    works for any operator manual invocation. drip_hybrid is a parallel
+    function, not a replacement."""
+    now = time.time()
+    cfg = _cfg(tmp_path, tg_token="tok", tg_chat_id="999")
+    entries = [_entry("x-fresh", "x", queued_at=now, freshly_drafted_at=now)]
+    _write_queue(cfg["queue_path"], entries)
+    with patch("urllib.request.urlopen") as mock_open:
+        mock_open.return_value = MagicMock()
+        # Legacy single-source call
+        rc = _mod.drip(cfg, source="fresh", start_ts=now - 60, banner="FRESH")
+    assert rc == 0
+
+
+def test_cli_hybrid_flag_dispatches_to_drip_hybrid(monkeypatch, tmp_path: Path) -> None:
+    captured: dict = {}
+
+    def fake_hybrid(cfg, **kwargs):
+        captured["cfg"] = cfg
+        captured["kwargs"] = kwargs
+        return 0
+
+    monkeypatch.setattr(_mod, "drip_hybrid", fake_hybrid)
+    monkeypatch.setattr(sys, "argv", [
+        "engagement-hourly-drip.py", "--hybrid", "--start-ts", "1780670000",
+    ])
+    monkeypatch.setattr(_mod, "_cfg", lambda: _cfg(tmp_path))
+    rc = _mod.main()
+    assert rc == 0
+    assert captured["kwargs"]["start_ts"] == 1780670000.0
+
+
+def test_dispatcher_invokes_hybrid_flag() -> None:
+    body = (REPO_ROOT / "scripts" / "engagement-hourly-dispatch.sh").read_text()
+    assert "--hybrid" in body, (
+        "engagement-hourly-dispatch.sh must invoke drip with --hybrid "
+        "(was --source=fresh in the FI-ENGAGEMENT-FRESH-DRIP era; "
+        "FI-ENGAGEMENT-HYBRID switches to the hybrid drip)"
+    )
+
+
+def test_subagent_prompt_delegates_li_to_social_manager() -> None:
+    body = (REPO_ROOT / "scripts" / "engagement-browse-draft-subagent.txt").read_text()
+    assert "send_to_project" in body
+    assert "social-manager" in body
+    assert "playwright-linkedin" in body
+    # And must explicitly tell the subagent NOT to harvest LI directly
+    assert "DELEGATE" in body or "delegate" in body
+
+
+def test_subagent_mcp_config_has_project_orchestrator() -> None:
+    cfg = json.loads(
+        (REPO_ROOT / "config" / "claude" / "engagement-subagent-mcp.json").read_text()
+    )
+    assert "project-orchestrator" in cfg["mcpServers"], (
+        "the subagent needs project-orchestrator to call send_to_project "
+        "for the LinkedIn delegation"
+    )
 
 
 def test_system_prompt_has_engagement_review_link_rule() -> None:

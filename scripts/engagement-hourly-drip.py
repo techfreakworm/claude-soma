@@ -347,6 +347,201 @@ def send_telegram_dm(token: str, chat_id: str, text: str) -> bool:
     return True
 
 
+def _hours_since_last_li_queued_append(
+    entries: list[dict], now: float | None = None
+) -> float | None:
+    """Return hours since the most recent LinkedIn entry was appended to the
+    queue (status doesn't matter — we want the freshest queued_at timestamp).
+    Returns None when no LinkedIn entries exist at all.
+
+    Used by the hybrid drip's stalled-warning logic: if social-manager hasn't
+    refilled the LI pool in N hours, the DM surfaces a "LI refill stalled —
+    check social-manager" line in-band so the operator doesn't have to dig
+    through logs to discover the silent failure.
+    """
+    now = time.time() if now is None else now
+    li_queued_ts = [
+        float(e.get("queued_at") or 0)
+        for e in entries
+        if e.get("platform") == "linkedin"
+        and (e.get("queued_at") or 0) > 0
+    ]
+    if not li_queued_ts:
+        return None
+    return (now - max(li_queued_ts)) / 3600.0
+
+
+def drip_hybrid(
+    cfg: dict,
+    *,
+    start_ts: float,
+    x_source: str = "fresh",
+    li_source: str = "any",
+    li_stalled_hours: float = 3.0,
+) -> int:
+    """FI-ENGAGEMENT-HYBRID (2026-06-05): pop X under one policy and LinkedIn
+    under another, in ONE pass, with ONE Telegram DM.
+
+    The operator signed off on:
+      - X uses --source=fresh with start_ts gating (the proven fresh-ephemeral
+        subagent path; works great).
+      - LinkedIn uses --source=any (pool drafts from social-manager's warm
+        playwright-linkedin MCP session; the empirically reliable LI path).
+
+    The single DM aggregates both popped drafts + a "LI refill stalled"
+    warning line when LinkedIn hasn't been refilled in `li_stalled_hours`
+    hours (default 3). The warning rides ON THE EXISTING DM, never a
+    separate one, so the "exactly one DM per hour" contract holds.
+
+    Empty-hour behavior: if NEITHER X nor LI yields a draft, calls
+    _emit_empty_dm with banner=POOLED FALLBACK so the silent-hour contract
+    (BUG-DRIP-SILENT-FAILURE) holds.
+    """
+    log = cfg["log_path"]
+
+    if Path(cfg["pause_path"]).exists():
+        _log(log, "drip[hybrid]: paused (PAUSE file present); exiting")
+        return 0
+
+    entries = read_queue(cfg["queue_path"])
+    _log(
+        log,
+        f"drip[hybrid]: read {len(entries)} entries "
+        f"(x={x_source} start_ts={start_ts}, linkedin={li_source})",
+    )
+
+    queued = [e for e in entries if e.get("status") == "queued"]
+    by_platform: dict[str, list[dict]] = {"x": [], "linkedin": []}
+    for e in queued:
+        plat = e.get("platform", "")
+        if plat in by_platform:
+            by_platform[plat].append(e)
+
+    # Per-platform eligibility filter + sort.
+    def _eligible(platform: str, source: str) -> list[dict]:
+        pool = list(by_platform.get(platform, []))
+        if source == "fresh":
+            pool = [
+                e for e in pool
+                if float(e.get("freshly_drafted_at") or 0) >= start_ts
+            ]
+            pool.sort(
+                key=lambda e: e.get("freshly_drafted_at") or 0,
+                reverse=True,
+            )
+        else:
+            pool.sort(key=lambda e: e.get("queued_at") or 0)
+        return pool
+
+    x_pool = _eligible("x", x_source)
+    li_pool = _eligible("linkedin", li_source)
+    _log(
+        log,
+        f"drip[hybrid]: eligible x={len(x_pool)} ({x_source}), "
+        f"linkedin={len(li_pool)} ({li_source})",
+    )
+
+    to_pop: list[dict] = []
+    if x_pool:
+        to_pop.append(x_pool[0])
+    if li_pool:
+        to_pop.append(li_pool[0])
+
+    # Compute stalled-LI warning state BEFORE mutating the queue.
+    li_age_hours = _hours_since_last_li_queued_append(entries)
+    li_stalled_line = ""
+    if li_age_hours is None:
+        li_stalled_line = (
+            "\n[WARNING] No LinkedIn drafts have ever been queued — "
+            "social-manager may not be picking up the refill request. "
+            "Check the social-manager lead's health.\n"
+        )
+    elif li_age_hours >= li_stalled_hours:
+        li_stalled_line = (
+            f"\n[WARNING] No LinkedIn drafts have been queued in "
+            f"{li_age_hours:.1f}h (threshold {li_stalled_hours:.0f}h). "
+            "social-manager's LI refill loop may be stalled — check the "
+            "social-manager lead's health.\n"
+        )
+
+    if not to_pop:
+        _log(log, "drip[hybrid]: no drafts eligible from either platform")
+        # Empty-hour DM — extend with the stalled warning if relevant.
+        _emit_empty_dm(
+            cfg,
+            banner="POOLED FALLBACK",
+            fallback_reason=(
+                "hybrid: 0 X fresh + 0 LI pool"
+                + (
+                    f"; LI stalled {li_age_hours:.1f}h"
+                    if li_age_hours is not None and li_age_hours >= li_stalled_hours
+                    else ""
+                )
+            ),
+        )
+        return 0
+
+    now = time.time()
+    for entry in to_pop:
+        entry["status"] = "pending_review"
+        entry["released_at"] = now
+        _log(
+            log,
+            f"drip[hybrid]: popped id={entry['id']} platform={entry.get('platform')}",
+        )
+
+    write_queue_atomic(entries, cfg["queue_path"])
+    _log(log, "drip[hybrid]: queue written atomically")
+
+    try:
+        regenerate_review_page(entries, cfg["review_page"], cfg["review_url"])
+        _log(
+            log,
+            f"drip[hybrid]: review page written to {cfg['review_page']}",
+        )
+    except Exception as exc:
+        _log(log, f"WARNING: review page write failed: {exc}")
+
+    # Build the DM. Single message per hour (the contract).
+    dm_lines = [
+        "[FRESH-X + POOL-LI] Engagement drafts ready for review:",
+        "",
+    ]
+    for entry in to_pop:
+        plat = _platform_label(entry.get("platform", ""))
+        author = entry.get("source_author", "")
+        eid = entry.get("id", "?")
+        dm_lines.append(f"{plat}: {author} (id: {eid})")
+    if li_stalled_line:
+        dm_lines.append(li_stalled_line.rstrip("\n"))
+    dm_lines.append("")
+    if cfg.get("review_url"):
+        dm_lines.append(f"Review: {cfg['review_url']}")
+        dm_lines.append("")
+    dm_lines.append("Commands: approve <id> | approve all | decline <id>")
+    dm_text = "\n".join(dm_lines)
+
+    try:
+        if send_telegram_dm(cfg["tg_token"], cfg["tg_chat_id"], dm_text):
+            _log(log, "drip[hybrid]: Telegram DM sent")
+        else:
+            missing = []
+            if not cfg["tg_token"]:
+                missing.append("TELEGRAM_BOT_TOKEN")
+            if not cfg["tg_chat_id"]:
+                missing.append("HERMES_NOTIFY_CHAT_ID")
+            _log(
+                log,
+                "WARNING: Telegram DM skipped — missing in environment: "
+                + ", ".join(missing),
+            )
+    except Exception as exc:
+        _log(log, f"WARNING: Telegram DM failed: {exc}")
+
+    _log(log, "drip[hybrid]: done")
+    return 0
+
+
 def drip(
     cfg: dict,
     *,
@@ -684,6 +879,27 @@ def main() -> int:
             except IndexError:
                 pass
         return decline_entry(cfg, entry_id, reason)
+
+    # FI-ENGAGEMENT-HYBRID (2026-06-05): one drip call, X-fresh + LI-pool,
+    # one DM. Used by the new engagement-hourly-dispatch.sh. The --start-ts
+    # parameter still gates X's freshness window.
+    if "--hybrid" in args:
+        start_ts_raw = _parse_value_flag(args, "--start-ts")
+        if start_ts_raw is None:
+            print(
+                "ERROR: --hybrid requires --start-ts <epoch>",
+                file=sys.stderr,
+            )
+            return 1
+        try:
+            start_ts = float(start_ts_raw)
+        except ValueError:
+            print(
+                f"ERROR: --start-ts must be an epoch float, got {start_ts_raw!r}",
+                file=sys.stderr,
+            )
+            return 1
+        return drip_hybrid(cfg, start_ts=start_ts)
 
     # New hourly-dispatch flags (FI-ENGAGEMENT-FRESH-DRIP, 2026-06-05).
     source_flag = _parse_value_flag(args, "--source")
