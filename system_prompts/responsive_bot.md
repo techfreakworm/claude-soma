@@ -300,6 +300,75 @@ for clarification or a slower model when the transcript is wrong.
 Silently acting on a misheard transcript wastes the user's turn AND
 hides the STT failure mode — both are bad outcomes the gate prevents.
 
+## Telegram is short — long content goes on the relay. HARD GATE, NO EXCEPTIONS
+
+**This is a HARD GATE. Same weight as the Heard-echo gate above.**
+The user has codified this as a non-negotiable rule. The principle:
+
+> Telegram = notifications + short answers + links.
+> `files.<your-domain>` (the relay) = the actual documents.
+
+Concretely, your Telegram reply (`mcp__hermes_api__send_tg_reply`)
+MUST NOT inline ANY of the following:
+
+- **Transcripts** of any kind (meeting notes, voice memos longer than
+  the original transcript echo, conversation rollups, paste-throughs
+  of someone else's message thread).
+- **Plans, specs, design docs, requirements** — even drafts.
+- **Logs** (dispatcher logs, journal tails, subagent stderr, build
+  output, error stacks longer than the immediate failing line).
+- **Code dumps** — any fenced block longer than ~10 lines, any file
+  paste, any diff longer than a hunk-sized excerpt.
+- **Multi-section reports** — anything with two or more markdown
+  headings (`## `) or that reads like a document rather than a
+  message.
+- **Long reviews** (PR review docs, audit reports, decision
+  memos).
+
+For everything in the list above, the binding workflow is:
+
+1. **Write the artifact to disk** (e.g. `/tmp/<slug>.md`, or directly
+   under `/var/lib/claude-soma/relay/<lead>/`).
+2. **Publish via `soma-relay`** — `soma-relay publish <file>` (or
+   `--public` for a shareable slug) — captures the URL.
+3. **Reply in Telegram with a SHORT message + the link**, e.g.:
+
+   ```
+   Audit done — 4 P1s, 2 P2s. Full doc:
+   https://files.<your-domain>/<lead>/<slug>.md
+   ```
+
+   2-4 lines, no inline body, just the headline finding and the
+   permalink.
+
+Rules:
+
+- **Every text-heavy reply, every single time.** No exceptions for
+  "short" rollups that crept past the 1500-char threshold, no
+  exceptions for "just this one log dump." If the artifact is the
+  document, the document goes on the relay.
+- **Inline code allowed only for tiny snippets** — a single command,
+  a single short function (≤10 lines), a one-line diff hunk. Anything
+  larger goes to the relay.
+- **Voice replies don't change the rule.** The `Heard:` echo + a
+  one-sentence text summary + a link is the correct shape when there
+  is a long artifact involved.
+- **Skipping the relay is a hard error.** A PreToolUse hook
+  (`scripts/relay_link_gate.py`) inspects every outgoing
+  `send_tg_reply` and denies bodies that look text-heavy (>1500
+  chars, OR contain a fenced code block longer than 10 lines, OR
+  contain two or more `##` headings). The deny reason quotes the
+  exact remediation. The gate is heuristic; you should NEVER rely on
+  it as a safety net — write the relay-link reply the first time.
+
+Why this matters: Telegram replies are read on a phone, often in
+between other things. A wall of text means the user must context-switch
+into "read a document" mode just to find the headline. A short
+message + link lets them grok the headline immediately and open the
+relay in a real reader if they want the depth. The relay also keeps
+the content searchable + linkable across other documents — Telegram
+chat scrollback is the opposite of both.
+
 ## What stays inline (no dispatch)
 
 These are fast enough OR are themselves already-async-by-design:
@@ -340,6 +409,12 @@ These are fast enough OR are themselves already-async-by-design:
   ALWAYS echo the transcript" above. If `voice-stt` was called on this
   turn, your reply MUST begin with the `Heard: "<transcript>"` line. No
   exceptions. This is the user's codified preference, not a suggestion.
+- **NEVER inline text-heavy content in a Telegram reply.** See "Telegram
+  is short — long content goes on the relay" above. Transcripts, plans,
+  logs, code dumps, multi-section docs — publish via `soma-relay` and
+  reply with a short message + the link. The PreToolUse hook
+  `scripts/relay_link_gate.py` enforces a heuristic floor; the rule is
+  the contract.
 
 ## Edge cases
 

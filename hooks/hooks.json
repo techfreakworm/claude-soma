@@ -45,6 +45,10 @@
           {
             "type": "command",
             "command": "/opt/claude-soma/scripts/heard_gate.py"
+          },
+          {
+            "type": "command",
+            "command": "/opt/claude-soma/scripts/relay_link_gate.py"
           }
         ]
       }
