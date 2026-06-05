@@ -426,6 +426,32 @@ relay in a real reader if they want the depth. The relay also keeps
 the content searchable + linkable across other documents — Telegram
 chat scrollback is the opposite of both.
 
+### Engagement-draft notifications — ALWAYS include the review URL
+
+This is a specific application of the relay-link rule for engagement
+drafts (the FI-ENGAGEMENT-FRESH-DRIP pipeline + any future drip /
+dispatch notification that surfaces drafts for operator review):
+
+EVERY engagement-draft notification — the hourly drip DM, the
+empty-hour `NEEDS_INTERVENTION` DM, and any future variant — MUST
+include the relay URL to `engagement-review.md`. The full draft text +
+source post excerpts + review controls live there, not in the DM
+itself.
+
+The drip writes `/var/lib/claude-soma/relay/engagement-review.md`
+on every run and the markserv/Caddy stack serves it at
+`https://<FILES_DOMAIN>/engagement-review.md` (the URL is derived from
+secrets.env precedence:
+`HERMES_ENGAGEMENT_REVIEW_URL` → `SOMA_RELAY_DOMAIN` → `FILES_DOMAIN` →
+`files.<SOMA_DOMAIN>` — never silently empty). The drip's DM payload
+already includes a `Review:` line — never strip it or send a separate
+"drafts ready" notification without it.
+
+When you (the channel bot) surface engagement-draft activity in any
+reply — acknowledging the drip's DM, summarizing review status,
+answering "what's pending" — include the same review URL. The DM is
+the index; the relay doc is the source of truth.
+
 ## What stays inline (no dispatch)
 
 These are fast enough OR are themselves already-async-by-design:

@@ -40,6 +40,62 @@ from pathlib import Path
 from typing import Any
 
 
+def _read_secrets_var(name: str, secrets: str = "/etc/claude-soma/secrets.env") -> str:
+    """Mirror of scripts/soma-relay's _read_secrets_var. Returns the LAST
+    occurrence of `^name=value` in the secrets file (operators sometimes
+    append a fix below a stale value), stripping outer double quotes.
+    Empty string if the file is unreadable or the key is absent — the
+    canonical place for these is /etc/claude-soma/secrets.env (0600,
+    ubuntu-owned).
+    """
+    try:
+        with open(secrets, encoding="utf-8") as fh:
+            last = ""
+            for line in fh:
+                if not line.startswith(name + "="):
+                    continue
+                v = line[len(name) + 1:].rstrip("\n").rstrip("\r")
+                if v.startswith('"') and v.endswith('"'):
+                    v = v[1:-1]
+                last = v
+            return last
+    except OSError:
+        return ""
+
+
+def _resolve_review_url() -> str:
+    """Resolve the engagement-review URL the operator clicks from the DM.
+    Precedence (mirrors scripts/soma-relay's _resolve_relay_domain so the
+    drip surfaces the same URL the soma-publish tooling does):
+
+      1. HERMES_ENGAGEMENT_REVIEW_URL env — explicit override (full URL).
+      2. SOMA_RELAY_DOMAIN= in secrets.env → https://<domain>/engagement-review.md.
+      3. FILES_DOMAIN= in secrets.env → same shape.
+      4. SOMA_DOMAIN= in secrets.env → https://files.<domain>/engagement-review.md.
+      5. Empty (legacy behavior — DM shows `Review:` with no URL).
+
+    The relay file itself is written to /var/lib/claude-soma/relay/engagement-review.md
+    by regenerate_review_page() and served by the markserv/Caddy stack at the
+    resolved URL. No soma-publish call needed — the relay root IS the served
+    directory.
+    """
+    explicit = os.environ.get("HERMES_ENGAGEMENT_REVIEW_URL", "").strip()
+    if explicit:
+        return explicit
+    page_basename = "engagement-review.md"
+    relay = _read_secrets_var("SOMA_RELAY_DOMAIN")
+    if relay:
+        return f"https://{relay}/{page_basename}"
+    files_domain = _read_secrets_var("FILES_DOMAIN")
+    if files_domain:
+        return f"https://{files_domain}/{page_basename}"
+    soma_domain = _read_secrets_var("SOMA_DOMAIN")
+    if soma_domain:
+        base = soma_domain[5:] if soma_domain.startswith("soma.") else soma_domain
+        return f"https://files.{base}/{page_basename}"
+    return ""
+
+
 def _cfg() -> dict[str, Any]:
     return {
         "queue_path": os.environ.get(
@@ -70,7 +126,12 @@ def _cfg() -> dict[str, Any]:
             os.environ.get("HERMES_NOTIFY_CHAT_ID")
             or os.environ.get("TELEGRAM_CHAT_ID", "")
         ),
-        "review_url": os.environ.get("HERMES_ENGAGEMENT_REVIEW_URL", ""),
+        # FI-DRIP-REVIEW-LINK (2026-06-05): every engagement notification
+        # MUST carry the review URL so the operator can open the full
+        # pending-review doc on the relay instead of relying on the DM's
+        # one-line summary. Derived from secrets.env when not explicitly
+        # set so the URL is never silently empty.
+        "review_url": _resolve_review_url(),
     }
 
 
@@ -240,11 +301,21 @@ def _emit_empty_dm(cfg: dict, *, banner: str, fallback_reason: str) -> None:
     """
     log = cfg["log_path"]
     reason_suffix = f": {fallback_reason}" if fallback_reason else ""
+    # FI-DRIP-REVIEW-LINK: include the relay review URL in the empty-hour DM
+    # too, so the operator can still open the full pending-review doc (it may
+    # still hold drafts from prior hours that haven't been approved yet — the
+    # "no NEW drafts" message shouldn't imply nothing is reviewable).
+    review_line = (
+        f"\nReview queue: {cfg['review_url']}\n"
+        if cfg.get("review_url")
+        else ""
+    )
     body = (
         f"[{banner}{reason_suffix}] No engagement drafts this hour.\n"
         "\n"
         "The fresh browse+draft pass did not produce any drafts and the "
         "pooled queue is also empty.\n"
+        f"{review_line}"
         "\n"
         "Investigate:\n"
         "  - playwright X / LinkedIn sessions: are state files still warm?\n"

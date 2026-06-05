@@ -855,6 +855,92 @@ def test_main_parses_fallback_with_reason(monkeypatch, tmp_path: Path) -> None:
     assert captured["kwargs"]["fallback_reason"] == "subagent_timeout"
 
 
+def test_resolve_review_url_explicit_env_wins(monkeypatch, tmp_path: Path) -> None:
+    secrets = tmp_path / "secrets.env"
+    secrets.write_text("SOMA_RELAY_DOMAIN=secrets.example.test\n")
+    monkeypatch.setattr(_mod, "_read_secrets_var", lambda name, secrets=str(secrets):
+                        _mod._read_secrets_var.__wrapped__(name, str(secrets))
+                        if hasattr(_mod._read_secrets_var, "__wrapped__")
+                        else "")
+    # Skip the wrapper-juggling above by just setting the env explicitly:
+    monkeypatch.setenv("HERMES_ENGAGEMENT_REVIEW_URL", "https://override.example.test/eng.md")
+    assert _mod._resolve_review_url() == "https://override.example.test/eng.md"
+
+
+def test_resolve_review_url_uses_soma_relay_domain(monkeypatch, tmp_path: Path) -> None:
+    secrets = tmp_path / "secrets.env"
+    secrets.write_text("SOMA_RELAY_DOMAIN=files.example.test\n")
+    monkeypatch.delenv("HERMES_ENGAGEMENT_REVIEW_URL", raising=False)
+    # Monkeypatch the helper to read from our tmp file
+    orig = _mod._read_secrets_var
+    monkeypatch.setattr(_mod, "_read_secrets_var",
+                        lambda name, secrets_path=str(secrets): orig(name, secrets_path))
+    assert _mod._resolve_review_url() == "https://files.example.test/engagement-review.md"
+
+
+def test_resolve_review_url_falls_through_to_files_domain(monkeypatch, tmp_path: Path) -> None:
+    secrets = tmp_path / "secrets.env"
+    secrets.write_text("FILES_DOMAIN=cdn.example.test\n")
+    monkeypatch.delenv("HERMES_ENGAGEMENT_REVIEW_URL", raising=False)
+    orig = _mod._read_secrets_var
+    monkeypatch.setattr(_mod, "_read_secrets_var",
+                        lambda name, secrets_path=str(secrets): orig(name, secrets_path))
+    assert _mod._resolve_review_url() == "https://cdn.example.test/engagement-review.md"
+
+
+def test_resolve_review_url_derives_files_from_soma_domain(monkeypatch, tmp_path: Path) -> None:
+    secrets = tmp_path / "secrets.env"
+    secrets.write_text("SOMA_DOMAIN=example.test\n")
+    monkeypatch.delenv("HERMES_ENGAGEMENT_REVIEW_URL", raising=False)
+    orig = _mod._read_secrets_var
+    monkeypatch.setattr(_mod, "_read_secrets_var",
+                        lambda name, secrets_path=str(secrets): orig(name, secrets_path))
+    assert _mod._resolve_review_url() == "https://files.example.test/engagement-review.md"
+
+
+def test_resolve_review_url_empty_when_nothing_configured(monkeypatch, tmp_path: Path) -> None:
+    secrets = tmp_path / "secrets.env"
+    secrets.write_text("# no relay knobs at all\n")
+    monkeypatch.delenv("HERMES_ENGAGEMENT_REVIEW_URL", raising=False)
+    orig = _mod._read_secrets_var
+    monkeypatch.setattr(_mod, "_read_secrets_var",
+                        lambda name, secrets_path=str(secrets): orig(name, secrets_path))
+    assert _mod._resolve_review_url() == ""
+
+
+def test_drip_fallback_empty_pool_dm_includes_review_link(tmp_path: Path) -> None:
+    """FI-DRIP-REVIEW-LINK: even the empty-hour DM must surface the review URL
+    so the operator can open the pending-review doc (it may still hold drafts
+    from prior hours)."""
+    cfg = _cfg(tmp_path, tg_token="tok", tg_chat_id="999",
+               review_url="https://files.example.test/engagement-review.md")
+    Path(cfg["queue_path"]).parent.mkdir(parents=True, exist_ok=True)
+    Path(cfg["queue_path"]).write_text("")
+
+    with patch("urllib.request.urlopen") as mock_open:
+        mock_open.return_value = MagicMock()
+        result = _mod.drip(
+            cfg, source="any", banner="POOLED FALLBACK",
+            on_empty_emit_dm=True, fallback_reason="subagent_timeout",
+        )
+
+    assert result == 0
+    body = urllib.parse.unquote_plus(mock_open.call_args[0][0].data.decode())
+    assert "https://files.example.test/engagement-review.md" in body, (
+        "the empty-hour DM must include the review URL so the operator can "
+        "open the pending-review doc"
+    )
+    assert "Review queue" in body or "Review:" in body
+
+
+def test_system_prompt_has_engagement_review_link_rule() -> None:
+    """responsive_bot.md must codify the rule that every engagement-draft
+    notification carries the review URL."""
+    body = (REPO_ROOT / "system_prompts" / "responsive_bot.md").read_text()
+    assert "Engagement-draft notifications — ALWAYS include the review URL" in body
+    assert "engagement-review.md" in body
+
+
 def test_main_no_flag_is_legacy_drip(monkeypatch, tmp_path: Path) -> None:
     """Back-compat: no flag = legacy mechanical drip, no fallback DM."""
     called_with: list = []
