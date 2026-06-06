@@ -419,3 +419,77 @@ def test_bash_command_as_first_token_denied(command: str) -> None:
         pytest.skip("chained command — gate only inspects first segment")
     r = _run({"tool_name": "Bash", "tool_input": {"command": command}})
     _assert_deny(r)
+
+
+# =========================================================================
+# FI-GATE-SUBAGENT-EXEMPT (2026-06-06) — dispatched subagents bypass the gate
+#
+# The gate exists to push heavy/network/multi-step work OFF the main loop
+# and ONTO Agent-dispatched subagents. Before this exemption, the gate
+# fired for the subagent's tool calls too, blocking the very work the
+# main loop just delegated. Detection signal: `agent_id` field is present
+# in PreToolUse event JSON only when running inside a dispatched subagent.
+# =========================================================================
+
+_SUBAGENT_TOOLS = [
+    ("WebFetch", {"url": "https://example.com"}),
+    ("WebSearch", {"query": "find me something"}),
+    ("Skill", {"skill": "x"}),
+    ("Edit", {"file_path": "/x"}),
+    ("Write", {"file_path": "/opt/claude-soma/config.json"}),
+    ("NotebookEdit", {"file_path": "/x"}),
+    ("mcp__playwright__browser_navigate", {}),
+    ("mcp__claude_ai_Canva__search-designs", {}),
+]
+
+
+@pytest.mark.parametrize("tool_name,tool_input", _SUBAGENT_TOOLS)
+def test_subagent_tool_call_allowed_via_agent_id(tool_name: str, tool_input: dict) -> None:
+    """Tools that the gate normally denies MUST be allowed when the event
+    carries an `agent_id` (= the invocation is inside a dispatched subagent)."""
+    r = _run({"tool_name": tool_name, "tool_input": tool_input,
+              "agent_id": "subagent-abc123"})
+    _assert_allow(r)
+
+
+@pytest.mark.parametrize("command", [
+    "curl https://example.com",
+    "wget https://releases.example.com/v1.tar.gz",
+    "codex --image-gen 'a cat'",
+    "pip install requests",
+    "npm install express",
+    "pytest -v",
+    "docker build .",
+    "git push origin main",
+])
+def test_subagent_bash_command_allowed_via_agent_id(command: str) -> None:
+    """Bash commands the gate normally denies MUST be allowed inside a
+    dispatched subagent."""
+    r = _run({"tool_name": "Bash", "tool_input": {"command": command},
+              "agent_id": "subagent-xyz789"})
+    _assert_allow(r)
+
+
+@pytest.mark.parametrize("tool_name,tool_input", [
+    ("WebSearch", {"query": "anything"}),
+    ("WebFetch", {"url": "https://example.com"}),
+])
+def test_main_loop_still_denied_when_agent_id_absent(tool_name: str, tool_input: dict) -> None:
+    """The gate stays fully active for the main orchestrator loop —
+    `agent_id` absent (or empty) means main, gate enforces normally."""
+    # No agent_id key at all
+    r1 = _run({"tool_name": tool_name, "tool_input": tool_input})
+    _assert_deny(r1)
+    # Empty-string agent_id (defensive: empty doesn't count as subagent)
+    r2 = _run({"tool_name": tool_name, "tool_input": tool_input, "agent_id": ""})
+    _assert_deny(r2)
+
+
+def test_subagent_exempt_via_env_var() -> None:
+    """Belt-and-suspenders: SOMA_ORCHESTRATOR_GATE_SUBAGENT=1 also exempts,
+    for future subagent shapes that don't surface agent_id in the event."""
+    r = _run(
+        {"tool_name": "WebSearch", "tool_input": {"query": "x"}},
+        env_overrides={"SOMA_ORCHESTRATOR_GATE_SUBAGENT": "1"},
+    )
+    _assert_allow(r)

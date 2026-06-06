@@ -41,13 +41,46 @@ def log_telemetry(event: dict) -> None:
     except Exception:
         pass
 
+def is_subagent_event(event: dict) -> bool:
+    """FI-GATE-SUBAGENT-EXEMPT (2026-06-06). The orchestrator gate exists
+    to push heavy / network / multi-step work OFF the main loop and ONTO
+    dispatched subagents (Agent / Task tool). But the hook fires for the
+    SUBAGENT's tool calls too — so without an exemption, the gate denies
+    the very work it told the main loop to delegate.
+
+    Detection: Claude Code's PreToolUse event JSON carries an `agent_id`
+    field ONLY when the invocation originates inside a dispatched subagent.
+    The main orchestrator session has no agent_id. This is the official,
+    portable signal (independent of worktree isolation, agent_type, env
+    inheritance) — see docs.claude.com hooks reference.
+
+    Belt-and-suspenders: also exempt when SOMA_ORCHESTRATOR_GATE_SUBAGENT=1
+    is set, so future subagent kinds that don't surface agent_id can still
+    opt out explicitly without a hook-script edit.
+    """
+    if event.get("agent_id"):
+        return True
+    if os.environ.get("SOMA_ORCHESTRATOR_GATE_SUBAGENT") == "1":
+        return True
+    return False
+
+
 def main() -> None:
     try: event = json.load(sys.stdin)
     except Exception: sys.exit(0)
     tool = event.get("tool_name", "")
     if not tool: sys.exit(0)
 
-    # Tool-name denies
+    # FI-GATE-SUBAGENT-EXEMPT: dispatched subagents are exactly the
+    # destination the gate redirects work to — they must be allowed to
+    # do that work. Skip the gate entirely. Log so the telemetry surface
+    # still shows where work landed.
+    if is_subagent_event(event):
+        log_telemetry({"action": "subagent_exempt", "tool": tool,
+                       "agent_id": event.get("agent_id", "")[:64]})
+        sys.exit(0)
+
+    # Tool-name denies (MAIN orchestrator loop only past this point)
     if tool in {"Edit", "NotebookEdit"}: deny(f"File edits are substantive work{REASON_TAIL}")
     if tool == "Write":
         fpath = event.get("tool_input", {}).get("file_path", "")
