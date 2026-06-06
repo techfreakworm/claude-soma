@@ -1,7 +1,12 @@
 [Unit]
-Description=Run engagement drip hourly
+Description=Run engagement drip 12 times/day during IST 10:00-21:00
 [Timer]
-OnCalendar=hourly
+# FI-DRIP-IST-WINDOW (2026-06-06): 12 fires/day at IST 10,11,...,21 only
+# (no overnight runs). The VPS is on Asia/Kolkata so OnCalendar reads as
+# local IST without TZ math. 12 hourly slots × 1 draft each = 12 drafts/day.
+# Pairs with the dispatcher's IST-hour-parity alternation (odd→X, even→LI)
+# to land ~6 X + 6 LinkedIn/day.
+OnCalendar=*-*-* 10..21:00:00
 Persistent=true
 Unit=claude-soma-engagement-drip.service
 [Install]

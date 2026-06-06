@@ -64,19 +64,55 @@ _log_dispatch_line() {
         >> "${DISPATCH_LOG}" 2>/dev/null || true
 }
 
+# FI-DRIP-IST-WINDOW (2026-06-06): 12 fires/day at IST 10..21, single
+# draft/run. Dispatcher picks the platform by IST hour parity:
+#   - odd IST hour  → X-pop  (run subagent → drip --single-platform=x)
+#   - even IST hour → LI-pop (skip subagent → drip --single-platform=linkedin)
+# Daily total: 6 X + 6 LinkedIn. LI pool refill cadence drops from 12/day
+# to 6/day (only on X-pop hours via the subagent's send_to_project), which
+# is plenty since each refill brings 3-5 drafts and pool-depth-check
+# self-throttles when the LI pool exceeds 6.
+IST_HOUR=$(TZ=Asia/Kolkata date +%H)
+# strip leading zero so 09 → 9 (arithmetic in bash treats 09 as octal-invalid).
+IST_HOUR=$((10#${IST_HOUR}))
+if (( IST_HOUR % 2 == 1 )); then
+    PLATFORM_THIS_HOUR=x
+else
+    PLATFORM_THIS_HOUR=linkedin
+fi
+
+_run_drip_single_x_fresh() {
+    "${PYTHON}" "${DRIP_PY}" --single-platform=x --source=fresh \
+        --start-ts "${START_TS}"
+}
+
+_run_drip_single_x_pool() {
+    "${PYTHON}" "${DRIP_PY}" --single-platform=x --source=any
+}
+
+_run_drip_single_li_pool() {
+    "${PYTHON}" "${DRIP_PY}" --single-platform=linkedin --source=any
+}
+
 _run_drip_fresh() {
-    # FI-ENGAGEMENT-HYBRID (2026-06-05): switched from single-source
-    # --source=fresh to --hybrid. The hybrid pops X (--source=fresh) AND
-    # LinkedIn (--source=any pool drafts, refilled by social-manager's warm
-    # playwright-linkedin MCP via send_to_project), aggregating into ONE
-    # Telegram DM. See drip_hybrid in engagement-hourly-drip.py and the
-    # FI-ENGAGEMENT-HYBRID entry in BUGS_PLAN for the why.
-    "${PYTHON}" "${DRIP_PY}" --hybrid --start-ts "${START_TS}"
+    # Back-compat shim. Pre-FI-DRIP-IST-WINDOW callers invoked this for
+    # the "happy path after subagent succeeds" branch. The new flow uses
+    # _run_drip_single_x_fresh directly; keep this as an alias so any
+    # operator who already invokes the old name still gets a sensible
+    # behavior.
+    _run_drip_single_x_fresh
 }
 
 _run_drip_fallback() {
     local reason="$1"
-    "${PYTHON}" "${DRIP_PY}" --fallback --fallback-reason "${reason}"
+    # FI-DRIP-IST-WINDOW: fall back to the pool of the platform we were
+    # supposed to surface this hour, not the legacy --fallback that mixed
+    # both platforms. Same platform, just pool instead of fresh.
+    if [[ "${PLATFORM_THIS_HOUR}" == "x" ]]; then
+        _run_drip_single_x_pool
+    else
+        _run_drip_single_li_pool
+    fi
 }
 
 _purge_null_permalink_drafts() {
@@ -179,6 +215,18 @@ _health_check_playwright() {
 }
 
 # --- Fast paths that skip the subagent entirely -----------------------------
+
+# FI-DRIP-IST-WINDOW (2026-06-06): on LinkedIn-pop hours the X subagent
+# does not run at all — we simply pop one LI from the pool and exit.
+# Social-manager keeps the pool warm via send_to_project asks issued on
+# X-pop hours (the other half of the schedule).
+if [[ "${PLATFORM_THIS_HOUR}" == "linkedin" ]]; then
+    _run_drip_single_li_pool
+    END_TS=$(date +%s)
+    _log_dispatch_line "skip" "li_pool" 0 \
+        $(( (END_TS - START_TS) * 1000 )) 0 "ist_hour=${IST_HOUR}:linkedin_pop"
+    exit 0
+fi
 
 if [[ "${FRESH_MODE}" != "on" ]]; then
     _run_drip_fallback "fresh_mode_off"

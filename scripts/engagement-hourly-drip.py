@@ -989,6 +989,148 @@ def _parse_value_flag(args: list[str], name: str) -> str | None:
     return None
 
 
+def drip_single(
+    cfg: dict,
+    *,
+    platform: str,
+    source: str = "any",
+    start_ts: float | None = None,
+) -> int:
+    """FI-DRIP-IST-WINDOW (2026-06-06): pop EXACTLY 1 draft from the
+    specified platform and DM the operator. Replaces the hybrid mode for
+    the new 12-fires/day schedule where each hour surfaces a single draft
+    and the dispatcher alternates platforms by IST hour parity.
+
+    source="fresh": filter X drafts by freshly_drafted_at >= start_ts
+                    (only meaningful for platform="x" on a subagent-run hour).
+    source="any":   pool mode; sort by queued_at ascending, oldest first.
+                    (LinkedIn always uses this; X falls back here when no
+                    fresh subagent ran this hour.)
+
+    Always emits exactly one DM. When the chosen pool is empty, the DM
+    explicitly says so + reports the LI-pool age so the operator can spot
+    a stalled refill without scrolling logs.
+    """
+    log = cfg["log_path"]
+    if Path(cfg["pause_path"]).exists():
+        _log(log, f"drip[single:{platform}]: paused; exiting")
+        return 0
+    if platform not in ("x", "linkedin"):
+        _log(log, f"drip[single]: invalid platform={platform!r}; exiting")
+        return 1
+
+    entries = read_queue(cfg["queue_path"])
+    _log(
+        log,
+        f"drip[single:{platform}]: read {len(entries)} entries "
+        f"(source={source}, start_ts={start_ts})",
+    )
+
+    pool = [e for e in entries if e.get("status") == "queued"
+            and e.get("platform") == platform]
+    if source == "fresh" and start_ts is not None:
+        pool = [
+            e for e in pool
+            if float(e.get("freshly_drafted_at") or 0) >= start_ts
+        ]
+        pool.sort(key=lambda e: e.get("freshly_drafted_at") or 0, reverse=True)
+    else:
+        pool.sort(key=lambda e: e.get("queued_at") or 0)
+    _log(log, f"drip[single:{platform}]: eligible={len(pool)}")
+
+    li_age_hours = _hours_since_last_li_queued_append(entries)
+    li_stalled_line = ""
+    if platform == "linkedin":
+        if li_age_hours is None:
+            li_stalled_line = (
+                "\n[WARNING] No LinkedIn drafts have ever been queued — "
+                "social-manager may not be picking up refills. Check the "
+                "social-manager lead's health.\n"
+            )
+        elif li_age_hours >= 3.0:
+            li_stalled_line = (
+                f"\n[WARNING] No LinkedIn drafts queued in "
+                f"{li_age_hours:.1f}h. social-manager refill loop may be "
+                "stalled — check the lead.\n"
+            )
+
+    if not pool:
+        _log(log, f"drip[single:{platform}]: nothing eligible — empty DM")
+        plat_label = _platform_label(platform)
+        body = (
+            f"[{plat_label} hour] No engagement draft available this hour.\n"
+            "\n"
+            f"The {plat_label} pool is empty"
+            + (" and the fresh subagent produced nothing." if source == "fresh"
+               else ".")
+            + "\n"
+        )
+        if li_stalled_line:
+            body += li_stalled_line
+        if cfg.get("review_url"):
+            body += f"\nReview queue: {cfg['review_url']}\n"
+        try:
+            if send_telegram_dm(cfg["tg_token"], cfg["tg_chat_id"], body):
+                _log(log, f"drip[single:{platform}]: empty-hour DM sent")
+        except Exception as exc:
+            _log(log, f"WARNING: empty-hour DM failed: {exc}")
+        return 0
+
+    entry = pool[0]
+    entry["status"] = "pending_review"
+    entry["released_at"] = time.time()
+    _log(
+        log,
+        f"drip[single:{platform}]: popped id={entry['id']} "
+        f"platform={entry.get('platform')}",
+    )
+    write_queue_atomic(entries, cfg["queue_path"])
+    _log(log, f"drip[single:{platform}]: queue written atomically")
+
+    try:
+        regenerate_review_page(entries, cfg["review_page"], cfg["review_url"])
+        _log(log, f"drip[single:{platform}]: review page written")
+    except Exception as exc:
+        _log(log, f"WARNING: review page write failed: {exc}")
+
+    plat_label = _platform_label(entry.get("platform", ""))
+    author = entry.get("source_author", "")
+    eid = entry.get("id", "?")
+    src_marker = "FRESH" if source == "fresh" else "POOL"
+    dm_lines = [
+        f"[{src_marker} {plat_label}] Engagement draft ready for review:",
+        "",
+        f"{plat_label}: {author} (id: {eid})",
+    ]
+    if li_stalled_line:
+        dm_lines.append(li_stalled_line.rstrip("\n"))
+    dm_lines.append("")
+    if cfg.get("review_url"):
+        dm_lines.append(f"Review: {cfg['review_url']}")
+        dm_lines.append("")
+    dm_lines.append("Commands: approve <id> | approve all | decline <id>")
+    dm_text = "\n".join(dm_lines)
+
+    try:
+        if send_telegram_dm(cfg["tg_token"], cfg["tg_chat_id"], dm_text):
+            _log(log, f"drip[single:{platform}]: Telegram DM sent")
+        else:
+            missing = []
+            if not cfg["tg_token"]:
+                missing.append("TELEGRAM_BOT_TOKEN")
+            if not cfg["tg_chat_id"]:
+                missing.append("HERMES_NOTIFY_CHAT_ID")
+            _log(
+                log,
+                f"WARNING: Telegram DM skipped — missing env: "
+                + ", ".join(missing),
+            )
+    except Exception as exc:
+        _log(log, f"WARNING: Telegram DM failed: {exc}")
+
+    return 0
+
+
 def main() -> int:
     cfg = _cfg()
     args = sys.argv[1:]
@@ -1042,6 +1184,29 @@ def main() -> int:
             except IndexError:
                 pass
         return decline_entry(cfg, entry_id, reason)
+
+    # FI-DRIP-IST-WINDOW (2026-06-06): single-platform mode for the 12 fires/day
+    # IST 10-21 schedule. Dispatcher picks the platform by IST hour parity.
+    single_platform = _parse_value_flag(args, "--single-platform")
+    if single_platform is not None:
+        source_flag = _parse_value_flag(args, "--source") or "any"
+        start_ts_raw = _parse_value_flag(args, "--start-ts")
+        start_ts: float | None = None
+        if start_ts_raw is not None:
+            try:
+                start_ts = float(start_ts_raw)
+            except ValueError:
+                print(
+                    f"ERROR: --start-ts must be an epoch float, got {start_ts_raw!r}",
+                    file=sys.stderr,
+                )
+                return 1
+        return drip_single(
+            cfg,
+            platform=single_platform.lower(),
+            source=source_flag,
+            start_ts=start_ts,
+        )
 
     # FI-ENGAGEMENT-HYBRID (2026-06-05): one drip call, X-fresh + LI-pool,
     # one DM. Used by the new engagement-hourly-dispatch.sh. The --start-ts

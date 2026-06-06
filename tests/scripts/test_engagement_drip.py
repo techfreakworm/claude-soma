@@ -333,6 +333,173 @@ def test_atomic_write_no_partial_on_crash(tmp_path: Path) -> None:
     assert tmp_file.exists(), ".tmp file should exist (orphaned)"
 
 
+# ────────────────────────────────────────────────────────────────────────────
+# FI-DRIP-IST-WINDOW (2026-06-06) — single-platform pop + IST hour parity
+# ────────────────────────────────────────────────────────────────────────────
+
+
+def test_drip_single_x_fresh_pops_only_x(tmp_path: Path, monkeypatch) -> None:
+    """--single-platform=x --source=fresh pops exactly 1 fresh X draft,
+    does not touch LI pool, sends exactly one DM."""
+    cfg = _cfg(tmp_path)
+    start_ts = 1000.0
+    entries = [
+        _entry("x-fresh", "x", queued_at=900.0, freshly_drafted_at=1100.0),
+        _entry("x-old", "x", queued_at=800.0),  # no freshly_drafted_at → not fresh
+        _entry("li-pool-1", "linkedin", queued_at=850.0),
+    ]
+    _write_queue(cfg["queue_path"], entries)
+
+    sent: list[str] = []
+    monkeypatch.setattr(_mod, "send_telegram_dm",
+                        lambda token, chat, text: sent.append(text) or True)
+
+    result = _mod.drip_single(cfg, platform="x", source="fresh", start_ts=start_ts)
+    assert result == 0
+
+    after = _read_queue(cfg["queue_path"])
+    by_id = {e["id"]: e for e in after}
+    assert by_id["x-fresh"]["status"] == "pending_review"
+    assert by_id["x-old"]["status"] == "queued"        # not fresh → not popped
+    assert by_id["li-pool-1"]["status"] == "queued"    # LI untouched
+    assert len(sent) == 1
+    assert "X:" in sent[0] and "x-fresh" in sent[0]
+
+
+def test_drip_single_li_pops_oldest_li(tmp_path: Path, monkeypatch) -> None:
+    """--single-platform=linkedin pops the oldest queued LI draft and
+    leaves X completely untouched."""
+    cfg = _cfg(tmp_path)
+    entries = [
+        _entry("x-pool", "x", queued_at=100.0),
+        _entry("li-newer", "linkedin", queued_at=300.0),
+        _entry("li-older", "linkedin", queued_at=200.0),
+    ]
+    _write_queue(cfg["queue_path"], entries)
+
+    sent: list[str] = []
+    monkeypatch.setattr(_mod, "send_telegram_dm",
+                        lambda token, chat, text: sent.append(text) or True)
+
+    result = _mod.drip_single(cfg, platform="linkedin", source="any")
+    assert result == 0
+
+    after = _read_queue(cfg["queue_path"])
+    by_id = {e["id"]: e for e in after}
+    assert by_id["li-older"]["status"] == "pending_review"
+    assert by_id["li-newer"]["status"] == "queued"
+    assert by_id["x-pool"]["status"] == "queued"
+    assert len(sent) == 1
+    assert "LinkedIn:" in sent[0] and "li-older" in sent[0]
+
+
+def test_drip_single_empty_pool_still_dms_with_review_link(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """Contract: every dispatch produces exactly one DM. An empty LI pool
+    on an LI-hour MUST still DM (with the review URL) so silent hours
+    can't recur."""
+    cfg = _cfg(tmp_path)
+    entries = [_entry("x-only", "x", queued_at=100.0)]  # no LI
+    _write_queue(cfg["queue_path"], entries)
+
+    sent: list[str] = []
+    monkeypatch.setattr(_mod, "send_telegram_dm",
+                        lambda token, chat, text: sent.append(text) or True)
+
+    result = _mod.drip_single(cfg, platform="linkedin", source="any")
+    assert result == 0
+    assert len(sent) == 1
+    assert "No engagement draft" in sent[0]
+
+
+def test_drip_single_emits_v1_review_doc_after_pop(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """After popping, the review doc regenerates so the relay reflects
+    the new pending_review state immediately."""
+    cfg = _cfg(tmp_path)
+    entries = [_entry("li-only", "linkedin", queued_at=500.0)]
+    _write_queue(cfg["queue_path"], entries)
+    monkeypatch.setattr(_mod, "send_telegram_dm",
+                        lambda token, chat, text: True)
+
+    _mod.drip_single(cfg, platform="linkedin", source="any")
+
+    review = Path(cfg["review_page"])
+    assert review.is_file()
+    content = review.read_text()
+    assert "_Schema version: engagement.v1_" in content
+    assert "## Pending Review (1)" in content
+    assert "li-only" in content
+
+
+def test_drip_single_review_doc_byte_stable_after_no_pop(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """Empty-pool path: still produces one DM but must NOT regenerate the
+    review doc (no state change to surface — keeps the doc churn-free)."""
+    cfg = _cfg(tmp_path)
+    _write_queue(cfg["queue_path"], [])  # empty queue
+    monkeypatch.setattr(_mod, "send_telegram_dm",
+                        lambda token, chat, text: True)
+
+    review = Path(cfg["review_page"])
+    assert not review.exists()
+    _mod.drip_single(cfg, platform="linkedin", source="any")
+    # No pop happened, so the review page is not regenerated — confirms
+    # the empty-pool path doesn't churn the doc.
+    assert not review.exists()
+
+
+# ────────────────────────────────────────────────────────────────────────────
+# Timer + dispatcher schedule contract
+# ────────────────────────────────────────────────────────────────────────────
+
+
+def test_timer_oncalendar_fires_12x_in_ist_window() -> None:
+    """The timer file's OnCalendar MUST express 12 fires/day at IST 10..21
+    (no overnight runs). The VPS is Asia/Kolkata so OnCalendar is local IST."""
+    timer = (REPO_ROOT / "systemd" / "claude-soma-engagement-drip.timer").read_text()
+    assert "OnCalendar=*-*-* 10..21:00:00" in timer, (
+        "FI-DRIP-IST-WINDOW: timer must fire at IST 10..21 (12 slots), "
+        "not the legacy hourly cadence"
+    )
+    assert "OnCalendar=hourly" not in timer, (
+        "must not fall back to hourly — that re-introduces overnight runs"
+    )
+
+
+def test_dispatcher_alternates_platform_by_ist_hour_parity() -> None:
+    """The dispatcher must pick X on odd IST hours and LinkedIn on even
+    IST hours so the daily mix lands at ~6 X + 6 LinkedIn."""
+    dispatch = (REPO_ROOT / "scripts" / "engagement-hourly-dispatch.sh").read_text()
+    # Hour-parity computation must use Asia/Kolkata TZ to be timezone-safe.
+    assert 'TZ=Asia/Kolkata date +%H' in dispatch
+    assert "PLATFORM_THIS_HOUR=x" in dispatch
+    assert "PLATFORM_THIS_HOUR=linkedin" in dispatch
+    # And the LinkedIn fast-path must skip the subagent (cost saving).
+    assert '"${PLATFORM_THIS_HOUR}" == "linkedin"' in dispatch
+    # The subagent invocation comes AFTER the LI fast-path exit so the
+    # subagent only runs on X hours.
+    li_skip = dispatch.find('"${PLATFORM_THIS_HOUR}" == "linkedin"')
+    subagent_call = dispatch.find('"${CLAUDE_BIN}" -p')
+    assert 0 < li_skip < subagent_call, (
+        "LI-hour fast-path must exit before reaching the subagent spawn"
+    )
+
+
+def test_drip_single_rejects_invalid_platform(tmp_path: Path) -> None:
+    """Invalid platform string is rejected without touching the queue."""
+    cfg = _cfg(tmp_path)
+    entries = [_entry("x-1", "x", queued_at=100.0)]
+    _write_queue(cfg["queue_path"], entries)
+    result = _mod.drip_single(cfg, platform="bluesky", source="any")
+    assert result == 1
+    after = _read_queue(cfg["queue_path"])
+    assert after[0]["status"] == "queued"  # untouched
+
+
 def test_regen_only_no_queue_mutation(tmp_path: Path) -> None:
     cfg = _cfg(tmp_path)
     entries = [_entry("id1", "x", status="pending_review")]
@@ -722,9 +889,13 @@ def _legacy_test_service_file_exec_path() -> None:
     assert "Type=oneshot" in content
 
 
-def test_timer_file_hourly() -> None:
+def test_timer_file_ist_window() -> None:
+    """FI-DRIP-IST-WINDOW (2026-06-06): timer fires 12 times/day at IST
+    10..21 (replaces the legacy 24/7 hourly schedule). The VPS is
+    Asia/Kolkata so OnCalendar reads as local IST."""
     content = TIMER_FILE.read_text()
-    assert "OnCalendar=hourly" in content
+    assert "OnCalendar=*-*-* 10..21:00:00" in content
+    assert "OnCalendar=hourly" not in content
     assert "Persistent=true" in content
     assert "WantedBy=timers.target" in content
 
@@ -1339,13 +1510,13 @@ def test_cli_hybrid_flag_dispatches_to_drip_hybrid(monkeypatch, tmp_path: Path) 
     assert captured["kwargs"]["start_ts"] == 1780670000.0
 
 
-def test_dispatcher_invokes_hybrid_flag() -> None:
+def test_dispatcher_invokes_single_platform_flag() -> None:
+    """FI-DRIP-IST-WINDOW (2026-06-06): dispatcher pops exactly 1 draft
+    per hour via --single-platform=x|linkedin. The legacy --hybrid flag
+    is replaced because each hour now surfaces a single platform."""
     body = (REPO_ROOT / "scripts" / "engagement-hourly-dispatch.sh").read_text()
-    assert "--hybrid" in body, (
-        "engagement-hourly-dispatch.sh must invoke drip with --hybrid "
-        "(was --source=fresh in the FI-ENGAGEMENT-FRESH-DRIP era; "
-        "FI-ENGAGEMENT-HYBRID switches to the hybrid drip)"
-    )
+    assert "--single-platform=x" in body
+    assert "--single-platform=linkedin" in body
 
 
 def test_subagent_prompt_delegates_li_to_social_manager() -> None:
