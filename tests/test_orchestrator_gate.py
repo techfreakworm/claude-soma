@@ -56,6 +56,7 @@ def _assert_allow(result: subprocess.CompletedProcess) -> None:
     ("Skill", {"skill": "x"}),
     ("WebFetch", {"url": "https://example.com"}),
     ("WebSearch", {"query": "find me something"}),
+    ("AskUserQuestion", {"questions": [{"question": "x", "options": []}]}),
     ("mcp__playwright__browser_navigate", {}),
     ("mcp__playwright-linkedin__browser_click", {}),
     ("mcp__playwright-medium__browser_snapshot", {}),
@@ -139,7 +140,6 @@ def test_bash_deny(command: str) -> None:
     ("TaskGet", {"task_id": "1"}),
     ("TaskStop", {"task_id": "1"}),
     ("SendMessage", {"to": "soma-proj-x", "message": "hi"}),
-    ("AskUserQuestion", {"question": "which?"}),
     ("SendUserFile", {"files": ["/tmp/x.png"]}),
     ("ToolSearch", {"query": "select:Read"}),
     ("mcp__plugin_telegram_telegram__reply", {}),
@@ -440,7 +440,23 @@ _SUBAGENT_TOOLS = [
     ("NotebookEdit", {"file_path": "/x"}),
     ("mcp__playwright__browser_navigate", {}),
     ("mcp__claude_ai_Canva__search-designs", {}),
+    ("AskUserQuestion", {"questions": [{"question": "x", "options": []}]}),
 ]
+
+
+def test_askuserquestion_deny_reason_points_to_telegram() -> None:
+    """FI-NO-ASKUSERQUESTION (2026-06-07): the deny reason MUST instruct
+    the bot to use the Telegram reply path + end the turn, not the
+    generic 'dispatch via Agent' tail used for other denies."""
+    r = _run({"tool_name": "AskUserQuestion",
+              "tool_input": {"questions": [{"question": "x", "options": []}]}})
+    assert r.returncode == 0
+    import json
+    data = json.loads(r.stdout)
+    assert data["hookSpecificOutput"]["permissionDecision"] == "deny"
+    reason = data["hookSpecificOutput"]["permissionDecisionReason"]
+    assert "send_tg_reply" in reason
+    assert "END THE TURN" in reason
 
 
 @pytest.mark.parametrize("tool_name,tool_input", _SUBAGENT_TOOLS)

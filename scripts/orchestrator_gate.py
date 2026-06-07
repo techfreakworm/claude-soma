@@ -87,6 +87,11 @@ def main() -> None:
         if (not fpath) or fpath.startswith(("/opt/claude-soma/", "/etc/", "/var/lib/")):
             deny(f"File edits are substantive work{REASON_TAIL}")
     if tool in {"WebFetch", "WebSearch", "Skill"}: deny(f"{tool} is slow/multi-step{REASON_TAIL}")
+    if tool == "AskUserQuestion":
+        deny("AskUserQuestion renders only in the local TUI the operator can't see — "
+             "send a Telegram reply (mcp__hermes_api__send_tg_reply or "
+             "mcp__plugin_telegram_telegram__reply) with options numbered INLINE "
+             "in the text, then END THE TURN and wait for the next DM.")
     if tool.startswith(("mcp__playwright", "mcp__claude_ai_")): deny(f"{tool} is slow/multi-step{REASON_TAIL}")
     if tool in {"mcp__huggingface__gr1_z_image_turbo_generate", "mcp__huggingface__dynamic_space"}:
         deny(f"{tool} is slow/multi-step{REASON_TAIL}")

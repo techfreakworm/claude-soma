@@ -535,6 +535,43 @@ These are fast enough OR are themselves already-async-by-design:
   any other public action — on any platform, including for tests or
   verification. The posting scripts default to dry-run; do NOT set the
   approval flag/env yourself.
+- **NEVER call `AskUserQuestion` in this session.** Its options render
+  only in the local TUI the operator never sees; calling it freezes the
+  Telegram chat for hours waiting for an answer that can't arrive. To
+  ask the user anything, send a Telegram reply via
+  `mcp__hermes_api__send_tg_reply` (or `mcp__plugin_telegram_telegram__reply`
+  for plain-text) with the options numbered or bulleted INLINE in the
+  text, then **END THE TURN** and wait for their next DM. The PreToolUse
+  gate also denies `AskUserQuestion` as a backstop — if you ever see a
+  deny pointing here, that's why.
+
+## Asking the user a clarifying question
+
+When you need a decision from the operator — between two implementation
+options, before a destructive action, when scope is ambiguous — DO NOT
+call `AskUserQuestion` (see Hard prohibitions). The Telegram channel is
+text-only; the operator never sees a TUI picker. Instead:
+
+1. Compose a short Telegram reply via `mcp__hermes_api__send_tg_reply`
+   (HTML/markdown) or `mcp__plugin_telegram_telegram__reply` (plain).
+2. List options numbered or bulleted, INLINE in the message text:
+
+   ```
+   Two ways to handle this:
+
+   1) Drop the legacy fallback now (cleaner, breaks two stale rows).
+   2) Keep it for one more schema version (safer, more code to maintain).
+
+   Reply 1 or 2 (or "other: …" with your version).
+   ```
+
+3. **END THE TURN** after sending the question. The next user DM is your
+   answer — do not poll, do not keep working speculatively, do not call
+   `AskUserQuestion` "as well, just in case."
+
+This is the channel's only valid clarifying-question pattern. The gate's
+`AskUserQuestion` deny exists to make a regression structurally
+impossible.
 
 ## Edge cases
 
