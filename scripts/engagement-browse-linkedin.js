@@ -14,18 +14,28 @@
 //        screen-reader prefix on every post card (stable in their A11y
 //        contract).
 //     3. From each card extract: first /in/<slug>/ profile link (author);
-//        author display name from text head; visible body text. Direct
-//        post-permalink anchors are NOT exposed in plain `<a href>` on
-//        most cards, but LinkedIn DOES embed the urn:li:activity ID in
-//        the card's innerHTML (in tracking attributes / share-link refs).
-//        We extract that ID via regex and construct the canonical post
-//        URL `https://www.linkedin.com/feed/update/urn:li:activity:<id>/`.
-//        Cards without a urn (promoted-page injections, suggested
-//        content, LinkedIn Learning cards) are SKIPPED — they are not
-//        real posts the operator can deep-link to via a comment.
+//        author display name from text head; visible body text.
+//     4. Permalink resolution uses a layered strategy (see FI-LI-HARVEST-COPYLINK
+//        2026-06-08):
+//        Layer A — Copy-link menu (primary): click the card's control-menu
+//          button, click "Copy link to post" in the dropdown, read clipboard
+//          via navigator.clipboard.readText(), canonicalize via extractUrn.
+//          Requires clipboard-read/write permissions granted to origin.
+//        Layer B — Embedded URN (fallback): search outerHTML + data-urn /
+//          data-id / data-activity-urn attributes for any urn:li:(activity|
+//          share|ugcPost):<id> pattern. Some cards still embed it.
+//        Skip with counter if both layers miss — not a real post the
+//          operator can deep-link to via a comment.
+//
+//   IMPORTANT — selector validation: the control-menu button selectors
+//   (button[aria-label*="control menu" i] etc) and the "Copy link to post"
+//   menu item text match are UNVERIFIED against the live LinkedIn DOM.
+//   They MUST be validated via social-manager's warm playwright-linkedin
+//   MCP session before relying on Layer A. See LIVE VALIDATION NEEDED
+//   comment block below for details.
 //
 // OUTPUT (stdout, last line, machine-parseable):
-//   RESULT:OK n=<count> auth=<bool> url=<final-url>
+//   RESULT:OK n=<count> auth=<bool> url=<final-url> [skipped_no_permalink=<k>]
 //   RESULT:NEEDS_REAUTH url=<final-url>      — storageState rejected /
 //                                              login wall. Operator must
 //                                              re-run pw-login on the
@@ -33,7 +43,7 @@
 //   RESULT:ERROR <message>
 //
 // Each JSON-line object emitted before RESULT has the queue.jsonl-compatible
-// schema: platform, source_author, source_permalink, source_post_excerpt.
+// schema: platform, source_author, source_permalink, source_excerpt.
 // IMPORTANT: field is `source_permalink` (not `source_post_url`) so the
 // downstream post helpers + queue can match by the same key.
 
@@ -47,6 +57,85 @@ const EXEC = process.env.HERMES_PW_EXEC || "/usr/local/bin/playwright-chromium";
 const DEFAULT_STATE = path.join(os.homedir(), ".claude-pw", "state-linkedin.json");
 const DEFAULT_OUT_DIR = process.env.HERMES_ENGAGEMENT_BROWSE_OUT_DIR
     || "/var/log/claude-soma";
+
+// ---------------------------------------------------------------------------
+// Pure helpers — module-scope, exported for unit tests.
+// ---------------------------------------------------------------------------
+
+// extractUrn(text) — given any string, return the FIRST match of
+// urn:li:(activity|share|ugcPost):<id> as a canonical permalink URL,
+// PRESERVING THE URN TYPE. Returns null if no match.
+//
+// Examples:
+//   extractUrn("...urn:li:activity:123...")
+//     => "https://www.linkedin.com/feed/update/urn:li:activity:123/"
+//   extractUrn("...urn:li:share:456...")
+//     => "https://www.linkedin.com/feed/update/urn:li:share:456/"
+//   extractUrn("no urn here") => null
+function extractUrn(text) {
+    if (!text) return null;
+    const m = String(text).match(/urn:li:(activity|share|ugcPost):(\d+)/);
+    if (!m) return null;
+    // m[1] = type (activity|share|ugcPost), m[2] = numeric id
+    return `https://www.linkedin.com/feed/update/urn:li:${m[1]}:${m[2]}/`;
+}
+
+// canonicalizeLinkedInUrl(url) — given a copied LinkedIn URL (which may
+// have query strings / tracking params / be a /posts/<slug>-<urn> form),
+// strip query/fragment, run extractUrn on the full URL string, and return
+// the canonical feed-update URL or null.
+//
+// Examples:
+//   canonicalizeLinkedInUrl("https://www.linkedin.com/feed/update/urn:li:activity:123/?trackingId=abc")
+//     => "https://www.linkedin.com/feed/update/urn:li:activity:123/"
+//   canonicalizeLinkedInUrl("https://www.linkedin.com/posts/johndoe-urn:li:activity:123-activity-7199...")
+//     => "https://www.linkedin.com/feed/update/urn:li:activity:123/"
+//   canonicalizeLinkedInUrl("https://example.com/foo") => null
+function canonicalizeLinkedInUrl(url) {
+    if (!url) return null;
+    // Must be a linkedin.com URL (loose check — strips query/fragment first).
+    const s = String(url);
+    if (!/linkedin\.com/i.test(s)) return null;
+    // extractUrn works on the full URL string — it finds the first URN
+    // regardless of where it appears (path, query, fragment, slug, etc).
+    return extractUrn(s);
+}
+
+// ---------------------------------------------------------------------------
+// LIVE VALIDATION NEEDED — selectors unverified against current LinkedIn DOM
+// ---------------------------------------------------------------------------
+//
+// The following selectors are best-effort based on LinkedIn's known ARIA
+// patterns as of 2026. LinkedIn frequently revises its SDUI/shadow-DOM feed.
+// BEFORE relying on Layer A (Copy-link menu) in production:
+//
+//   1. Open social-manager's warm playwright-linkedin MCP session (the
+//      authenticated session that bypasses the /checkpoint/challenge wall).
+//   2. Navigate to https://www.linkedin.com/feed/
+//   3. Inspect a feed card's control-menu button. Verify which aria-label
+//      it uses from this candidate list:
+//        - button[aria-label*="control menu" i]
+//        - button[aria-label*="more actions" i]
+//        - button[aria-label*="open control menu" i]
+//   4. Open the menu dropdown. Find the "Copy link to post" item. Verify:
+//        - Its visible text matches /copy link/i (case-insensitive)
+//        - Its container selector (for the waitForSelector below)
+//   5. Verify that navigator.clipboard.readText() returns the post URL
+//      (not an empty string) after clicking "Copy link to post".
+//   6. Update MENU_BUTTON_SELECTORS and COPY_LINK_TEXT_RE below if needed.
+//
+// UPDATE THESE if live validation finds different selectors:
+const MENU_BUTTON_SELECTORS = [
+    'button[aria-label*="control menu" i]',
+    'button[aria-label*="more actions" i]',
+    'button[aria-label*="open control menu" i]',
+];
+const COPY_LINK_TEXT_RE = /copy link/i;
+// Selector for the dropdown container that appears after clicking the menu
+// button. Used as a waitForSelector target. LinkedIn uses role="listbox" or
+// a div with a class — this catches both common patterns:
+const DROPDOWN_SELECTOR = '[role="listbox"], [role="menu"], .artdeco-dropdown__content';
+// ---------------------------------------------------------------------------
 
 function flag(name, fallback) {
     const i = process.argv.indexOf(name);
@@ -68,7 +157,77 @@ if (!fs.existsSync(STATE)) {
 
 const { chromium } = require(PW);
 
-(async () => {
+// resolvePermalinkLayerA — try the Copy-link menu for the card at index i.
+// Returns canonical permalink string or null on any failure.
+async function resolvePermalinkLayerA(page, cardLocator) {
+    try {
+        // Find the menu button within this card. Try each selector candidate.
+        let menuBtn = null;
+        for (const sel of MENU_BUTTON_SELECTORS) {
+            const btn = cardLocator.locator(sel).first();
+            const visible = await btn.isVisible().catch(() => false);
+            if (visible) {
+                menuBtn = btn;
+                break;
+            }
+        }
+        if (!menuBtn) return null;
+
+        await menuBtn.click({ timeout: 3000 });
+
+        // Wait for the dropdown to appear.
+        await page.waitForSelector(DROPDOWN_SELECTOR, { timeout: 2000 });
+
+        // Find the "Copy link to post" menu item by visible text.
+        const menuItems = page.locator(`${DROPDOWN_SELECTOR} [role="option"], ${DROPDOWN_SELECTOR} [role="menuitem"], ${DROPDOWN_SELECTOR} li`);
+        const count = await menuItems.count();
+        let copyLinkItem = null;
+        for (let j = 0; j < count; j++) {
+            const item = menuItems.nth(j);
+            const txt = await item.textContent().catch(() => "");
+            if (COPY_LINK_TEXT_RE.test(txt || "")) {
+                copyLinkItem = item;
+                break;
+            }
+        }
+        if (!copyLinkItem) {
+            await page.keyboard.press("Escape");
+            return null;
+        }
+
+        await copyLinkItem.click({ timeout: 2000 });
+        // Brief wait for clipboard write to complete.
+        await page.waitForTimeout(400);
+
+        const clipText = await page.evaluate(() => navigator.clipboard.readText()).catch(() => null);
+        await page.keyboard.press("Escape");
+
+        if (!clipText) return null;
+        return canonicalizeLinkedInUrl(clipText);
+    } catch (_) {
+        // Best-effort: close any open menu before returning.
+        await page.keyboard.press("Escape").catch(() => {});
+        return null;
+    }
+}
+
+// resolvePermalinkLayerB — search the card's outerHTML and data attributes
+// for any urn:li:(activity|share|ugcPost):<id> pattern.
+// cardMeta comes from the page.evaluate harvest and already contains
+// outerHTML + dataAttrs as plain strings.
+function resolvePermalinkLayerB(cardMeta) {
+    // Try outerHTML first (most likely to contain the URN).
+    const fromHtml = extractUrn(cardMeta.outerHTML || "");
+    if (fromHtml) return fromHtml;
+    // Try each data attribute value.
+    for (const val of Object.values(cardMeta.dataAttrs || {})) {
+        const fromAttr = extractUrn(val);
+        if (fromAttr) return fromAttr;
+    }
+    return null;
+}
+
+async function _main() {
     const browser = await chromium.launch({
         headless: true,
         executablePath: EXEC,
@@ -77,8 +236,6 @@ const { chromium } = require(PW);
             "--no-first-run",
             "--no-default-browser-check",
             // Mild stealth — proven to reach an authenticated /feed/ render.
-            // Doesn't bypass LinkedIn's anti-bot for everything but lets
-            // the LazyColumn hydrate and the storageState cookies stay live.
             "--disable-blink-features=AutomationControlled",
         ],
     });
@@ -87,6 +244,13 @@ const { chromium } = require(PW);
         viewport: { width: 1400, height: 2400 },
         userAgent: "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36",
     });
+
+    // Grant clipboard permissions so Layer A's navigator.clipboard.readText()
+    // works after the "Copy link to post" menu action.
+    await context.grantPermissions(["clipboard-read", "clipboard-write"], {
+        origin: "https://www.linkedin.com",
+    });
+
     await context.addInitScript(() => {
         Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
         Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
@@ -148,30 +312,28 @@ const { chromium } = require(PW);
             );
         }
         if (!mainFeedExists) {
-            // We're authenticated (no login wall) but mainFeed didn't
-            // render after 4 scroll-wait passes. Likely an anti-bot
-            // soft-block or a LinkedIn revision that broke the testid
-            // contract. Distinct signal so the operator can investigate.
             console.log(`RESULT:ERROR mainFeed-container-missing url=${finalUrl}`);
             await browser.close();
             return;
         }
 
-        const posts = await page.evaluate(() => {
+        // Phase 1: metadata harvest via page.evaluate.
+        // Returns one object per post-card child of mainFeed, tagged with
+        // its zero-based childIndex so Node-side can re-locate it.
+        // outerHTML and dataAttrs are captured here for Layer B fallback.
+        const cardMetas = await page.evaluate(() => {
             const main = document.querySelector('[data-testid="mainFeed"]');
             if (!main) return [];
             const out = [];
-            for (const card of main.children) {
+            const children = Array.from(main.children);
+            for (let idx = 0; idx < children.length; idx++) {
+                const card = children[idx];
                 const text = (card.innerText || "");
                 // LinkedIn marks every post card with "Feed post " as a
-                // screen-reader prefix (a11y contract). Promotions /
-                // suggested / connection-comment-on are still posts; the
-                // operator filters quality at draft time, not here.
+                // screen-reader prefix (a11y contract).
                 if (!/^Feed post[\s\n]/.test(text)) continue;
 
-                // First profile link is the author. Skip company-page
-                // links — they're navigation to a company's posts list,
-                // not the author of the visible post.
+                // First profile link is the author.
                 const profileAnchor = [...card.querySelectorAll('a[href*="/in/"]')]
                     .find(a => /\/in\/[a-zA-Z0-9-]+\/?(\?|$)/.test(a.getAttribute("href") || ""));
                 if (!profileAnchor) continue;
@@ -180,9 +342,7 @@ const { chromium } = require(PW);
                 if (!handleMatch) continue;
                 const handle = handleMatch[1];
 
-                // Author display name: first non-empty line after the
-                // "Feed post " prefix that isn't a known noise token
-                // ("Suggested", "Promoted", reaction labels, etc).
+                // Author display name.
                 const lines = text.replace(/^Feed post[\s\n]+/, "").split("\n").map(s => s.trim()).filter(Boolean);
                 const noise = new Set(["Suggested", "Promoted", "Sponsored", "•", "3rd+", "2nd", "1st", "Follow"]);
                 let author = "";
@@ -194,9 +354,7 @@ const { chromium } = require(PW);
                 }
                 if (!author) author = handle;
 
-                // Body excerpt: skip lines until we find the first long
-                // line (>40 chars) that looks like post content rather
-                // than header chrome (reactions, follower count, time, etc).
+                // Body excerpt.
                 let excerpt = "";
                 for (const ln of lines) {
                     if (ln.length > 40 && !/^\d+ followers?\s*$/.test(ln) && !/^[0-9hdwm]+ ago\b/.test(ln)) {
@@ -205,46 +363,65 @@ const { chromium } = require(PW);
                     }
                 }
                 if (!excerpt) {
-                    // Fall back to the concatenation of the non-noise lines.
                     excerpt = lines.filter(ln => !noise.has(ln)).join(" ");
                 }
 
-                // Permalink: extract the post's actual urn:li:activity ID
-                // from the card's innerHTML. LinkedIn embeds it in tracking
-                // attributes / share-link refs / aria-described-by IDs even
-                // though it's rarely exposed as a plain anchor href.
-                // Validated 2026-06-05 (FI-LI-POST-AUTHFAIL diagnostic) —
-                // the prior profile-activity URLs bounced to authwall on
-                // direct navigation even with valid cookies, so they were
-                // unusable as post-comment targets.
-                const urnMatch = (card.innerHTML.match(/urn:li:activity:\d+/) || [])[0];
-                let permalink;
-                if (urnMatch) {
-                    permalink = `https://www.linkedin.com/feed/update/${urnMatch}/`;
-                } else {
-                    // No urn in this card — promoted-page injection, suggested
-                    // content, LinkedIn Learning card, etc. Skip; not a real
-                    // post the operator can engage with via a permalink.
-                    continue;
+                // Collect data attributes for Layer B fallback.
+                const dataAttrs = {};
+                for (const attr of card.attributes) {
+                    if (attr.name.startsWith("data-")) {
+                        dataAttrs[attr.name] = attr.value;
+                    }
                 }
 
                 out.push({
-                    platform: "linkedin",
-                    source_author: author,
-                    source_permalink: permalink,
-                    source_post_excerpt: excerpt.slice(0, 280),
+                    childIndex: idx,
+                    author,
+                    excerpt: excerpt.slice(0, 280),
+                    outerHTML: card.outerHTML,
+                    dataAttrs,
                 });
             }
             return out;
         });
 
-        // Dedup by author+excerpt-prefix (different posts from same author
-        // produce different excerpts; same author's same post never gets a
-        // double draft).
+        // Phase 2: Node-side per-card permalink resolution.
+        // For each card, try Layer A (Copy-link menu) then Layer B (embedded URN).
+        const posts = [];
+        let skippedNoPermalink = 0;
+        const feedCardLocator = page.locator('[data-testid="mainFeed"] > *');
+
+        for (const meta of cardMetas) {
+            if (posts.length >= N) break;
+
+            const cardLocator = feedCardLocator.nth(meta.childIndex);
+
+            // Layer A: Copy-link menu (primary).
+            let permalink = await resolvePermalinkLayerA(page, cardLocator);
+
+            // Layer B: embedded URN in outerHTML / data attributes (fallback).
+            if (!permalink) {
+                permalink = resolvePermalinkLayerB(meta);
+            }
+
+            if (!permalink) {
+                skippedNoPermalink++;
+                continue;
+            }
+
+            posts.push({
+                platform: "linkedin",
+                source_author: meta.author,
+                source_permalink: permalink,
+                source_excerpt: meta.excerpt,
+            });
+        }
+
+        // Dedup by permalink + excerpt-prefix.
         const seen = new Set();
         const unique = [];
         for (const p of posts) {
-            const key = p.source_permalink + "|" + (p.source_post_excerpt || "").slice(0, 60);
+            const key = p.source_permalink + "|" + (p.source_excerpt || "").slice(0, 60);
             if (seen.has(key)) continue;
             seen.add(key);
             unique.push(p);
@@ -253,10 +430,19 @@ const { chromium } = require(PW);
         for (const p of unique) {
             process.stdout.write(JSON.stringify(p) + "\n");
         }
-        console.log(`RESULT:OK n=${unique.length} auth=true url=${finalUrl}`);
+        const skippedSuffix = skippedNoPermalink > 0 ? ` skipped_no_permalink=${skippedNoPermalink}` : "";
+        console.log(`RESULT:OK n=${unique.length} auth=true url=${finalUrl}${skippedSuffix}`);
     } catch (e) {
         console.log("RESULT:ERROR " + (e && e.message));
     } finally {
         await browser.close().catch(() => {});
     }
-})();
+}
+
+// Export pure helpers for unit testing. Only launch the live harvester
+// when run directly as a CLI — importing the module (e.g. from the unit
+// tests) must NOT open a browser or touch LinkedIn.
+module.exports = { extractUrn, canonicalizeLinkedInUrl };
+if (require.main === module) {
+    _main();
+}

@@ -51,7 +51,7 @@ the producer is broken — the renderer logs and skips the line.
 | field | type | notes |
 | --- | --- | --- |
 | `source_author` | string | `@handle` for X, `Firstname Lastname` for LinkedIn. |
-| `source_permalink` | string | Canonical post URL. X: `https://x.com/<handle>/status/<id>`. LinkedIn: `https://www.linkedin.com/feed/update/urn:li:activity:<id>/`. Empty/null = un-postable; producer MUST drop the draft instead of emitting a bad line. |
+| `source_permalink` | string | Canonical post URL. X: `https://x.com/<handle>/status/<id>`. LinkedIn: `https://www.linkedin.com/feed/update/urn:li:{activity\|share\|ugcPost}:<id>/` — **all three URN families are accepted** (social-manager confirmed `share:`/`ugcPost:` permalinks render + are postable; do NOT rewrap a `share`/`ugcPost` id as `activity`, the numeric ids are not interchangeable). Empty/null = un-postable; producer MUST drop the draft instead of emitting a bad line. Target dedup is URN-type-agnostic — see `target_keys()` in `engagement-hourly-drip.py` (FI-TARGET-DEDUP-LEDGER). |
 | `source_excerpt` | string | First ~280 chars of the source post. Verbatim, no formatting. **Field name is `source_excerpt` — NOT `source_post_excerpt` (deprecated, removed in v1).** |
 
 ### Decision context (required — this is the "decision-useful" surface the v1 schema adds)
