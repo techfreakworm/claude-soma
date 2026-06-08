@@ -228,6 +228,14 @@ Workflow:
      will pop whatever LI is in the pool at drip-time.
 
 ============================================================
+Avoid duplicate targets (best-effort — dispatcher enforces deterministically)
+============================================================
+
+Before drafting for an X post, check __QUEUE_PATH__ for any existing entry
+whose `source_permalink` matches or is very similar (same status/tweet ID).
+If you see one, skip that post and pick a different one instead.
+
+============================================================
 Hard rules
 ============================================================
 

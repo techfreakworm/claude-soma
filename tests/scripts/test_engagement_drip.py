@@ -66,6 +66,7 @@ def _cfg(tmp_path: Path, **overrides) -> dict:
         "tg_token": "",
         "tg_chat_id": "",
         "review_url": "https://files.mayankgupta.in/engagement-review.md",
+        "posted_ledger": str(tmp_path / "posted-targets.jsonl"),
     }
     defaults.update(overrides)
     return defaults
@@ -91,6 +92,7 @@ def _run_helper(script: Path, args: list[str], tmp_path: Path) -> subprocess.Com
         "HERMES_ENGAGEMENT_REVIEW_URL": "https://files.mayankgupta.in/engagement-review.md",
         "HERMES_ENGAGEMENT_REFILL_FLAG": str(tmp_path / "REFILL_NEEDED"),
         "HERMES_ENGAGEMENT_REFILL_THRESHOLD": "6",
+        "HERMES_ENGAGEMENT_POSTED_LEDGER": str(tmp_path / "posted-targets.jsonl"),
         "TELEGRAM_BOT_TOKEN": "",
         "HERMES_NOTIFY_CHAT_ID": "",
     }
@@ -1802,3 +1804,387 @@ def test_purge_null_permalink_fresh_cli(tmp_path: Path) -> None:
     assert "eng-x-purge" not in ids, "fresh null-permalink row must be purged"
     assert "eng-x-keep" in ids, "fresh row with good permalink must be kept"
     assert "eng-x-old-null" in ids, "old null-permalink row must be kept (not fresh)"
+
+
+# ────────────────────────────────────────────────────────────────────────────
+# FI-TARGET-DEDUP-LEDGER (Bundle 2) — 12 new tests
+# ────────────────────────────────────────────────────────────────────────────
+
+
+def _li_entry(eid: str, urn_type: str, numeric_id: str, author: str = "AuthorA",
+              excerpt: str = "Same post content here", status: str = "queued",
+              **kwargs) -> dict:
+    """Build a LinkedIn entry with the given URN type and numeric ID."""
+    permalink = (
+        f"https://www.linkedin.com/feed/update/urn:li:{urn_type}:{numeric_id}/"
+    )
+    return _entry(
+        eid, "linkedin", status=status,
+        source_permalink=permalink,
+        source_author=author,
+        source_excerpt=excerpt,
+        **kwargs,
+    )
+
+
+def test_target_keys_li_urn_types_collapse(tmp_path: Path) -> None:
+    """Three LinkedIn entries with the same numeric ID under activity, share,
+    ugcPost URN types → all share the li:<id> primary key → pairwise match."""
+    a = _li_entry("id-act", "activity", "7468")
+    b = _li_entry("id-shr", "share", "7468")
+    c = _li_entry("id-ugc", "ugcPost", "7468")
+
+    ka = _mod.target_keys(a)
+    kb = _mod.target_keys(b)
+    kc = _mod.target_keys(c)
+
+    assert "li:7468" in ka
+    assert "li:7468" in kb
+    assert "li:7468" in kc
+    assert _mod.targets_match(a, b)
+    assert _mod.targets_match(b, c)
+    assert _mod.targets_match(a, c)
+
+
+def test_target_keys_x_status_id(tmp_path: Path) -> None:
+    """Two X entries with the same /status/<id>/ but different query strings
+    still match via the x:<id> primary key."""
+    a = _entry(
+        "x-1", "x",
+        source_permalink="https://x.com/user/status/9876543210",
+        source_author="UserA",
+        source_excerpt="Tweet content",
+    )
+    b = _entry(
+        "x-2", "x",
+        source_permalink="https://x.com/user/status/9876543210?s=20&t=abc",
+        source_author="UserA",
+        source_excerpt="Tweet content",
+    )
+    assert "x:9876543210" in _mod.target_keys(a)
+    assert "x:9876543210" in _mod.target_keys(b)
+    assert _mod.targets_match(a, b)
+
+
+def test_target_keys_fallback_on_no_permalink(tmp_path: Path) -> None:
+    """Entry with empty permalink still gets a c:... key.
+    Two entries with same author+excerpt match; different excerpt → no match."""
+    same_a = _entry(
+        "id-a", "linkedin",
+        source_permalink="",
+        source_author="Alice",
+        source_excerpt="Exactly the same text here",
+    )
+    same_b = _entry(
+        "id-b", "linkedin",
+        source_permalink="",
+        source_author="Alice",
+        source_excerpt="Exactly the same text here",
+    )
+    different = _entry(
+        "id-c", "linkedin",
+        source_permalink="",
+        source_author="Alice",
+        source_excerpt="Completely different content",
+    )
+
+    ka = _mod.target_keys(same_a)
+    assert any(k.startswith("c:") for k in ka), "must have fallback key"
+    assert _mod.targets_match(same_a, same_b), "same author+excerpt must match"
+    assert not _mod.targets_match(same_a, different), "different excerpt must not match"
+
+
+def test_target_keys_cross_type_offset_caught_by_fallback(tmp_path: Path) -> None:
+    """LinkedIn activity/share offset case: same author + same excerpt but
+    DIFFERENT numeric IDs (primary keys differ) → still match via fallback."""
+    e_activity = _li_entry("id-act2", "activity", "7469",
+                            author="BobSmith", excerpt="Identical content here")
+    e_share = _li_entry("id-shr2", "share", "7468",
+                        author="BobSmith", excerpt="Identical content here")
+
+    ka = _mod.target_keys(e_activity)
+    kb = _mod.target_keys(e_share)
+    # Primary keys differ
+    assert "li:7469" in ka
+    assert "li:7468" in kb
+    assert "li:7469" not in kb
+    assert "li:7468" not in ka
+    # But fallback keys match (same author + same excerpt)
+    assert _mod.targets_match(e_activity, e_share), (
+        "cross-type offset (7469 vs 7468) must match via fallback author+excerpt key"
+    )
+
+
+def test_posted_ledger_append_and_load_roundtrip(tmp_path: Path) -> None:
+    """Append two entries to the ledger, load_posted_keys returns the union."""
+    ledger = tmp_path / "posted.jsonl"
+    e1 = _li_entry("id1", "activity", "1111", author="Alice", excerpt="Post one")
+    e2 = _entry(
+        "id2", "x",
+        source_permalink="https://x.com/user/status/2222",
+        source_author="Bob",
+        source_excerpt="Post two",
+    )
+
+    _mod.append_posted_ledger(ledger, e1, "https://li.com/post/1", 1000.0)
+    _mod.append_posted_ledger(ledger, e2, "https://x.com/s/2", 2000.0)
+
+    keys = _mod.load_posted_keys(ledger)
+    assert "li:1111" in keys
+    assert "x:2222" in keys
+    # Fallback keys also present
+    assert any(k.startswith("c:linkedin:alice:") for k in keys)
+    assert any(k.startswith("c:x:bob:") for k in keys)
+
+
+def test_backfill_posted_ledger_idempotent(tmp_path: Path) -> None:
+    """Queue with 2 posted rows; run backfill twice; ledger has exactly 2 rows."""
+    cfg = _cfg(tmp_path)
+    entries = [
+        _entry("eng-x-p1", "x", status="posted", queued_at=100.0,
+               posted_at=200.0,
+               source_permalink="https://x.com/u/status/111",
+               post_permalink="https://x.com/comment/111"),
+        _entry("eng-li-p2", "linkedin", status="posted", queued_at=200.0,
+               posted_at=300.0,
+               source_permalink="https://www.linkedin.com/feed/update/urn:li:activity:222/",
+               post_permalink="https://li.com/comment/222"),
+    ]
+    _write_queue(cfg["queue_path"], entries)
+
+    _mod.backfill_posted_ledger(cfg)
+    _mod.backfill_posted_ledger(cfg)  # second run must be a no-op
+
+    ledger_path = Path(cfg["posted_ledger"])
+    rows = [json.loads(line) for line in ledger_path.read_text().splitlines() if line.strip()]
+    assert len(rows) == 2, f"expected 2 ledger rows (idempotent), got {len(rows)}"
+    draft_ids = {r["draft_id"] for r in rows}
+    assert "eng-x-p1" in draft_ids
+    assert "eng-li-p2" in draft_ids
+
+
+def test_dedup_fresh_drops_dup_of_posted_ledger(tmp_path: Path) -> None:
+    """Ledger has target T; a fresh queued draft on T is dropped;
+    a fresh draft on a different target survives."""
+    cfg = _cfg(tmp_path)
+    start_ts = 1000.0
+
+    # Pre-populate ledger with target T
+    ledger_entry = _entry(
+        "old-posted", "x",
+        source_permalink="https://x.com/u/status/5555",
+        source_author="CelAuth",
+        source_excerpt="The very same tweet",
+    )
+    _mod.append_posted_ledger(
+        cfg["posted_ledger"], ledger_entry,
+        "https://x.com/comment/5555", 500.0,
+    )
+
+    # Fresh draft targeting the same post (same status ID → primary key match)
+    fresh_dup = _entry(
+        "eng-x-dup", "x", status="queued", queued_at=900.0,
+        freshly_drafted_at=1100.0,
+        source_permalink="https://x.com/u/status/5555",
+        source_author="CelAuth",
+        source_excerpt="The very same tweet",
+    )
+    # Fresh draft targeting a different post
+    fresh_ok = _entry(
+        "eng-x-ok", "x", status="queued", queued_at=900.0,
+        freshly_drafted_at=1100.0,
+        source_permalink="https://x.com/u/status/9999",
+        source_author="OtherAuth",
+        source_excerpt="Different tweet entirely",
+    )
+    _write_queue(cfg["queue_path"], [fresh_dup, fresh_ok])
+
+    result = _mod.dedup_fresh_against_targets(cfg, start_ts)
+    assert result == 0
+
+    after = {e["id"]: e for e in _mod.read_queue(cfg["queue_path"])}
+    assert "eng-x-dup" not in after, "dup of ledger target must be dropped"
+    assert "eng-x-ok" in after, "non-dup fresh draft must survive"
+
+
+def test_dedup_fresh_drops_dup_of_in_queue_active_target(tmp_path: Path) -> None:
+    """A pending_review entry on target T; a fresh queued draft on T dropped."""
+    cfg = _cfg(tmp_path)
+    start_ts = 1000.0
+
+    existing_pending = _entry(
+        "eng-li-pending", "linkedin", status="pending_review", queued_at=500.0,
+        source_permalink="https://www.linkedin.com/feed/update/urn:li:activity:3333/",
+        source_author="TargetAuthor",
+        source_excerpt="Important post content",
+    )
+    fresh_dup = _entry(
+        "eng-li-fresh-dup", "linkedin", status="queued", queued_at=900.0,
+        freshly_drafted_at=1100.0,
+        source_permalink="https://www.linkedin.com/feed/update/urn:li:activity:3333/",
+        source_author="TargetAuthor",
+        source_excerpt="Important post content",
+    )
+    _write_queue(cfg["queue_path"], [existing_pending, fresh_dup])
+
+    _mod.dedup_fresh_against_targets(cfg, start_ts)
+
+    after = {e["id"]: e for e in _mod.read_queue(cfg["queue_path"])}
+    assert "eng-li-pending" in after, "pending_review entry must be kept"
+    assert "eng-li-fresh-dup" not in after, "fresh dup of pending target must be dropped"
+
+
+def test_dedup_fresh_same_run_keep_first_drop_rest(tmp_path: Path) -> None:
+    """3 fresh drafts targeting the same post in one run → 1 survives, 2 dropped."""
+    cfg = _cfg(tmp_path)
+    start_ts = 1000.0
+
+    # All three target the same X tweet
+    f1 = _entry(
+        "eng-x-f1", "x", status="queued", queued_at=901.0, freshly_drafted_at=1100.0,
+        source_permalink="https://x.com/u/status/7777",
+        source_author="SameAuth", source_excerpt="Same tweet body",
+    )
+    f2 = _entry(
+        "eng-x-f2", "x", status="queued", queued_at=902.0, freshly_drafted_at=1100.0,
+        source_permalink="https://x.com/u/status/7777",
+        source_author="SameAuth", source_excerpt="Same tweet body",
+    )
+    f3 = _entry(
+        "eng-x-f3", "x", status="queued", queued_at=903.0, freshly_drafted_at=1100.0,
+        source_permalink="https://x.com/u/status/7777",
+        source_author="SameAuth", source_excerpt="Same tweet body",
+    )
+    _write_queue(cfg["queue_path"], [f1, f2, f3])
+
+    _mod.dedup_fresh_against_targets(cfg, start_ts)
+
+    after = _mod.read_queue(cfg["queue_path"])
+    assert len(after) == 1, f"expected 1 survivor from 3 same-target fresh drafts, got {len(after)}"
+    # First in queue order survives
+    assert after[0]["id"] == "eng-x-f1"
+
+
+def test_dedup_fresh_keeps_nonfresh_and_nondup(tmp_path: Path) -> None:
+    """Non-fresh queued row on a dup target is NOT dropped (only fresh rows
+    are candidates); a fresh non-dup row survives."""
+    cfg = _cfg(tmp_path)
+    start_ts = 1000.0
+
+    # Non-fresh queued row on a target that would match the ledger
+    # (this is an old pool draft — must NOT be dropped by the dedup pass)
+    non_fresh_on_dup_target = _entry(
+        "eng-x-old", "x", status="queued", queued_at=500.0,
+        freshly_drafted_at=800.0,   # < start_ts → not fresh
+        source_permalink="https://x.com/u/status/4444",
+        source_author="AuthX", source_excerpt="Old pool post",
+    )
+    # Fresh non-dup row — must survive
+    fresh_ok = _entry(
+        "eng-x-new", "x", status="queued", queued_at=900.0,
+        freshly_drafted_at=1100.0,
+        source_permalink="https://x.com/u/status/5555",
+        source_author="AuthY", source_excerpt="Brand new post",
+    )
+    _write_queue(cfg["queue_path"], [non_fresh_on_dup_target, fresh_ok])
+
+    _mod.dedup_fresh_against_targets(cfg, start_ts)
+
+    after = {e["id"]: e for e in _mod.read_queue(cfg["queue_path"])}
+    assert "eng-x-old" in after, "non-fresh queued row must NOT be dropped"
+    assert "eng-x-new" in after, "fresh non-dup row must survive"
+
+
+def test_mark_posted_auto_declines_siblings(tmp_path: Path) -> None:
+    """mark_posted on an entry auto-declines all other entries that share
+    the same target (queued, pending_review, approved), leaves unrelated
+    entries untouched, and records the posted entry in the ledger."""
+    cfg = _cfg(tmp_path)
+
+    permalink_base = "https://www.linkedin.com/feed/update/urn:li:activity:8888/"
+    to_post = _entry(
+        "post-1", "linkedin", status="approved", queued_at=100.0,
+        source_permalink=permalink_base,
+        source_author="Magda",
+        source_excerpt="Shared post text",
+    )
+    # Siblings — all targeting the same LI post
+    sib_queued = _entry(
+        "sib-q", "linkedin", status="queued", queued_at=200.0,
+        source_permalink=permalink_base,
+        source_author="Magda",
+        source_excerpt="Shared post text",
+    )
+    sib_pending = _entry(
+        "sib-p", "linkedin", status="pending_review", queued_at=300.0,
+        source_permalink=permalink_base,
+        source_author="Magda",
+        source_excerpt="Shared post text",
+    )
+    sib_approved = _entry(
+        "sib-a", "linkedin", status="approved", queued_at=400.0,
+        source_permalink=permalink_base,
+        source_author="Magda",
+        source_excerpt="Shared post text",
+    )
+    # Unrelated entry — different author + different excerpt
+    unrelated = _entry(
+        "unrel-1", "linkedin", status="queued", queued_at=500.0,
+        source_permalink="https://www.linkedin.com/feed/update/urn:li:activity:9999/",
+        source_author="OtherPerson",
+        source_excerpt="Completely unrelated post",
+    )
+    _write_queue(cfg["queue_path"],
+                 [to_post, sib_queued, sib_pending, sib_approved, unrelated])
+
+    result = _mod.mark_posted(cfg, "post-1", permalink_base + "comment/1")
+    assert result == 0
+
+    after = {e["id"]: e for e in _mod.read_queue(cfg["queue_path"])}
+
+    assert after["post-1"]["status"] == "posted"
+    assert after["sib-q"]["status"] == "declined"
+    assert after["sib-q"]["decline_reason"] == "duplicate_target:post-1"
+    assert after["sib-p"]["status"] == "declined"
+    assert after["sib-a"]["status"] == "declined"
+    assert after["unrel-1"]["status"] == "queued", "unrelated entry must not be touched"
+
+    # Ledger must have one row for the posted entry
+    ledger_keys = _mod.load_posted_keys(cfg["posted_ledger"])
+    assert "li:8888" in ledger_keys, "ledger must contain the LI primary key"
+
+
+def test_mark_posted_records_ledger_even_for_force_post(tmp_path: Path) -> None:
+    """Option (a): even if the target is already in the ledger, a subsequent
+    mark_posted appends a new row (force-post = real engagement, block future)."""
+    cfg = _cfg(tmp_path)
+
+    permalink = "https://x.com/u/status/6666"
+    entry = _entry(
+        "eng-x-fp", "x", status="approved", queued_at=100.0,
+        source_permalink=permalink,
+        source_author="ForcePostAuth",
+        source_excerpt="Force post content",
+    )
+    _write_queue(cfg["queue_path"], [entry])
+
+    # First mark_posted
+    _mod.mark_posted(cfg, "eng-x-fp", permalink + "/comment/1")
+
+    # Re-add the entry (simulate a second queue row for the same source post)
+    entry2 = _entry(
+        "eng-x-fp2", "x", status="approved", queued_at=100.0,
+        source_permalink=permalink,
+        source_author="ForcePostAuth",
+        source_excerpt="Force post content",
+    )
+    _write_queue(cfg["queue_path"], [entry2])
+
+    # Second mark_posted — ledger must get ANOTHER row
+    _mod.mark_posted(cfg, "eng-x-fp2", permalink + "/comment/2")
+
+    ledger_path = Path(cfg["posted_ledger"])
+    rows = [json.loads(line) for line in ledger_path.read_text().splitlines() if line.strip()]
+    assert len(rows) == 2, (
+        f"expected 2 ledger rows (option a: always append), got {len(rows)}"
+    )

@@ -31,8 +31,10 @@ from __future__ import annotations
 
 import contextlib
 import fcntl
+import hashlib
 import json
 import os
+import re
 import sys
 import time
 import urllib.parse
@@ -226,6 +228,13 @@ def _cfg() -> dict[str, Any]:
         # one-line summary. Derived from secrets.env when not explicitly
         # set so the URL is never silently empty.
         "review_url": _resolve_review_url(),
+        # FI-TARGET-DEDUP-LEDGER (Bundle 2): persistent record of posted
+        # targets so the dedup pass can block re-drafts on already-commented
+        # posts across queue regenerations.
+        "posted_ledger": os.environ.get(
+            "HERMES_ENGAGEMENT_POSTED_LEDGER",
+            "/var/lib/claude-soma/engagement/posted-targets.jsonl",
+        ),
     }
 
 
@@ -1036,15 +1045,40 @@ def mark_posted(cfg: dict, entry_id: str, permalink: str) -> int:
     now = time.time()
     with queue_locked(cfg["queue_path"]):
         entries = read_queue(cfg["queue_path"])
+        posted_entry: dict | None = None
         for e in entries:
             if e.get("id") == entry_id:
                 e["status"] = "posted"
                 e["post_permalink"] = permalink
                 e["posted_at"] = now
+                posted_entry = e
                 break
+        if posted_entry is not None:
+            # FI-TARGET-DEDUP-LEDGER #94: record in ledger (always, even if
+            # already present — option (a): a force-post is a real engagement
+            # that should block future re-drafts).
+            append_posted_ledger(cfg["posted_ledger"], posted_entry, permalink, now)
+            # Auto-decline all other entries that target the same post.
+            declined_k = 0
+            for e in entries:
+                if e.get("id") == entry_id:
+                    continue
+                if e.get("status") not in {"queued", "pending_review", "approved"}:
+                    continue
+                if targets_match(e, posted_entry):
+                    e["status"] = "declined"
+                    e["declined_at"] = now
+                    e["decline_reason"] = f"duplicate_target:{entry_id}"
+                    declined_k += 1
         write_queue_atomic(entries, cfg["queue_path"])
-    print(f"Marked posted: {entry_id} -> {permalink}")
-    _log(cfg["log_path"], f"posted: id={entry_id} permalink={permalink}")
+    sibling_info = f" auto-declined {declined_k} sibling(s) sharing target" if (
+        posted_entry is not None
+    ) else ""
+    print(f"Marked posted: {entry_id} -> {permalink}{sibling_info}")
+    _log(
+        cfg["log_path"],
+        f"posted: id={entry_id} permalink={permalink}{sibling_info}",
+    )
     try:
         regenerate_review_page(entries, cfg["review_page"], cfg["review_url"])
     except Exception as exc:
@@ -1128,6 +1162,221 @@ def purge_null_permalink_fresh(cfg: dict, start_ts: float) -> int:
         write_queue_atomic(kept, cfg["queue_path"])
     _log(log, f"purge-null-permalink: done, dropped={dropped} kept={len(kept)}")
     print(f"dispatcher: purged {dropped} null-permalink fresh draft(s)", file=sys.stderr)
+    return 0
+
+
+# ---------------------------------------------------------------------------
+# FI-TARGET-DEDUP-LEDGER (Bundle 2) — target key helpers + ledger
+# ---------------------------------------------------------------------------
+
+# Regex patterns for extracting canonical IDs from social permalinks.
+_LI_URN_RE = re.compile(r"urn:li:(?:activity|share|ugcPost):(\d+)")
+_X_STATUS_RE = re.compile(r"/status/(\d+)")
+
+
+def target_keys(entry: dict) -> set[str]:
+    """Return the set of canonical keys identifying the social post an entry
+    targets.  Two entries are considered the "same target" iff their key sets
+    intersect (i.e. they share at least one key).
+
+    Key scheme
+    ----------
+    Primary key (when permalink resolves):
+      li:<numeric_id>   — LinkedIn; URN type deliberately stripped so
+                          urn:li:activity:N, urn:li:share:N, urn:li:ugcPost:N
+                          all collapse to the same key when the numeric part
+                          matches.
+      x:<status_id>     — X (Twitter) tweet status ID.
+
+    Fallback key (ALWAYS included):
+      c:<platform>:<author_lower>:<sha256hex16>
+      where the hash covers the first 200 chars of the lowercased,
+      whitespace-collapsed source excerpt.  This catches the LinkedIn
+      activity/share offset case (same post, slightly different numeric IDs)
+      and the no-permalink case.
+    """
+    keys: set[str] = set()
+    platform = str(entry.get("platform") or "").lower()
+    permalink = str(entry.get("source_permalink") or "")
+
+    # --- Primary key ---
+    if platform == "linkedin":
+        m = _LI_URN_RE.search(permalink)
+        if m:
+            keys.add(f"li:{m.group(1)}")
+    elif platform == "x":
+        m = _X_STATUS_RE.search(permalink)
+        if m:
+            keys.add(f"x:{m.group(1)}")
+
+    # --- Fallback key (always) ---
+    author_lower = str(entry.get("source_author") or "").strip().lower()
+    raw_excerpt = _excerpt(entry)
+    excerpt_norm = re.sub(r"\s+", " ", raw_excerpt.lower()).strip()[:200]
+    h = hashlib.sha256(excerpt_norm.encode()).hexdigest()[:16]
+    keys.add(f"c:{platform}:{author_lower}:{h}")
+
+    return keys
+
+
+def targets_match(a: dict, b: dict) -> bool:
+    """Return True iff entries `a` and `b` target the same social post."""
+    return bool(target_keys(a) & target_keys(b))
+
+
+def load_posted_keys(ledger_path: str | Path) -> set[str]:
+    """Union all `keys` arrays from the posted-target ledger into one set.
+
+    Missing file → empty set.  Malformed lines are silently skipped.
+    """
+    result: set[str] = set()
+    try:
+        with open(ledger_path, encoding="utf-8") as fh:
+            for line in fh:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    row = json.loads(line)
+                    for k in row.get("keys") or []:
+                        if k:
+                            result.add(str(k))
+                except (json.JSONDecodeError, TypeError):
+                    pass
+    except FileNotFoundError:
+        pass
+    return result
+
+
+def append_posted_ledger(
+    ledger_path: str | Path,
+    entry: dict,
+    permalink: str,
+    posted_at: float,
+) -> None:
+    """Append one row to the posted-target ledger.
+
+    Caller MUST hold queue_locked() so this append is serialized with all
+    other queue mutations.  Opens in "a" mode so existing rows are preserved.
+    """
+    row = {
+        "keys": sorted(target_keys(entry)),
+        "permalink": permalink,
+        "posted_at": posted_at,
+        "draft_id": entry.get("id"),
+        "platform": entry.get("platform"),
+    }
+    ledger_path = Path(ledger_path)
+    ledger_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(ledger_path, "a", encoding="utf-8") as fh:
+        fh.write(json.dumps(row, separators=(",", ":")) + "\n")
+
+
+def backfill_posted_ledger(cfg: dict) -> int:
+    """CLI --backfill-posted-ledger: populate ledger from queue posted rows.
+
+    Idempotent: re-running adds nothing (checked by draft_id).
+    """
+    ledger_path = cfg["posted_ledger"]
+    with queue_locked(cfg["queue_path"]):
+        entries = read_queue(cfg["queue_path"])
+        # Build set of draft_ids already in the ledger.
+        existing_ids: set[str] = set()
+        try:
+            with open(ledger_path, encoding="utf-8") as fh:
+                for line in fh:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        row = json.loads(line)
+                        did = row.get("draft_id")
+                        if did:
+                            existing_ids.add(str(did))
+                    except (json.JSONDecodeError, TypeError):
+                        pass
+        except FileNotFoundError:
+            pass
+
+        added = 0
+        already = 0
+        for e in entries:
+            if e.get("status") != "posted":
+                continue
+            eid = e.get("id")
+            if not eid:
+                continue
+            if str(eid) in existing_ids:
+                already += 1
+                continue
+            permalink = e.get("post_permalink") or e.get("source_permalink") or ""
+            posted_at = float(e.get("posted_at") or 0)
+            append_posted_ledger(ledger_path, e, permalink, posted_at)
+            added += 1
+
+    print(
+        f"backfilled {added} posted targets into ledger "
+        f"({already} already present)"
+    )
+    return 0
+
+
+def dedup_fresh_against_targets(cfg: dict, start_ts: float) -> int:
+    """Drop fresh queued drafts that target an already-known post.
+
+    "Already known" means the target's keys intersect any key in:
+      - all non-fresh queued entries (drafted in a prior run)
+      - all pending_review / approved / posted entries
+      - the persistent posted-target ledger
+
+    Fresh entries (freshly_drafted_at >= start_ts) are processed in queue
+    order: first one that survives is kept, later ones for the same target
+    are dropped.  This handles the @mudler_it 4-drafts case.
+
+    Non-fresh and non-queued rows are never dropped.
+    """
+    log = cfg["log_path"]
+    with queue_locked(cfg["queue_path"]):
+        entries = read_queue(cfg["queue_path"])
+
+        # Build blocking key set from all non-fresh rows.
+        blocking: set[str] = load_posted_keys(cfg["posted_ledger"])
+        for e in entries:
+            status = e.get("status", "")
+            is_queued = status == "queued"
+            is_fresh = float(e.get("freshly_drafted_at") or 0) >= start_ts
+            if status in {"posted", "approved", "pending_review"}:
+                blocking.update(target_keys(e))
+            elif is_queued and not is_fresh:
+                blocking.update(target_keys(e))
+
+        # Process fresh rows in queue order.
+        kept: list[dict] = []
+        dropped = 0
+        for e in entries:
+            is_queued = e.get("status") == "queued"
+            is_fresh = float(e.get("freshly_drafted_at") or 0) >= start_ts
+            if is_queued and is_fresh:
+                ek = target_keys(e)
+                if ek & blocking:
+                    dropped += 1
+                    _log(
+                        log,
+                        f"dedup_fresh: dropped id={e.get('id')} "
+                        f"(duplicate target keys={sorted(ek & blocking)})",
+                    )
+                    continue
+                # Keep this entry and add its keys to block subsequent dups.
+                blocking.update(ek)
+                kept.append(e)
+            else:
+                kept.append(e)
+
+        write_queue_atomic(kept, cfg["queue_path"])
+
+    _log(log, f"dedup_fresh: dropped {dropped} duplicate-target fresh draft(s)")
+    print(f"dedup_fresh: dropped {dropped} duplicate-target fresh draft(s)",
+          file=sys.stderr)
     return 0
 
 
@@ -1311,6 +1560,22 @@ def main() -> int:
 
     if "--regen-only" in args:
         return regen_only(cfg)
+
+    if "--backfill-posted-ledger" in args:
+        return backfill_posted_ledger(cfg)
+
+    dedup_ts_raw = _parse_value_flag(args, "--dedup-fresh-against-targets")
+    if dedup_ts_raw is not None:
+        try:
+            dedup_ts = float(dedup_ts_raw)
+        except ValueError:
+            print(
+                f"ERROR: --dedup-fresh-against-targets requires an epoch float, "
+                f"got {dedup_ts_raw!r}",
+                file=sys.stderr,
+            )
+            return 1
+        return dedup_fresh_against_targets(cfg, dedup_ts)
 
     purge_ts_raw = _parse_value_flag(args, "--purge-null-permalink-fresh")
     if purge_ts_raw is not None:

@@ -125,6 +125,13 @@ _purge_null_permalink_drafts() {
     "${PYTHON}" "${DRIP_PY}" --purge-null-permalink-fresh "${START_TS}" 2>/dev/null || true
 }
 
+_dedup_fresh_drafts() {
+    # FI-TARGET-DEDUP-LEDGER (Bundle 2, #93): deterministic post-pass that
+    # drops fresh drafts targeting a post already in the queue or ledger.
+    # Runs after _purge_null_permalink_drafts, before _count_fresh_drafts.
+    "${PYTHON}" "${DRIP_PY}" --dedup-fresh-against-targets "${START_TS}" 2>/dev/null || true
+}
+
 _count_fresh_drafts() {
     # Read queue.jsonl and count entries with status=queued AND
     # freshly_drafted_at >= START_TS AND a usable source_permalink (so
@@ -293,6 +300,9 @@ set -e
 # the count drives the decision tree. This is defense in depth — the
 # subagent prompt also tells it not to write null-permalink rows.
 _purge_null_permalink_drafts
+# FI-TARGET-DEDUP-LEDGER (Bundle 2, #93): drop fresh drafts that
+# duplicate a target already in the queue or posted-target ledger.
+_dedup_fresh_drafts
 FRESH_COUNT=$(_count_fresh_drafts)
 END_TS=$(date +%s)
 LATENCY_MS=$(( (END_TS - START_TS) * 1000 ))
