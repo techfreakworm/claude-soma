@@ -561,6 +561,13 @@ step "13/17  Install Caddyfile (base only; site configs land via finalize-caddy.
 sudo install -d -m 755 /etc/caddy/conf.d
 sudo install -m 644 "${REPO_ROOT}/Caddyfile" /etc/caddy/Caddyfile
 
+# Defensive: ensure the conf.d import line is present even if the repo Caddyfile
+# template drifts in a future commit.  Idempotent — no-op if already present.
+if ! sudo grep -qF 'import /etc/caddy/conf.d/*.caddyfile' /etc/caddy/Caddyfile; then
+    echo 'import /etc/caddy/conf.d/*.caddyfile' | sudo tee -a /etc/caddy/Caddyfile >/dev/null
+    echo "  Added missing 'import /etc/caddy/conf.d/*.caddyfile' to /etc/caddy/Caddyfile"
+fi
+
 CADDY_OK=0
 if sudo caddy validate --config /etc/caddy/Caddyfile >/dev/null 2>&1; then
     if sudo systemctl reload caddy.service >/dev/null 2>&1; then

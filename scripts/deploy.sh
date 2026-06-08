@@ -43,6 +43,11 @@ fi
 .venv/bin/pip install -e ".[dev]"
 chmod +x scripts/*.sh
 
+# Sync any changed systemd unit files from the repo to /etc/systemd/system and
+# reload the daemon.  Timers auto-restart; services print RESTART REQUIRED
+# (except claude-soma-channel.service which is always operator-gated).
+bash $REMOTE/scripts/deploy-systemd.sh
+
 # Build the Next.js dashboard ON THE SERVER. rsync excludes .next, and
 # output: "standalone" does NOT copy .next/static or public/ next to
 # server.js, so build_frontend.sh does the build AND that copy. Without this
