@@ -29,6 +29,8 @@ Modes (via argv):
 """
 from __future__ import annotations
 
+import contextlib
+import fcntl
 import json
 import os
 import sys
@@ -38,6 +40,98 @@ import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+
+# ---------------------------------------------------------------------------
+# FI-QUEUE-DEDUP-LOCK helpers
+# ---------------------------------------------------------------------------
+
+_STATUS_PRECEDENCE: dict[str, int] = {
+    "posted": 6,
+    "failed": 5,
+    "declined": 4,
+    "approved": 3,
+    "pending_review": 2,
+    "queued": 1,
+}
+
+
+def _status_rank(entry: dict) -> int:
+    """Return the precedence rank for an entry's status. Unknown → 0."""
+    return _STATUS_PRECEDENCE.get(str(entry.get("status") or ""), 0)
+
+
+def _entry_latest_ts(entry: dict) -> float:
+    """Return the latest timestamp among all timestamped fields in the entry.
+    Used as a tiebreaker when two rows share the same status rank."""
+    candidates = [
+        entry.get("posted_at"),
+        entry.get("declined_at"),
+        entry.get("approved_at"),
+        entry.get("released_at"),
+        entry.get("queued_at"),
+    ]
+    valid = [float(v) for v in candidates if v is not None and v != ""]
+    return max(valid) if valid else 0.0
+
+
+def _dedup_entries(entries: list[dict]) -> list[dict]:
+    """Collapse duplicate id rows to one canonical row per id.
+
+    Selection rule (in priority order):
+      1. Highest _STATUS_PRECEDENCE rank wins.
+      2. Tie in rank → latest timestamp (max of all ts fields) wins.
+
+    Rows with no id or empty id pass through verbatim and are appended
+    after the de-duplicated id rows (legacy/malformed rows; never drop them).
+
+    Output order: first-seen id insertion order, then no-id rows.
+    """
+    # best[id] = the current winner entry for that id
+    best: dict[str, dict] = {}
+    no_id_rows: list[dict] = []
+
+    for entry in entries:
+        eid = entry.get("id")
+        if not eid:
+            no_id_rows.append(entry)
+            continue
+        eid = str(eid)
+        if eid not in best:
+            best[eid] = entry
+        else:
+            existing = best[eid]
+            existing_rank = _status_rank(existing)
+            new_rank = _status_rank(entry)
+            if new_rank > existing_rank:
+                best[eid] = entry
+            elif new_rank == existing_rank:
+                if _entry_latest_ts(entry) > _entry_latest_ts(existing):
+                    best[eid] = entry
+
+    return list(best.values()) + no_id_rows
+
+
+@contextlib.contextmanager
+def queue_locked(path: str | Path):
+    """Exclusive write-lock on <path>.lock (a sibling file, NOT queue.jsonl).
+
+    Using a separate lockfile is intentional: write_queue_atomic uses
+    os.replace(), which changes the inode at `path` on every write. A lock
+    on the queue file itself would become a lock on an unlinked (orphaned)
+    inode the moment a writer replaced the file, defeating the mutual
+    exclusion guarantee. The sibling .lock file is never replaced, so its
+    inode is stable and fcntl.LOCK_EX semantics hold correctly across all
+    concurrent writers.
+    """
+    lock_path = Path(path).parent / (Path(path).name + ".lock")
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(lock_path, "a") as lf:
+        fcntl.flock(lf, fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(lf, fcntl.LOCK_UN)
 
 
 def _read_secrets_var(name: str, secrets: str = "/etc/claude-soma/secrets.env") -> str:
@@ -148,6 +242,15 @@ def _log(log_path: str, msg: str) -> None:
 
 
 def read_queue(path: str | Path) -> list[dict]:
+    """Read and return all entries from the queue file.
+
+    Applies _dedup_entries so callers always see at most one row per id,
+    with terminal-status precedence applied. Readers do not need to hold
+    queue_locked() — os.replace() is atomic (POSIX), so a reader sees
+    either the complete old file or the complete new file, never a partial
+    write. Dedup-on-read makes readers robust to any historic duplicate rows
+    that existed before FI-QUEUE-DEDUP-LOCK was deployed.
+    """
     entries: list[dict] = []
     try:
         with open(path, encoding="utf-8") as fh:
@@ -164,7 +267,7 @@ def read_queue(path: str | Path) -> list[dict]:
                     )
     except FileNotFoundError:
         pass
-    return entries
+    return _dedup_entries(entries)
 
 
 def write_queue_atomic(entries: list[dict], path: str | Path) -> None:
@@ -644,16 +747,21 @@ def drip_hybrid(
         )
         return 0
 
-    now = time.time()
-    for entry in to_pop:
-        entry["status"] = "pending_review"
-        entry["released_at"] = now
-        _log(
-            log,
-            f"drip[hybrid]: popped id={entry['id']} platform={entry.get('platform')}",
-        )
-
-    write_queue_atomic(entries, cfg["queue_path"])
+    with queue_locked(cfg["queue_path"]):
+        entries = read_queue(cfg["queue_path"])
+        now = time.time()
+        pop_ids = {e["id"] for e in to_pop}
+        to_pop = []
+        for e in entries:
+            if e.get("id") in pop_ids and e.get("status") == "queued":
+                e["status"] = "pending_review"
+                e["released_at"] = now
+                to_pop.append(e)
+                _log(
+                    log,
+                    f"drip[hybrid]: popped id={e['id']} platform={e.get('platform')}",
+                )
+        write_queue_atomic(entries, cfg["queue_path"])
     _log(log, "drip[hybrid]: queue written atomically")
 
     try:
@@ -790,13 +898,18 @@ def drip(
             _emit_empty_dm(cfg, banner=banner, fallback_reason=fallback_reason)
         return 0
 
-    now = time.time()
-    for entry in to_pop:
-        entry["status"] = "pending_review"
-        entry["released_at"] = now
-        _log(log, f"drip: popped id={entry['id']} platform={entry.get('platform')}")
-
-    write_queue_atomic(entries, cfg["queue_path"])
+    with queue_locked(cfg["queue_path"]):
+        entries = read_queue(cfg["queue_path"])
+        now = time.time()
+        pop_ids = {e["id"] for e in to_pop}
+        to_pop = []
+        for e in entries:
+            if e.get("id") in pop_ids and e.get("status") == "queued":
+                e["status"] = "pending_review"
+                e["released_at"] = now
+                to_pop.append(e)
+                _log(log, f"drip: popped id={e['id']} platform={e.get('platform')}")
+        write_queue_atomic(entries, cfg["queue_path"])
     _log(log, "drip: queue written atomically")
 
     try:
@@ -887,21 +1000,22 @@ def approve_entries(
     ids: list[str] | None = None,
     all_pending: bool = False,
 ) -> int:
-    entries = read_queue(cfg["queue_path"])
     id_set = set(ids) if ids else set()
     now = time.time()
     approved_ids: list[str] = []
-    for e in entries:
-        if all_pending:
-            if e.get("status") == "pending_review":
+    with queue_locked(cfg["queue_path"]):
+        entries = read_queue(cfg["queue_path"])
+        for e in entries:
+            if all_pending:
+                if e.get("status") == "pending_review":
+                    e["status"] = "approved"
+                    e["approved_at"] = now
+                    approved_ids.append(e["id"])
+            elif e.get("id") in id_set and e.get("status") == "pending_review":
                 e["status"] = "approved"
                 e["approved_at"] = now
                 approved_ids.append(e["id"])
-        elif e.get("id") in id_set and e.get("status") == "pending_review":
-            e["status"] = "approved"
-            e["approved_at"] = now
-            approved_ids.append(e["id"])
-    write_queue_atomic(entries, cfg["queue_path"])
+        write_queue_atomic(entries, cfg["queue_path"])
     n = len(approved_ids)
     word = "entry" if n == 1 else "entries"
     summary = (
@@ -919,15 +1033,16 @@ def approve_entries(
 
 
 def mark_posted(cfg: dict, entry_id: str, permalink: str) -> int:
-    entries = read_queue(cfg["queue_path"])
     now = time.time()
-    for e in entries:
-        if e.get("id") == entry_id:
-            e["status"] = "posted"
-            e["post_permalink"] = permalink
-            e["posted_at"] = now
-            break
-    write_queue_atomic(entries, cfg["queue_path"])
+    with queue_locked(cfg["queue_path"]):
+        entries = read_queue(cfg["queue_path"])
+        for e in entries:
+            if e.get("id") == entry_id:
+                e["status"] = "posted"
+                e["post_permalink"] = permalink
+                e["posted_at"] = now
+                break
+        write_queue_atomic(entries, cfg["queue_path"])
     print(f"Marked posted: {entry_id} -> {permalink}")
     _log(cfg["log_path"], f"posted: id={entry_id} permalink={permalink}")
     try:
@@ -938,15 +1053,16 @@ def mark_posted(cfg: dict, entry_id: str, permalink: str) -> int:
 
 
 def mark_posted_error(cfg: dict, entry_id: str, error_msg: str) -> int:
-    entries = read_queue(cfg["queue_path"])
     now = time.time()
-    for e in entries:
-        if e.get("id") == entry_id:
-            e["status"] = "failed"
-            e["post_error"] = error_msg
-            e["posted_at"] = now
-            break
-    write_queue_atomic(entries, cfg["queue_path"])
+    with queue_locked(cfg["queue_path"]):
+        entries = read_queue(cfg["queue_path"])
+        for e in entries:
+            if e.get("id") == entry_id:
+                e["status"] = "failed"
+                e["post_error"] = error_msg
+                e["posted_at"] = now
+                break
+        write_queue_atomic(entries, cfg["queue_path"])
     print(f"Marked failed: {entry_id}: {error_msg}")
     _log(cfg["log_path"], f"failed: id={entry_id} error={error_msg}")
     try:
@@ -957,22 +1073,61 @@ def mark_posted_error(cfg: dict, entry_id: str, error_msg: str) -> int:
 
 
 def decline_entry(cfg: dict, entry_id: str, reason: str | None = None) -> int:
-    entries = read_queue(cfg["queue_path"])
     now = time.time()
-    for e in entries:
-        if e.get("id") == entry_id:
-            e["status"] = "declined"
-            e["declined_at"] = now
-            if reason:
-                e["decline_reason"] = reason
-            break
-    write_queue_atomic(entries, cfg["queue_path"])
+    with queue_locked(cfg["queue_path"]):
+        entries = read_queue(cfg["queue_path"])
+        for e in entries:
+            if e.get("id") == entry_id:
+                e["status"] = "declined"
+                e["declined_at"] = now
+                if reason:
+                    e["decline_reason"] = reason
+                break
+        write_queue_atomic(entries, cfg["queue_path"])
     print(f"Declined: {entry_id}")
     _log(cfg["log_path"], f"declined: id={entry_id}")
     try:
         regenerate_review_page(entries, cfg["review_page"], cfg["review_url"])
     except Exception as exc:
         print(f"WARNING: review page write failed: {exc}", file=sys.stderr)
+    return 0
+
+
+def purge_null_permalink_fresh(cfg: dict, start_ts: float) -> int:
+    """Purge fresh null-permalink drafts from the queue, under the write lock.
+
+    Removes entries where ALL three conditions hold:
+      - status == "queued"
+      - freshly_drafted_at >= start_ts  (i.e., produced in this dispatch run)
+      - source_permalink is None, empty, or not a non-empty string
+
+    Entries that are NOT freshly drafted (freshly_drafted_at < start_ts or
+    missing) are kept even if their permalink is null — those are old pool
+    drafts that the operator can manually fix. Only the current-run drafts
+    are purged because they were produced by a subagent that may have failed
+    to resolve the URL.
+    """
+    log = cfg["log_path"]
+    with queue_locked(cfg["queue_path"]):
+        entries = read_queue(cfg["queue_path"])
+        kept: list[dict] = []
+        dropped = 0
+        for e in entries:
+            if (
+                e.get("status") == "queued"
+                and float(e.get("freshly_drafted_at") or 0) >= start_ts
+                and not (
+                    isinstance(e.get("source_permalink"), str)
+                    and e["source_permalink"].strip()
+                )
+            ):
+                dropped += 1
+                _log(log, f"purge-null-permalink: dropped id={e.get('id')} (no permalink, fresh)")
+            else:
+                kept.append(e)
+        write_queue_atomic(kept, cfg["queue_path"])
+    _log(log, f"purge-null-permalink: done, dropped={dropped} kept={len(kept)}")
+    print(f"dispatcher: purged {dropped} null-permalink fresh draft(s)", file=sys.stderr)
     return 0
 
 
@@ -1076,16 +1231,35 @@ def drip_single(
             _log(log, f"WARNING: empty-hour DM failed: {exc}")
         return 0
 
-    entry = pool[0]
-    entry["status"] = "pending_review"
-    entry["released_at"] = time.time()
-    _log(
-        log,
-        f"drip[single:{platform}]: popped id={entry['id']} "
-        f"platform={entry.get('platform')}",
-    )
-    write_queue_atomic(entries, cfg["queue_path"])
-    _log(log, f"drip[single:{platform}]: queue written atomically")
+    with queue_locked(cfg["queue_path"]):
+        entries = read_queue(cfg["queue_path"])
+        pool = [e for e in entries if e.get("status") == "queued"
+                and e.get("platform") == platform]
+        if source == "fresh" and start_ts is not None:
+            pool = [
+                e for e in pool
+                if float(e.get("freshly_drafted_at") or 0) >= start_ts
+            ]
+            pool.sort(key=lambda e: e.get("freshly_drafted_at") or 0, reverse=True)
+        else:
+            pool.sort(key=lambda e: e.get("queued_at") or 0)
+        if not pool:
+            _log(log, f"drip[single:{platform}]: pool empty after re-read under lock (race); skipping pop")
+            entry = None
+        else:
+            entry = pool[0]
+            entry["status"] = "pending_review"
+            entry["released_at"] = time.time()
+            _log(
+                log,
+                f"drip[single:{platform}]: popped id={entry['id']} "
+                f"platform={entry.get('platform')}",
+            )
+            write_queue_atomic(entries, cfg["queue_path"])
+            _log(log, f"drip[single:{platform}]: queue written atomically")
+
+    if entry is None:
+        return 0
 
     try:
         regenerate_review_page(entries, cfg["review_page"], cfg["review_url"])
@@ -1137,6 +1311,19 @@ def main() -> int:
 
     if "--regen-only" in args:
         return regen_only(cfg)
+
+    purge_ts_raw = _parse_value_flag(args, "--purge-null-permalink-fresh")
+    if purge_ts_raw is not None:
+        try:
+            purge_ts = float(purge_ts_raw)
+        except ValueError:
+            print(
+                f"ERROR: --purge-null-permalink-fresh requires an epoch float, "
+                f"got {purge_ts_raw!r}",
+                file=sys.stderr,
+            )
+            return 1
+        return purge_null_permalink_fresh(cfg, purge_ts)
 
     if "--approve-all" in args:
         return approve_entries(cfg, all_pending=True)

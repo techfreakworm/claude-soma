@@ -1562,3 +1562,243 @@ def test_main_no_flag_is_legacy_drip(monkeypatch, tmp_path: Path) -> None:
     assert called_with == [((), {})], (
         "legacy invocation must hit drip() with no kwargs"
     )
+
+
+# ────────────────────────────────────────────────────────────────────────────
+# FI-QUEUE-DEDUP-LOCK — 8 new tests
+# ────────────────────────────────────────────────────────────────────────────
+
+
+def test_dedup_terminal_status_wins(tmp_path: Path) -> None:
+    """read_queue collapses 3 rows for the same id to 1 row; the highest-rank
+    status (posted=6) wins regardless of input order."""
+    q = tmp_path / "queue.jsonl"
+    entries = [
+        _entry("eng-x-abc", "x", status="pending_review", queued_at=100.0),
+        _entry("eng-x-abc", "x", status="queued",         queued_at=100.0),
+        _entry("eng-x-abc", "x", status="posted",         queued_at=100.0,
+               posted_at=200.0),
+    ]
+    # Write them in reverse-rank order so we're sure the code doesn't rely on ordering.
+    import random
+    shuffled = list(entries)
+    random.shuffle(shuffled)
+    _write_queue(q, shuffled)
+
+    result = _mod.read_queue(str(q))
+    assert len(result) == 1, f"expected 1 deduped row, got {len(result)}"
+    assert result[0]["status"] == "posted"
+
+
+def test_dedup_tiebreaker_by_latest_timestamp(tmp_path: Path) -> None:
+    """When two rows share the same id AND the same status rank, the one with
+    the later timestamp wins."""
+    q = tmp_path / "queue.jsonl"
+    entries = [
+        _entry("eng-li-xyz", "linkedin", status="approved",
+               queued_at=50.0, approved_at=100.0),
+        _entry("eng-li-xyz", "linkedin", status="approved",
+               queued_at=50.0, approved_at=200.0),
+    ]
+    _write_queue(q, entries)
+
+    result = _mod.read_queue(str(q))
+    assert len(result) == 1
+    assert result[0]["approved_at"] == 200.0, "row with approved_at=200 must win"
+
+
+def test_dedup_preserves_no_id_rows_verbatim(tmp_path: Path) -> None:
+    """A row with no 'id' key (legacy/malformed) is not dropped by _dedup_entries."""
+    q = tmp_path / "queue.jsonl"
+    normal_entry = _entry("eng-x-good", "x", status="queued", queued_at=100.0)
+    malformed = {
+        "platform": "x",
+        "status": "queued",
+        "draft_text": "no id field at all",
+    }
+    _write_queue(q, [normal_entry, malformed])
+
+    result = _mod.read_queue(str(q))
+    ids = [e.get("id") for e in result]
+    assert "eng-x-good" in ids, "normal row must be present"
+    no_id = [e for e in result if not e.get("id")]
+    assert len(no_id) == 1, "the no-id row must pass through verbatim"
+    assert no_id[0]["draft_text"] == "no id field at all"
+
+
+def test_decline_sticks_across_duplicates(tmp_path: Path) -> None:
+    """User-reported bug: decline_entry only flipped one row when the same id
+    had TWO entries with different statuses. After the fix, dedup-on-read inside
+    the lock means only one row exists when the mutation runs, so the decline
+    always sticks."""
+    cfg = _cfg(tmp_path)
+    Path(cfg["queue_path"]).parent.mkdir(parents=True, exist_ok=True)
+    # Manually write two rows for the same id (simulating the live 8-dupe state)
+    with open(cfg["queue_path"], "w") as fh:
+        fh.write(json.dumps(_entry("eng-x-abc", "x", status="queued",
+                                   queued_at=100.0)) + "\n")
+        fh.write(json.dumps(_entry("eng-x-abc", "x", status="pending_review",
+                                   queued_at=100.0)) + "\n")
+
+    result = _mod.decline_entry(cfg, "eng-x-abc")
+    assert result == 0
+
+    after = _mod.read_queue(cfg["queue_path"])
+    assert len(after) == 1, f"expected 1 row after dedup+decline, got {len(after)}"
+    assert after[0]["status"] == "declined", (
+        "decline must stick even when the queue had duplicate rows for the same id"
+    )
+
+
+def test_mark_posted_idempotent(tmp_path: Path) -> None:
+    """mark_posted called twice on the same id does not grow the queue.
+    The second call is a no-op on status (already 'posted') but must not
+    append a new row."""
+    cfg = _cfg(tmp_path)
+    entries = [_entry("eng-x-dup", "x", status="approved", queued_at=100.0)]
+    _write_queue(cfg["queue_path"], entries)
+
+    permalink = "https://x.com/user/status/111"
+    _mod.mark_posted(cfg, "eng-x-dup", permalink)
+    _mod.mark_posted(cfg, "eng-x-dup", permalink)
+
+    after = _mod.read_queue(cfg["queue_path"])
+    assert len(after) == 1, f"expected 1 row after two mark_posted calls, got {len(after)}"
+    assert after[0]["status"] == "posted"
+
+
+def test_concurrent_writers_no_row_loss(tmp_path: Path) -> None:
+    """Two subprocesses each call mark_posted on N distinct ids concurrently.
+    The final queue must have all 2N entries and no torn writes."""
+    import threading
+
+    N = 8
+    q = tmp_path / "queue.jsonl"
+    # Pre-create 2N entries: N for worker A (ids a0..a7), N for worker B (b0..b7)
+    entries = (
+        [_entry(f"a{i}", "x", status="approved", queued_at=float(i)) for i in range(N)]
+        + [_entry(f"b{i}", "x", status="approved", queued_at=float(i)) for i in range(N)]
+    )
+    _write_queue(q, entries)
+
+    cfg_a = _cfg(tmp_path)
+    cfg_b = _cfg(tmp_path)
+    errors: list[Exception] = []
+
+    def worker(cfg: dict, ids: list[str]) -> None:
+        try:
+            for eid in ids:
+                _mod.mark_posted(cfg, eid, f"https://x.com/status/{eid}")
+        except Exception as exc:
+            errors.append(exc)
+
+    t_a = threading.Thread(target=worker, args=(cfg_a, [f"a{i}" for i in range(N)]))
+    t_b = threading.Thread(target=worker, args=(cfg_b, [f"b{i}" for i in range(N)]))
+    t_a.start()
+    t_b.start()
+    t_a.join(timeout=30)
+    t_b.join(timeout=30)
+
+    assert not t_a.is_alive(), "worker A timed out"
+    assert not t_b.is_alive(), "worker B timed out"
+    assert not errors, f"worker exceptions: {errors}"
+
+    final = _mod.read_queue(str(q))
+    assert len(final) == 2 * N, (
+        f"expected {2*N} rows after concurrent writes, got {len(final)}"
+    )
+    statuses = {e["id"]: e["status"] for e in final}
+    for i in range(N):
+        assert statuses.get(f"a{i}") == "posted", f"a{i} not posted"
+        assert statuses.get(f"b{i}") == "posted", f"b{i} not posted"
+
+
+def test_lock_is_separate_file(tmp_path: Path) -> None:
+    """The lockfile path is <queue>.lock (a sibling file), not queue.jsonl itself.
+    This is verified by:
+      (a) naming convention: <queue>.lock lives alongside queue.jsonl
+      (b) using queue_locked() creates the .lock sibling but does NOT modify
+          the queue file inode
+      (c) cross-process blocking: a child process that tries to acquire the lock
+          while the parent holds it must be blocked until the parent releases.
+
+    Note: fcntl locks are per-process on Linux, not per-thread within the same
+    process. Cross-thread tests would pass trivially. We use subprocess.Popen
+    to test actual cross-process mutual exclusion.
+    """
+    q = tmp_path / "queue.jsonl"
+    q.touch()
+    lock_path = tmp_path / "queue.jsonl.lock"
+
+    # (a) naming convention
+    assert str(lock_path) == str(Path(str(q)).parent / (Path(str(q)).name + ".lock"))
+    assert str(lock_path) != str(q), "lockfile must be a sibling, not the queue itself"
+
+    # (b) queue_locked() creates the .lock file and does not touch queue inode
+    q_inode_before = q.stat().st_ino
+    with _mod.queue_locked(q):
+        assert lock_path.exists(), "lock file must be created by queue_locked()"
+    q_inode_after = q.stat().st_ino
+    assert q_inode_before == q_inode_after, (
+        "queue_locked() must not change the queue file's inode"
+    )
+
+    # (c) cross-process mutual exclusion via a short child process that tries
+    # to acquire the lock while we hold it and reports back via its exit code.
+    helper_script = tmp_path / "try_lock.py"
+    helper_script.write_text(
+        f"import sys, fcntl, pathlib\n"
+        f"p = pathlib.Path({str(lock_path)!r})\n"
+        f"p.parent.mkdir(parents=True, exist_ok=True)\n"
+        f"with open(p, 'a') as f:\n"
+        f"    try:\n"
+        f"        fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)\n"
+        f"        sys.exit(0)  # acquired: lock was NOT held\n"
+        f"    except BlockingIOError:\n"
+        f"        sys.exit(42)  # blocked: lock IS held — this is the expected path\n"
+    )
+    with _mod.queue_locked(q):
+        child = subprocess.run(
+            [sys.executable, str(helper_script)],
+            timeout=5,
+        )
+        assert child.returncode == 42, (
+            f"child process must see the lock as held (exit 42), got {child.returncode}"
+        )
+
+
+def test_purge_null_permalink_fresh_cli(tmp_path: Path) -> None:
+    """--purge-null-permalink-fresh <start_ts>:
+      (a) fresh row with null permalink → dropped
+      (b) fresh row with good permalink → kept
+      (c) old row (freshly_drafted_at < start_ts) with null permalink → kept
+    """
+    start_ts = 1000.0
+    cfg = _cfg(tmp_path)
+    Path(cfg["queue_path"]).parent.mkdir(parents=True, exist_ok=True)
+
+    # (a) fresh, no permalink — should be purged
+    fresh_null = _entry("eng-x-purge", "x", status="queued", queued_at=900.0,
+                        freshly_drafted_at=1100.0)
+    fresh_null["source_permalink"] = None
+
+    # (b) fresh, good permalink — must be kept
+    fresh_good = _entry("eng-x-keep", "x", status="queued", queued_at=900.0,
+                        freshly_drafted_at=1100.0)
+    fresh_good["source_permalink"] = "https://x.com/user/status/42"
+
+    # (c) old draft, no permalink — must be kept (not in this run)
+    old_null = _entry("eng-x-old-null", "x", status="queued", queued_at=500.0)
+    old_null["source_permalink"] = None
+    old_null["freshly_drafted_at"] = 800.0  # before start_ts
+
+    _write_queue(cfg["queue_path"], [fresh_null, fresh_good, old_null])
+
+    result = _mod.purge_null_permalink_fresh(cfg, start_ts)
+    assert result == 0
+
+    after = _mod.read_queue(cfg["queue_path"])
+    ids = {e["id"] for e in after}
+    assert "eng-x-purge" not in ids, "fresh null-permalink row must be purged"
+    assert "eng-x-keep" in ids, "fresh row with good permalink must be kept"
+    assert "eng-x-old-null" in ids, "old null-permalink row must be kept (not fresh)"
