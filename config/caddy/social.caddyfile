@@ -1,0 +1,17 @@
+# Caddy vhost for social.mayankgupta.in
+# Install to /etc/caddy/conf.d/social.caddyfile on deploy.
+# The main repo Caddyfile already contains: import /etc/caddy/conf.d/*.caddyfile
+#
+# Public paths only — all other routes return 404 (never proxied to localhost:9200).
+# Internal routes (/api/tokens/status, /api/tokens/refresh, etc.) are reachable
+# only on 127.0.0.1:9200 and are not exposed here.
+
+social.mayankgupta.in {
+    @public path /oauth/* /health /api/webhooks/*
+    handle @public {
+        reverse_proxy 127.0.0.1:9200
+    }
+    handle {
+        respond 404
+    }
+}

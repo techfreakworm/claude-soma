@@ -40,6 +40,8 @@ secrets.env
 *.key
 *.token
 config.local.*
+meta-tokens.env
+social.env
 .claude/settings.local.json
 .claude.local.md
 

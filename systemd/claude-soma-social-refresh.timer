@@ -1,0 +1,10 @@
+[Unit]
+Description=Daily Meta token refresh sweep (IG + Threads; 03:30 UTC)
+
+[Timer]
+OnCalendar=*-*-* 03:30:00
+Persistent=true
+Unit=claude-soma-social-refresh.service
+
+[Install]
+WantedBy=timers.target

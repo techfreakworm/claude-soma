@@ -1,0 +1,25 @@
+[Unit]
+Description=Claude Soma social (Meta Graph API) service
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/opt/claude-soma
+EnvironmentFile=/etc/claude-soma/secrets.env
+Environment=PATH=/opt/claude-soma/.venv/bin:/usr/local/bin:/usr/bin:/bin
+Environment=HERMES_SOCIAL_DB=/var/lib/claude-soma/social.sqlite
+Environment=HERMES_SOCIAL_PORT=9200
+ExecStartPre=/usr/bin/install -d -o ubuntu -g ubuntu /var/log/claude-soma
+ExecStart=/opt/claude-soma/.venv/bin/uvicorn claude_soma.social.main:app \
+    --host 127.0.0.1 --port 9200 --no-server-header
+UMask=0077
+Restart=on-failure
+RestartSec=5
+StandardOutput=append:/var/log/claude-soma/social.log
+StandardError=append:/var/log/claude-soma/social.err.log
+
+[Install]
+WantedBy=multi-user.target
