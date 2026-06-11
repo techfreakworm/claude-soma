@@ -8,6 +8,7 @@ Type=simple
 User=ubuntu
 Group=ubuntu
 WorkingDirectory=/var/lib/claude-soma/relay
+ExecStartPre=+/opt/claude-soma/scripts/markserv-apply-template.sh
 ExecStart=/opt/claude-soma/scripts/markserv-launch.sh
 Restart=always
 RestartSec=5

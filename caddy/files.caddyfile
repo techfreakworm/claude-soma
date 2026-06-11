@@ -11,14 +11,42 @@
 # (file_server backend, no per-type routing) — reconcile before any re-render.
 
 __FILES_DOMAIN__ {
-	basicauth /* {
+	# basicauth protects everything EXCEPT the public OAuth callback page.
+	# /oauth/* is intentionally unauthenticated: a Meta OAuth implicit-flow
+	# redirect lands there with the access_token in the URL fragment.
+	@protected not path /oauth/*
+	basicauth @protected {
 		soma __BCRYPT_HASH__
 	}
 	encode gzip zstd
 
+	# Public, unauthenticated OAuth callback page (static HTML).
+	handle /oauth/* {
+		file_server {
+			root /var/lib/claude-soma/relay
+		}
+	}
+
 	# Binary office/zip/pdf deliverables: serve RAW via file_server + force download. Bypasses markserv.
 	@binary path *.pptx *.ppt *.pptm *.potx *.odp *.otp *.ods *.odt *.docx *.doc *.xlsx *.xls *.key *.pdf *.zip
 	handle @binary {
+		header Content-Disposition attachment
+		file_server {
+			root /var/lib/claude-soma/relay
+		}
+	}
+
+	# Raw markdown download: *.md?dl=1 -> raw bytes, force download (bypasses markserv render).
+	# Backs the "Download .md" button injected into markserv's rendered page.
+	# CAVEAT: file_server runs as the `caddy` user. A relay .md that is a SYMLINK into a
+	# tree caddy can't read (e.g. /tmp/social-engagement/*) will 404 on ?dl=1 even though
+	# the rendered view works (markserv reads it as the ubuntu user). Real files under
+	# /var/lib/claude-soma/relay download fine.
+	@mdraw {
+		path *.md
+		query dl=1
+	}
+	handle @mdraw {
 		header Content-Disposition attachment
 		file_server {
 			root /var/lib/claude-soma/relay
