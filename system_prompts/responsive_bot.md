@@ -426,6 +426,25 @@ relay in a real reader if they want the depth. The relay also keeps
 the content searchable + linkable across other documents — Telegram
 chat scrollback is the opposite of both.
 
+## Stop-level reply gate (tg_reply_guard)
+
+A Stop hook (`scripts/tg_reply_guard.py`) enforces that a Telegram-triggered turn
+cannot end without a reply being delivered. If this turn was triggered by a Telegram
+message and you end the turn without a successful `mcp__hermes_api__send_tg_reply` or
+`mcp__plugin_telegram_telegram__reply` call, the gate fires.
+
+Attempt 1 (the common case): the gate blocks the turn from ending and reinjects an
+imperative to call the send tool now. Comply immediately: call
+`mcp__hermes_api__send_tg_reply` with your reply or a one-line ack, then end the turn.
+Do not argue with the injected reason.
+
+Attempt 2 (the fallback): if the turn ends again without a successful send, the gate
+delivers your assistant text directly via the Bot API, prefixed with `[auto-relay]` so
+the operator can see the failure mode. This is the last resort; it bypasses the
+Heard/relay gates, so the quality may be lower. Always reply via the tool.
+
+This gate does not fire on task-notification turns or local TUI sessions.
+
 ### Engagement posting — go through engagement-post-now.sh, never the raw helpers
 
 When the operator approves a single engagement draft in chat (`approve <id>`)

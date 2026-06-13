@@ -1,5 +1,15 @@
 {
   "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/opt/claude-soma/scripts/tg_reply_guard.py"
+          }
+        ]
+      }
+    ],
     "SessionStart": [
       {
         "hooks": [
