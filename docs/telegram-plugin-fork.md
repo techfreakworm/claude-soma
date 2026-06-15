@@ -14,10 +14,11 @@ To fix it in a way that stays upstream-mergeable, we **fork-and-own**:
 - Fork: `https://github.com/techfreakworm/claude-plugins-official` (a real fork of
   `anthropics/claude-plugins-official`).
 - The fork is vendored into this repo as a **git submodule** at
-  `external/claude-plugins-official`, pinned to the exact commit `0df2472` (which
+  `external/claude-plugins-official`, pinned to the exact commit `a822c13` (which
   lives on the fork's `fix/reply-to-context` branch). `.gitmodules` records no
   `branch=`, so `submodule update` checks out that fixed SHA, NOT the moving
-  branch head — a future force-push to the branch cannot silently drift deploys.
+  branch head — a force-push to the branch cannot silently drift deploys (a
+  redeploy moves only when the pinned SHA in this repo is bumped).
 - The channel loads the telegram plugin **from the submodule** (not from the
   upstream GitHub marketplace), so our patch is what runs.
 
@@ -32,11 +33,28 @@ One isolated, cherry-pickable commit on the fork branch `fix/reply-to-context`
   the existing `safeName`, because it lands inside the `<channel>` notification)
   and capped at 2000 chars. A quoted message that carried media but no text is
   noted as `[photo]`/`[document]`/etc.
-- `handleInbound` prepends that block to the channel `content` and adds
-  `meta.reply_to_message_id` for threading.
+- `handleInbound` prepends that block to the channel `content`. The quoted
+  context travels in `content` ONLY — there is intentionally **no** extra
+  notification meta key (see the gotcha below).
 
 The patch is fail-safe: no `reply_to_message` -> behaviour is byte-for-byte the
-old behaviour (`content = text`, no extra meta).
+old behaviour (`content = text`).
+
+## Gotcha: never add a `reply_to_message_id` (or other reply) meta key
+
+The first cut (`0df2472`, deployed 2026-06-15) also set
+`meta.reply_to_message_id` for threading. That **silently dropped every
+quote-reply**: Claude Code's channel layer discards an inbound
+`notifications/claude/channel` notification that carries `reply_to_message_id`
+(it treats the reply as a continuation it must correlate to a tracked outbound
+message and drops it on a miss). Replies to the bot's own messages vanished
+entirely; plain messages were unaffected. Confirmed via the CC-side
+received-notifications debug log
+(`~/.cache/claude-cli-nodejs/-opt-claude-soma/mcp-logs-plugin-telegram-telegram/`):
+no reply-formatted notification ever appeared there. The fix (`a822c13`) carries
+the quoted context in `content` only and adds no meta key — so a reply is
+ingested exactly like any normal message. **Do not re-introduce a reply meta
+key** without first proving CC accepts it on a live channel.
 
 ## Load-path wiring (how the channel resolves our copy)
 
@@ -87,18 +105,27 @@ sudo systemctl restart claude-soma-channel.service
 This is **operator-gated** — the bot cannot restart itself. On restart the plugin
 runs `bun install` from the submodule then `bun server.ts` (our patched copy).
 
-## Verify
+## Verify (REQUIRED — this is a supervised redeploy; test before trusting)
 
-Static (the on-disk plugin is the patched one):
+Static (the on-disk plugin is the patched, meta-less copy):
 
 ```bash
-grep -c reply_to_message_id /opt/claude-soma/external/claude-plugins-official/external_plugins/telegram/server.ts
-# expect: >= 1
+grep -c 'in reply to' /opt/claude-soma/external/claude-plugins-official/external_plugins/telegram/server.ts   # expect >= 1
+grep -c 'reply_to_message_id' /opt/claude-soma/external/claude-plugins-official/external_plugins/telegram/server.ts  # expect 1 (comment only, never in the emitted meta)
 ```
 
-Live (the running channel actually relays the quote): from Telegram, reply/quote
-an earlier message and send something new. The bot should now see the quoted text
-(it can reference what you replied to). Before the fix it only saw the new text.
+Live — do this IMMEDIATELY after the restart, with the rollback below armed:
+quote-reply to one of the **bot's own** messages and send new text. Then confirm
+the channel actually ingested it (objective check — a reply that was dropped will
+NOT appear here):
+
+```bash
+ls -t ~/.cache/claude-cli-nodejs/-opt-claude-soma/mcp-logs-plugin-telegram-telegram/*.jsonl | head -1 \
+  | xargs grep -a 'in reply to' | tail -3   # expect your quoted reply, proving CC accepted it
+```
+
+If that grep stays empty after a quote-reply, the reply is still being dropped —
+roll back immediately (below).
 
 ## Rollback
 
