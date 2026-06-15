@@ -59,6 +59,15 @@ CREATE TABLE IF NOT EXISTS team_members (
 );
 
 CREATE INDEX IF NOT EXISTS idx_team_members_lead ON team_members(lead_name);
+
+CREATE TABLE IF NOT EXISTS lead_watchdog (
+    name                 TEXT PRIMARY KEY,
+    consecutive_failures INTEGER NOT NULL DEFAULT 0,
+    last_attempt_ts      REAL,
+    last_method          TEXT,
+    last_outcome         TEXT,
+    gaveup_notified      INTEGER NOT NULL DEFAULT 0
+);
 """
 
 
@@ -144,6 +153,27 @@ class Registry:
         with self._lock:
             rows = self._conn.execute(
                 "SELECT * FROM projects ORDER BY last_activity DESC"
+            ).fetchall()
+        return [dict(r) for r in rows]
+
+    def list_revivable(self) -> list[dict[str, Any]]:
+        """Return rows whose lead is a candidate for watchdog revival.
+
+        status IN ('active','dead') only -- 'killed' was an intentional stop and
+        must NEVER be revived. The registry status is not trustworthy on its own
+        (a live lead can be wrongly marked 'dead' after a transient reconcile),
+        so the watchdog cross-checks live tmux for every row this returns; this
+        method merely filters out the never-touch 'killed' rows.
+        """
+        with self._lock:
+            rows = self._conn.execute(
+                """
+                SELECT name, cwd, permission_mode, brief, status, session_uuid,
+                       last_activity
+                FROM projects
+                WHERE status IN ('active', 'dead')
+                ORDER BY last_activity DESC
+                """
             ).fetchall()
         return [dict(r) for r in rows]
 
@@ -364,6 +394,86 @@ class Registry:
                 (lead_name,),
             ).fetchall()
         return [dict(r) for r in rows]
+
+    # --- lead_watchdog (revival backoff state) ---
+
+    def get_watchdog_state(self, name: str) -> dict[str, Any] | None:
+        """Return the watchdog backoff row for a lead, or None if never recorded."""
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT * FROM lead_watchdog WHERE name = ?", (name,)
+            ).fetchone()
+        return dict(row) if row else None
+
+    def record_revive_attempt(
+        self,
+        name: str,
+        *,
+        method: str,
+        outcome: str,
+        success: bool,
+    ) -> None:
+        """Record the result of a revive attempt, updating backoff state.
+
+        On success consecutive_failures resets to 0 and gaveup_notified clears,
+        so a once-given-up lead that later comes back is eligible for a fresh
+        give-up DM if it dies again. On failure consecutive_failures increments.
+        last_attempt_ts / last_method / last_outcome are always refreshed.
+        """
+        now = time.time()
+        with self._lock:
+            if success:
+                self._conn.execute(
+                    """
+                    INSERT INTO lead_watchdog(
+                        name, consecutive_failures, last_attempt_ts,
+                        last_method, last_outcome, gaveup_notified)
+                    VALUES(?, 0, ?, ?, ?, 0)
+                    ON CONFLICT(name) DO UPDATE SET
+                        consecutive_failures=0,
+                        last_attempt_ts=excluded.last_attempt_ts,
+                        last_method=excluded.last_method,
+                        last_outcome=excluded.last_outcome,
+                        gaveup_notified=0
+                    """,
+                    (name, now, method, outcome),
+                )
+            else:
+                self._conn.execute(
+                    """
+                    INSERT INTO lead_watchdog(
+                        name, consecutive_failures, last_attempt_ts,
+                        last_method, last_outcome, gaveup_notified)
+                    VALUES(?, 1, ?, ?, ?, 0)
+                    ON CONFLICT(name) DO UPDATE SET
+                        consecutive_failures=lead_watchdog.consecutive_failures + 1,
+                        last_attempt_ts=excluded.last_attempt_ts,
+                        last_method=excluded.last_method,
+                        last_outcome=excluded.last_outcome
+                    """,
+                    (name, now, method, outcome),
+                )
+
+    def mark_gaveup_notified(self, name: str) -> None:
+        """Mark that the one-time give-up DM has been sent for this lead."""
+        now = time.time()
+        with self._lock:
+            self._conn.execute(
+                """
+                INSERT INTO lead_watchdog(
+                    name, consecutive_failures, last_attempt_ts, gaveup_notified)
+                VALUES(?, 0, ?, 1)
+                ON CONFLICT(name) DO UPDATE SET gaveup_notified=1
+                """,
+                (name, now),
+            )
+
+    def reset_watchdog(self, name: str) -> None:
+        """Clear all backoff state for a lead (failures, give-up flag)."""
+        with self._lock:
+            self._conn.execute(
+                "DELETE FROM lead_watchdog WHERE name = ?", (name,)
+            )
 
     def close(self) -> None:
         with self._lock:

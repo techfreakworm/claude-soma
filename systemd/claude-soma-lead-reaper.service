@@ -1,0 +1,24 @@
+# systemd/claude-soma-lead-reaper.service
+#
+# Lead watchdog/reaper: detects project leads whose claude process has died
+# silently (the transient systemd unit is Type=oneshot+RemainAfterExit=yes, so
+# it reads "active (exited)" forever and never notices the death) and revives
+# them. Driven by claude-soma-lead-reaper.timer every few minutes.
+#
+# Runs as ubuntu (same identity as claude-soma-channel.service) so it inherits
+# the same `sudo -n systemd-run` / `systemctl stop` rights the spawner needs to
+# tear down a stale unit and spin a fresh one. The leading `-` on
+# EnvironmentFile keeps the unit startable on a box without the secrets file
+# (CI/dev); without it the watchdog just can't send give-up/revive DMs.
+[Unit]
+Description=Claude Soma lead watchdog (revive silently-dead project leads)
+
+[Service]
+Type=oneshot
+User=ubuntu
+Group=ubuntu
+EnvironmentFile=-/etc/claude-soma/secrets.env
+Environment=HERMES_ORCH_DB=/opt/claude-soma/registry.sqlite
+Environment=PATH=/home/ubuntu/.local/bin:/opt/claude-soma/.venv/bin:/usr/local/bin:/usr/bin:/bin
+WorkingDirectory=/opt/claude-soma
+ExecStart=/opt/claude-soma/.venv/bin/python -m claude_soma.mcp_servers.project_orchestrator.watchdog

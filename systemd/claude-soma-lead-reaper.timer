@@ -1,0 +1,17 @@
+# systemd/claude-soma-lead-reaper.timer
+#
+# Fires the lead watchdog shortly after boot and then every few minutes. A dead
+# lead is invisible to systemd, so this external poll is the only thing that
+# notices and revives it. Persistent=true so a missed run (box asleep/down)
+# fires once on the next boot rather than being silently skipped.
+[Unit]
+Description=Run the Claude Soma lead watchdog every 3 minutes
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=3min
+Persistent=true
+Unit=claude-soma-lead-reaper.service
+
+[Install]
+WantedBy=timers.target
