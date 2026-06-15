@@ -404,10 +404,13 @@ After the initial bootstrap, the canonical deploy sequence for pulling new code 
 
 ```bash
 git -C /opt/claude-soma pull --ff-only
+git -C /opt/claude-soma submodule update --init --recursive   # vendored telegram fork (external/claude-plugins-official)
 sudo bash /opt/claude-soma/scripts/deploy-systemd.sh
 bash /opt/claude-soma/scripts/build_frontend.sh
 sudo systemctl restart claude-soma-frontend.service
 ```
+
+The `submodule update` line keeps the vendored Telegram plugin fork (`external/claude-plugins-official`) checked out at the commit pinned by the repo. It is a no-op when nothing changed; it is REQUIRED whenever the submodule pointer moves (e.g. a new reply-to/plugin patch). Activating a moved telegram submodule additionally needs an operator-gated `sudo systemctl restart claude-soma-channel.service` — see [docs/telegram-plugin-fork.md](docs/telegram-plugin-fork.md).
 
 `deploy-systemd.sh` syncs any changed `systemd/*.{service,timer}` files from the repo to `/etc/systemd/system` and runs `daemon-reload`. Changed timers are auto-restarted; changed `.service` files print `RESTART REQUIRED` so the operator can restart them at a safe moment. `claude-soma-channel.service` is always operator-gated and will never be auto-restarted by the script (restarting the bot from a script it invoked would kill the calling process). Run `--dry-run` to preview changes without applying them.
 

@@ -28,9 +28,15 @@
 # starting fresh; the channel owns that cwd exclusively, so --continue
 # deterministically picks the bot's own session. Covers BOTH the systemd start and
 # the healthcheck in-pane respawn (both go through this wrapper).
+#
+# The telegram plugin is vendored as a git submodule (external/claude-plugins-official,
+# our fork of anthropics/claude-plugins-official) and exposed through claude-soma's own
+# marketplace (.claude-plugin/marketplace.json) loaded via --plugin-dir below -- hence
+# `telegram@claude-soma`, NOT `@claude-plugins-official`. The fork carries our
+# reply_to-context patch (quoted-message relay). See docs/telegram-plugin-fork.md.
 
 exec /home/ubuntu/.local/bin/claude \
-    --channels plugin:telegram@claude-plugins-official \
+    --channels plugin:telegram@claude-soma \
     --continue \
     --settings /opt/claude-soma/config/claude/channel-settings.json \
     --plugin-dir /opt/claude-soma \

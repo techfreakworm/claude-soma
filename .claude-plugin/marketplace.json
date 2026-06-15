@@ -11,6 +11,7 @@
   "homepage": "https://claude.mayankgupta.in",
   "license": "MIT",
   "plugins": [
-    { "name": "claude-soma", "path": "." }
+    { "name": "claude-soma", "path": "." },
+    { "name": "telegram", "path": "external/claude-plugins-official/external_plugins/telegram" }
   ]
 }

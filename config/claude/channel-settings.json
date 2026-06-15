@@ -1,5 +1,5 @@
 {
   "enabledPlugins": {
-    "telegram@claude-plugins-official": true
+    "telegram@claude-soma": true
   }
 }
