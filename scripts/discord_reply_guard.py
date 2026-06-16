@@ -28,7 +28,7 @@ FLAG_TTL_SECONDS = 600
 TAIL_SIZE = 2 * 1024 * 1024  # 2 MB
 
 SEND_TOOL_RE = re.compile(r"^mcp__plugin_discord_discord__reply$")
-CHANNEL_TAG_RE = re.compile(r'<channel\s[^>]*source="discord')
+CHANNEL_TAG_RE = re.compile(r'<channel\s[^>]*source="plugin:discord:discord')
 CHAT_ID_RE = re.compile(r'chat_id="([^"]+)"')
 MESSAGE_ID_RE = re.compile(r'message_id="([^"]+)"')
 
