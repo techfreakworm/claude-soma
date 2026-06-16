@@ -372,6 +372,42 @@ The wrapper is referenced in the project-lead spawn path (`src/claude_soma/mcp_s
 
 Tests: `tests/test_claude_safe_wrapper.py`.
 
+### Channel reply-guard Stop hooks
+
+Two `Stop` hooks guarantee a channel-triggered turn can never end in
+operator-facing silence (the bot composing a reply as plain assistant text that
+never reaches the chat). They are registered in `hooks/hooks.json` under `"Stop"`:
+
+- `scripts/tg_reply_guard.py` — Telegram guard. If the turn was triggered by a
+  `<channel ... source="plugin:telegram">` message and no successful
+  `send_tg_reply` / `telegram__reply` happened, it blocks the stop once and
+  reinjects an imperative to send the reply. Modes via `SOMA_TG_REPLY_GUARD_MODE`:
+  `log` (default — detect-only telemetry, never blocks), `block` (block/reinject
+  on attempt 1, allow on attempt 2), `enforce` (attempt 2 auto-relays the
+  assistant text via the Telegram Bot API using `TELEGRAM_BOT_TOKEN`).
+- `scripts/discord_reply_guard.py` — Discord guard. Same contract for a
+  `<channel ... source="discord">` turn missing a successful
+  `mcp__plugin_discord_discord__reply`. Block-only (no auto-relay: the Discord
+  token is managed by the plugin and has no stable secrets path), so the second
+  miss logs and allows the stop. Modes via `SOMA_DISCORD_REPLY_GUARD_MODE`:
+  `block` (default), `log`.
+
+Both only act when `cwd == /opt/claude-soma` (the live channel session), fail
+open (any error → exit 0, never bricks the channel), and dedup per message id so
+`--continue` restarts don't re-fire.
+
+**Is this installed automatically?** Yes — no copy/materialize step. The channel
+session launches with `--plugin-dir /opt/claude-soma` (see
+`scripts/channel-claude.sh`), so Claude Code loads the repo's `hooks/hooks.json`
+and runs the guard scripts in place from the clone. A fresh install picks them up
+as soon as Step 2 (clone) and the channel start are done; the scripts are
+committed with the executable bit set, which the absolute-path hook commands
+require. Kill switches: `SOMA_TG_REPLY_GUARD_DISABLED=1` and
+`SOMA_DISCORD_REPLY_GUARD_DISABLED=1` (export in the channel service env →
+immediate `exit 0`).
+
+Tests: `tests/test_tg_reply_guard.py`.
+
 ### hermes-notify MCP
 
 The `hermes-notify` MCP server (`src/claude_soma/mcp_servers/hermes_notify/server.py`) provides the `notify_orchestrator` and `set_teammate_handle` tools that let leads send structured lifecycle events (STARTED, MILESTONE, COMPLETED, NEEDS_INPUT, ERROR) back to the orchestrator's Telegram channel.

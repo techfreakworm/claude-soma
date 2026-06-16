@@ -170,7 +170,7 @@ claude-soma/
                          schedule-routine, portfolio-status, voice, codex-image-gen, ...)
   agents/                subagent template(s) for spawned leads
   templates/projects/    project-type templates (web-scraper, llm-app, ...)
-  hooks/                 SessionStart + UserPromptSubmit + PostToolUse hooks
+  hooks/                 Stop + SessionStart + UserPromptSubmit + PreToolUse + PostToolUse hooks
   scripts/               deploy, bootstrap, healthcheck, voice intake, somux,
                          pw-login / pw-refresh, ...
   systemd/               channel, api, frontend, timers (healthcheck, reaper, ...)
