@@ -117,8 +117,11 @@ For the full install runbook with prerequisites, external CLI setup, and trouble
 - **Auth:** Claude Max OAuth only. The token lives in
   `/etc/claude-soma/secrets.env` as `CLAUDE_CODE_OAUTH_TOKEN`; nothing reads an
   Anthropic API key.
-- **Telegram:** the bot opts into the Telegram plugin via
-  `config/claude/channel-settings.json` (so it never leaks into project-leads).
+- **Channel:** the bot runs ONE messaging channel — **Telegram or Discord** —
+  chosen via `SOMA_ACTIVE_CHANNEL` in `secrets.env`. It opts into only that
+  channel's plugin via `config/claude/channel-settings.<channel>.json` (so the
+  channel never leaks into project-leads). Switch channels by editing
+  `SOMA_ACTIVE_CHANNEL` and restarting `claude-soma-channel.service`.
 - **Social auth:** run `node scripts/pw-login.js` once on the VNC desktop to log
   into X / LinkedIn / Medium; `pw-refresh` keeps the sessions warm.
 - **Sessions:** `somux ls | a <name> | peek <name>` lists/attaches/peeks the
@@ -153,7 +156,7 @@ artifacts — leave them as-is.
 claude-soma/
   .claude-plugin/        Claude Code plugin + marketplace metadata
   .mcp.json              wires the MCP servers into the bot
-  config/claude/         channel-settings.json (telegram opt-in), lead-mcp.json
+  config/claude/         channel-settings.<telegram|discord>.json (per-channel opt-in), lead-mcp.json
   src/claude_soma/
     mcp_servers/
       voice_stt/         whisper.cpp wrapper

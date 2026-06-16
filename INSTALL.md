@@ -225,8 +225,10 @@ See `secrets.env.example` in the repo root for the full key list with inline com
 | `HERMES_ALLOWED_GITHUB_HANDLES` | your GitHub username (comma-separated for multiple) |
 | `NEXTAUTH_SECRET` | `openssl rand -base64 32` |
 | `NEXTAUTH_URL` | `https://soma.<SOMA_DOMAIN>` (e.g. `https://soma.example.com`) |
-| `TELEGRAM_BOT_TOKEN` | @BotFather — see Prerequisites; then run `setup-telegram.sh` |
-| `HERMES_NOTIFY_CHAT_ID` | auto-detected by `setup-telegram.sh`, or getUpdates chat.id |
+| `SOMA_ACTIVE_CHANNEL` | `telegram` or `discord` — the single channel the bot runs (default `telegram`) |
+| `TELEGRAM_BOT_TOKEN` | (if telegram) @BotFather — see Prerequisites; then run `setup-telegram.sh` |
+| `HERMES_NOTIFY_CHAT_ID` | (if telegram) auto-detected by `setup-telegram.sh`, or getUpdates chat.id |
+| `DISCORD_BOT_TOKEN` | (if discord) Discord Developer Portal → Bot → Reset Token (enable Message Content Intent); then run `setup-discord.sh` |
 | `TELEGRAM_CHAT_ID` | same value as `HERMES_NOTIFY_CHAT_ID` |
 | `HERMES_API_CORS_ORIGINS` | `https://soma.<SOMA_DOMAIN>,http://localhost:3000` |
 | `HERMES_FILES_PASSWORD` | choose a strong password (used for basicauth on `files.<SOMA_DOMAIN>`) |
@@ -275,7 +277,32 @@ systemctl is-active claude-soma-channel claude-soma-api claude-soma-frontend cla
 
 ---
 
-## Step 8 — Pair the Telegram bot
+## Step 8 — Pair the messaging bot (Telegram or Discord)
+
+The bot runs ONE channel at a time, chosen via `SOMA_ACTIVE_CHANNEL` in
+`secrets.env` (`telegram` or `discord`). Run the setup script for the channel you
+picked. To switch later: edit `SOMA_ACTIVE_CHANNEL`, fill the other token, run
+that channel's setup script, and the script restarts the channel for you.
+
+### Discord
+
+Prereqs (Discord side): at the [Discord Developer Portal](https://discord.com/developers/applications)
+create an app → **Bot** → **enable "Message Content Intent"** → **Reset Token**
+and put it in secrets.env as `DISCORD_BOT_TOKEN`; then **OAuth2 → URL Generator →
+scope `bot`** and open the URL to add the bot to a server you share (DMs to a bot
+require a shared server). Then:
+
+```bash
+bash /opt/claude-soma/scripts/setup-discord.sh
+```
+
+It mirrors the token to `~/.claude/channels/discord/.env`, verifies it against the
+Discord API, sets `SOMA_ACTIVE_CHANNEL=discord`, restarts the channel, and prints
+the pairing steps: DM the bot → it replies a 6-char code → run `/discord:access
+pair <code>` in the bot's session → then lock it with `/discord:access policy
+allowlist`.
+
+### Telegram
 
 After `TELEGRAM_BOT_TOKEN` is written to secrets.env and services are restarted (Step 7), run the pairing script:
 

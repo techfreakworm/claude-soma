@@ -724,15 +724,29 @@ Bootstrap complete. Required next steps:
        NEXTAUTH_SECRET=<openssl rand -base64 32>
        NEXTAUTH_URL=https://soma.<your-domain>
        HERMES_API_CORS_ORIGINS=https://soma.<your-domain>,http://localhost:3000
-       TELEGRAM_BOT_TOKEN=<from @BotFather>
-       HERMES_NOTIFY_CHAT_ID=<your Telegram chat id>
        HERMES_FILES_PASSWORD=<choose a strong password>
+
+     CHOOSE ONE messaging channel (the bot runs exactly one at a time):
+       SOMA_ACTIVE_CHANNEL=telegram        # ...or: discord
+     ...then fill ONLY that channel's token below.
+
+     If telegram:
+       TELEGRAM_BOT_TOKEN=<from @BotFather>
+       HERMES_NOTIFY_CHAT_ID=<your Telegram chat id>   (setup-telegram.sh auto-detects this)
+     If discord:
+       DISCORD_BOT_TOKEN=<Discord Developer Portal -> your app -> Bot -> Reset Token>
+       (On the Bot page, ENABLE "Message Content Intent". Invite the bot to a
+        server you share via OAuth2 -> URL Generator -> scope: bot.)
 
      NOTE: AUTH_GITHUB_ID + AUTH_GITHUB_SECRET are the NextAuth v5 names.
      Do NOT use AUTH_GITHUB_CLIENT_ID / AUTH_GITHUB_CLIENT_SECRET — they are ignored.
 
-     After filling secrets, run: bash scripts/setup-telegram.sh
-     to pair your Telegram account with the bot.
+     After filling secrets, pair your account with the bot by running the
+     setup script for the channel you chose:
+       telegram:  bash scripts/setup-telegram.sh
+       discord:   bash scripts/setup-discord.sh
+     (To switch channels later: edit SOMA_ACTIVE_CHANNEL in secrets.env, fill the
+      other token, run that channel's setup script, and restart the channel.)
 
   2. Restart services after filling secrets:
        sudo systemctl restart claude-soma-api.service
