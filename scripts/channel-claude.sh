@@ -23,10 +23,13 @@
 #
 #   telegram -> plugin:telegram@claude-plugins-official (upstream marketplace;
 #               the reply-to fork is parked, see docs/telegram-plugin-fork.md)
-#   discord  -> plugin:discord@claude-soma (the discord plugin vendored in the
-#               external/claude-plugins-official submodule, surfaced through
-#               claude-soma's own marketplace via --plugin-dir below -- no
-#               runtime `/plugin install` needed)
+#   discord  -> plugin:discord@claude-plugins-official (upstream marketplace; the
+#               official discord plugin). Both channel plugins are INSTALLED from
+#               the registered claude-plugins-official marketplace (`claude plugin
+#               install <plugin>@claude-plugins-official`) -- a plugin enabled via
+#               --settings only boots if it is installed; --plugin-dir alone does
+#               NOT install/boot a channel plugin. setup-{telegram,discord}.sh and
+#               bootstrap.sh handle the install.
 #
 # Each channel has its own --settings file enabling ONLY that channel's plugin,
 # so the other channel's plugin never boots (a stray enabled plugin would poll
@@ -61,7 +64,7 @@ case "$CHANNEL" in
         SETTINGS="${SOMA_ROOT}/config/claude/channel-settings.telegram.json"
         ;;
     discord)
-        CHANNEL_PLUGIN="plugin:discord@claude-soma"
+        CHANNEL_PLUGIN="plugin:discord@claude-plugins-official"
         SETTINGS="${SOMA_ROOT}/config/claude/channel-settings.discord.json"
         ;;
     *)

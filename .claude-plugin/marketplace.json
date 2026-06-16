@@ -12,7 +12,6 @@
   "license": "MIT",
   "plugins": [
     { "name": "claude-soma", "path": "." },
-    { "name": "telegram", "path": "external/claude-plugins-official/external_plugins/telegram" },
-    { "name": "discord", "path": "external/claude-plugins-official/external_plugins/discord" }
+    { "name": "telegram", "path": "external/claude-plugins-official/external_plugins/telegram" }
   ]
 }

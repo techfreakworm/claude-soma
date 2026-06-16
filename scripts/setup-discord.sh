@@ -49,6 +49,18 @@ if [[ -z "$BOT_NAME" ]]; then
 fi
 info "Token verified. Bot user: ${BOT_NAME}"
 
+# --- Step 3b: install the discord plugin from the upstream marketplace ---
+# A channel plugin only boots if it is INSTALLED; enabling it via --settings is
+# not enough (and --plugin-dir alone does not install a channel plugin). Idempotent.
+CLAUDE_BIN="${CLAUDE_BIN:-/home/ubuntu/.local/bin/claude}"
+if "$CLAUDE_BIN" plugin list 2>/dev/null | grep -q 'discord@claude-plugins-official'; then
+    info "discord@claude-plugins-official already installed."
+else
+    info "Installing discord@claude-plugins-official ..."
+    "$CLAUDE_BIN" plugin install discord@claude-plugins-official 2>&1 | tail -3 \
+        || die "Failed to install discord@claude-plugins-official (try: $CLAUDE_BIN plugin marketplace update claude-plugins-official, then re-run)."
+fi
+
 # --- Step 4: select discord as the active channel ---
 if grep -q '^SOMA_ACTIVE_CHANNEL=' "$SECRETS_FILE"; then
     sed -i "s|^SOMA_ACTIVE_CHANNEL=.*|SOMA_ACTIVE_CHANNEL=discord|" "$SECRETS_FILE" 2>/dev/null \
