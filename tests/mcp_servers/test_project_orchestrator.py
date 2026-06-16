@@ -528,38 +528,30 @@ def test_resume_project_no_suffix_when_no_team(monkeypatch) -> None:
     assert captured.get("resume_prompt_suffix") is None
 
 
-def test_get_team_impl_uses_canonical_handles_from_registry(monkeypatch) -> None:
-    """get_team_impl must substitute self-reported canonical handles (from
-    team_members rows that don't look like teammate-N) for pane-derived handles."""
+def test_get_team_impl_never_relabels_teammate_with_lead_name(monkeypatch) -> None:
+    """Regression for the admin-graph mis-parenting bug (2026-06-16): even when the
+    registry holds a self-registration row (teammate_handle == the lead's own name)
+    or a stale cross-lead canonical handle, get_team_impl must label teammates by
+    their live pane index (teammate-N) and NEVER stamp a lead-name handle onto a
+    pane -- the old positional substitution did, which rendered one lead's teammate
+    under a different lead in the graph."""
     _no_url_poll(monkeypatch)
     with patch("subprocess.run", side_effect=_tmux_side_effect("")):
         orch.spawn_project_impl(name="canon-team", type_="custom",
                                 brief="x", permission_mode="default")
-    # Pre-seed a canonical (self-reported) handle.
-    orch._reg().upsert_team_member("canon-team", "@soma-writer", "writer", "self-reported")
+    # Pollute the registry the way the bug did: a self-registration row whose handle
+    # equals the lead name, plus a stale cross-lead canonical handle.
+    orch._reg().upsert_team_member("canon-team", "canon-team", "general-purpose", "self")
+    orch._reg().upsert_team_member("canon-team", "wan-manager", "general-purpose", "stale")
 
-    pane_roster = [{"handle": "teammate-1", "role": "writer", "status": "active"}]
-    captured_args: dict = {}
+    with patch("subprocess.run", return_value=_ok("0\t0\tlead\n1\t0\twriter\n")):
+        t = orch.get_team_impl("canon-team")
 
-    original_discover = orch.discover_team
-
-    def _spy_discover(name, registry_members=None):
-        captured_args["registry_members"] = registry_members
-        return original_discover(name, registry_members=registry_members)
-
-    with patch.object(orch, "discover_team", side_effect=_spy_discover):
-        with patch("subprocess.run", return_value=_ok("0\t0\tlead\n1\t0\twriter\n")):
-            t = orch.get_team_impl("canon-team")
-
-    # discover_team must have received the registry members.
-    assert captured_args["registry_members"] is not None
-    canonical = [
-        m for m in captured_args["registry_members"]
-        if m["teammate_handle"] == "@soma-writer"
-    ]
-    assert canonical, "canonical member must be in registry_members passed to discover_team"
-    # The returned team must have the canonical handle.
-    assert any(m["handle"] == "@soma-writer" for m in t["team"]), t["team"]
+    handles = [m["handle"] for m in t["team"]]
+    assert handles == ["teammate-1"], handles
+    # No teammate is ever labelled with a lead name.
+    assert "canon-team" not in handles
+    assert "wan-manager" not in handles
 
 
 def test_get_team_impl_falls_back_to_pane_handle_without_canonical(monkeypatch) -> None:

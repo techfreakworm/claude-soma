@@ -317,15 +317,15 @@ def get_team_impl(name: str) -> dict:
     panes) and persist the roster to the registry for resume re-establishment.
     Raises if there's no such project.
 
-    Reads registry team_members FIRST so self-reported canonical handles (written
-    via hermes-notify set_teammate_handle) substitute the pane-derived teammate-N
-    placeholders in discover_team's output.
+    Teammates are labelled by their live pane identity (teammate-<pane_index>);
+    discover_team does NOT relabel them with registry "canonical" handles -- that
+    positional substitution mis-attributed teammates across leads (one lead's
+    teammate rendered under another lead in the admin graph, bug 2026-06-16).
     """
     p = _reg().get(name)
     if not p:
         raise RuntimeError(f"no project named {name!r}")
-    registry_members = _reg().get_team_members(name)
-    team = discover_team(p["agent_id"], registry_members=registry_members)
+    team = discover_team(p["agent_id"])
     for member in team:
         _reg().upsert_team_member(
             lead_name=name,

@@ -590,53 +590,19 @@ def test_discover_team_empty_when_only_lead_pane() -> None:
         assert spawner.discover_team("solo") == []
 
 
-def test_discover_team_substitutes_canonical_handle() -> None:
-    """When registry_members contains a self-reported (non-teammate-N) handle,
-    discover_team must substitute it for the pane-derived teammate-N placeholder."""
-    out = "0\t0\tlead\n1\t0\tcontent writer\n"
-    registry_members = [
-        {"teammate_handle": "@soma-writer", "role": "writer", "brief": "self-reported"},
-    ]
-    with patch("subprocess.run", return_value=_ok(out)):
-        team = spawner.discover_team("demoteam", registry_members=registry_members)
-    assert len(team) == 1
-    assert team[0]["handle"] == "@soma-writer"
-    assert team[0]["role"] == "content writer"
-    assert team[0]["status"] == "active"
-
-
-def test_discover_team_fallback_when_no_canonical_in_registry() -> None:
-    """When registry_members contains only pane-derived (teammate-N) handles,
-    discover_team must keep the pane handle unchanged."""
-    out = "0\t0\tlead\n1\t0\tdev\n"
-    registry_members = [
-        {"teammate_handle": "teammate-1", "role": "dev", "brief": "dev"},
-    ]
-    with patch("subprocess.run", return_value=_ok(out)):
-        team = spawner.discover_team("demoteam", registry_members=registry_members)
-    assert team[0]["handle"] == "teammate-1"
-
-
-def test_discover_team_no_registry_members_unchanged() -> None:
-    """With registry_members=None (default), discover_team behaves exactly as before."""
-    out = "0\t0\tlead\n1\t0\twriter\n"
+def test_discover_team_labels_teammates_by_pane_index() -> None:
+    """Teammates are labelled teammate-<pane_index> from the live panes; discover_team
+    does NOT relabel them from the registry. Regression for the admin-graph
+    mis-parenting bug (2026-06-16): the old positional canonical-handle substitution
+    could stamp another lead's name (or a lead's own self-registration handle) onto a
+    pane, rendering one lead's teammate under a different lead. A teammate-<idx> handle
+    can never collide with a lead name, so every teammate nests under its true parent."""
+    out = "0\t0\tlead\n1\t0\twriter\n2\t0\teditor\n"
     with patch("subprocess.run", return_value=_ok(out)):
         team = spawner.discover_team("demoteam")
-    assert team[0]["handle"] == "teammate-1"
-
-
-def test_discover_team_partial_canonical_substitution() -> None:
-    """With 2 pane teammates and 1 canonical handle, only the first pane member
-    gets the canonical handle; the second falls back to teammate-N."""
-    out = "0\t0\tlead\n1\t0\twriter\n2\t0\teditor\n"
-    registry_members = [
-        {"teammate_handle": "@soma-writer", "role": "writer", "brief": "self-reported"},
-    ]
-    with patch("subprocess.run", return_value=_ok(out)):
-        team = spawner.discover_team("demoteam", registry_members=registry_members)
-    assert len(team) == 2
-    assert team[0]["handle"] == "@soma-writer"
-    assert team[1]["handle"] == "teammate-2"
+    assert [m["handle"] for m in team] == ["teammate-1", "teammate-2"]
+    assert team[0]["role"] == "writer"
+    assert team[1]["role"] == "editor"
 
 
 def test_discover_team_empty_on_dead_session_or_error() -> None:

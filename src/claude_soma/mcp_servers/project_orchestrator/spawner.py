@@ -535,12 +535,9 @@ def is_lead_alive(name: str) -> bool:
     return result.returncode == 0
 
 
-def discover_team(
-    name: str,
-    registry_members: list[dict] | None = None,
-) -> list[dict[str, str]]:
+def discover_team(name: str) -> list[dict[str, str]]:
     """Best-effort roster of a lead's agent-team teammates, read live from its
-    tmux panes, with canonical-handle substitution from the registry.
+    tmux panes.
 
     With CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 a lead spawns its teammates as
     split panes in its window (see docs/KNOWN_BUGS.md), so every pane beyond the
@@ -548,12 +545,15 @@ def discover_team(
     because teammates are ephemeral -- they die with the session -- so a cached
     roster would go stale. Returns [] if the lead is gone or has no team.
 
-    If `registry_members` is supplied, any self-reported canonical handles (those
-    not matching the pane-derived ``teammate-N`` pattern) are used to substitute
-    pane handle placeholders in order. A pane entry at position i gets the i-th
-    canonical handle when one is available; otherwise it falls back to
-    ``teammate-N``. Pane-derived entries in the registry (matching ``teammate-N``)
-    are not treated as canonical.
+    Each teammate is labelled by its STABLE pane identity -- ``teammate-<pane_index>``
+    with the role from the pane title. We deliberately do NOT relabel panes with
+    self-reported "canonical" handles from the registry: there is no reliable
+    correspondence between a self-reported handle and a specific live pane, and the
+    old positional substitution stamped the i-th registry handle onto the i-th pane
+    -- including a lead's own self-registration row whose handle equals a lead name
+    -- which made one lead's teammate render under another lead in the admin graph
+    (bug 2026-06-16). A ``teammate-<idx>`` handle can never equal a lead name, so
+    every teammate nests under its true parent.
     """
     bare = _bare_name(name)
     session = _session_name(bare)
@@ -581,17 +581,6 @@ def discover_team(
             "role": title.strip() or "teammate",
             "status": "dead" if dead == "1" else "active",
         })
-
-    # Canonical-read: replace pane-derived teammate-N handles with self-reported
-    # canonical handles from the registry (if any were provided by the caller).
-    if registry_members:
-        canonical = [
-            m for m in registry_members
-            if not re.match(r"^teammate-\d+$", m.get("teammate_handle", ""))
-        ]
-        for i, member in enumerate(team):
-            if i < len(canonical):
-                member["handle"] = canonical[i]["teammate_handle"]
 
     return team
 
