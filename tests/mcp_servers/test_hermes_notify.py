@@ -280,15 +280,20 @@ def test_notify_orchestrator_started_stores_row(tmp_path: Path) -> None:
     db = tmp_path / "r.sqlite"
     es = EventStore(db_path=db)
     hn_server._store = es
+    # Step 7: the MCP is now a pure client -- it POSTs the raw event and the
+    # LISTENER inserts + owns the id. Simulate the listener via _post_json.
+    def fake_post(url, obj):
+        eid = es.insert_event(lead=obj["lead"], type_=obj["type"], ts=0.0,
+                              payload_json=obj["payload_json"])
+        return True, {"event_id": eid}
     with patch.dict("os.environ", {"HERMES_LEAD_NAME": "my-lead"}, clear=False):
-        with patch.object(hn_server, "_post_to_listener", return_value=False):
+        with patch.object(hn_server, "_post_json", side_effect=fake_post):
             result = hn_server.notify_orchestrator(
                 type="STARTED",
                 payload={"description": "doing stuff"},
             )
-    assert "stored_id" in result
-    assert result["stored_id"] > 0
-    assert result["delivered"] is False
+    assert result["delivered"] is True
+    assert result["stored_id"] and result["stored_id"] > 0
 
     row = es.get_event(result["stored_id"])
     assert row is not None
@@ -301,8 +306,12 @@ def test_notify_orchestrator_completed_stores_row(tmp_path: Path) -> None:
     db = tmp_path / "r.sqlite"
     es = EventStore(db_path=db)
     hn_server._store = es
+    def fake_post(url, obj):
+        eid = es.insert_event(lead=obj["lead"], type_=obj["type"], ts=0.0,
+                              payload_json=obj["payload_json"])
+        return True, {"event_id": eid}
     with patch.dict("os.environ", {"HERMES_LEAD_NAME": "my-lead"}, clear=False):
-        with patch.object(hn_server, "_post_to_listener", return_value=True):
+        with patch.object(hn_server, "_post_json", side_effect=fake_post):
             result = hn_server.notify_orchestrator(
                 type="COMPLETED",
                 payload={"summary": "all done", "paths": [], "urls": []},
@@ -316,8 +325,14 @@ def test_notify_orchestrator_needs_input_creates_pending(tmp_path: Path) -> None
     db = tmp_path / "r.sqlite"
     es = EventStore(db_path=db)
     hn_server._store = es
+    # insert_event (the listener's writer) creates the NEEDS_INPUT pending_inputs
+    # companion atomically from payload_json -- so the simulated listener does too.
+    def fake_post(url, obj):
+        eid = es.insert_event(lead=obj["lead"], type_=obj["type"], ts=0.0,
+                              payload_json=obj["payload_json"])
+        return True, {"event_id": eid}
     with patch.dict("os.environ", {"HERMES_LEAD_NAME": "q-lead"}, clear=False):
-        with patch.object(hn_server, "_post_to_listener", return_value=False):
+        with patch.object(hn_server, "_post_json", side_effect=fake_post):
             result = hn_server.notify_orchestrator(
                 type="NEEDS_INPUT",
                 payload={
@@ -338,8 +353,12 @@ def test_notify_orchestrator_error_truncates_traceback(tmp_path: Path) -> None:
     es = EventStore(db_path=db)
     hn_server._store = es
     long_tb = "x" * 6000
+    def fake_post(url, obj):
+        eid = es.insert_event(lead=obj["lead"], type_=obj["type"], ts=0.0,
+                              payload_json=obj["payload_json"])
+        return True, {"event_id": eid}
     with patch.dict("os.environ", {"HERMES_LEAD_NAME": "err-lead"}, clear=False):
-        with patch.object(hn_server, "_post_to_listener", return_value=False):
+        with patch.object(hn_server, "_post_json", side_effect=fake_post):
             result = hn_server.notify_orchestrator(
                 type="ERROR",
                 payload={
@@ -401,11 +420,8 @@ def test_http_listener_post_notify_queues_delivery(tmp_path: Path) -> None:
     ha_server._store = es
     ha_server._milestone_last_dmed = {}
 
-    # Pre-insert a row (as hermes-notify MCP tool would)
-    eid = es.insert_event(
-        lead="tl", type_="STARTED", ts=time.time(), payload_json='{"description":"x"}'
-    )
-
+    # Step 7: NO pre-insert -- the listener is now the writer/id-owner. The lead
+    # POSTs a RAW event (no event_id) and the listener assigns A's id.
     port = _find_free_port()
     srv = http.server.ThreadingHTTPServer(("127.0.0.1", port), ha_server._NotifyHandler)
     t = threading.Thread(target=srv.serve_forever, daemon=True)
@@ -419,7 +435,7 @@ def test_http_listener_post_notify_queues_delivery(tmp_path: Path) -> None:
 
     with patch.object(ha_server, "_deliver_event", side_effect=fake_deliver):
         body = json.dumps({
-            "event_id": eid, "lead": "tl", "type": "STARTED",
+            "lead": "tl", "type": "STARTED",
             "payload_json": '{"description":"x"}'
         }).encode()
         req = urllib.request.Request(
@@ -431,12 +447,14 @@ def test_http_listener_post_notify_queues_delivery(tmp_path: Path) -> None:
         with urllib.request.urlopen(req, timeout=5) as resp:
             result = json.loads(resp.read())
         assert resp.status == 202
-        assert result["event_id"] == eid
+        new_id = result["event_id"]
+        assert isinstance(new_id, int) and new_id >= 1
         # Give the delivery thread a moment
         time.sleep(0.2)
 
     srv.shutdown()
-    assert eid in delivered_calls
+    assert new_id in delivered_calls
+    assert es.get_event(new_id) is not None  # the listener inserted it
 
 
 def test_http_listener_post_notify_invalid_json_returns_400(tmp_path: Path) -> None:
@@ -1147,12 +1165,7 @@ def test_handle_notify_milestone_with_services_triggers_proactive_dm(
     ha_server._milestone_last_dmed = {}
 
     payload_json = '{"progress": "RESTART REQUIRED now", "services": ["claude-soma-api.service"]}'
-    eid = es.insert_event(
-        lead="svc-lead",
-        type_="MILESTONE",
-        ts=time.time(),
-        payload_json=payload_json,
-    )
+    # Step 7: listener is the writer -- POST raw, no pre-insert / no client id.
 
     port = _find_free_port()
     srv = http.server.ThreadingHTTPServer(("127.0.0.1", port), ha_server._NotifyHandler)
@@ -1164,7 +1177,7 @@ def test_handle_notify_milestone_with_services_triggers_proactive_dm(
         with patch.object(ha_server, "_send_proactive_dm", side_effect=lambda *a, **kw: dm_calls.append(a) or None):
             with patch.object(ha_server, "_deliver_event"):
                 body = json.dumps({
-                    "event_id": eid, "lead": "svc-lead", "type": "MILESTONE",
+                    "lead": "svc-lead", "type": "MILESTONE",
                     "payload_json": payload_json,
                 }).encode()
                 req = urllib.request.Request(
@@ -1176,7 +1189,7 @@ def test_handle_notify_milestone_with_services_triggers_proactive_dm(
                 with urllib.request.urlopen(req, timeout=5) as resp:
                     result = json.loads(resp.read())
                 assert resp.status == 202
-                assert result["event_id"] == eid
+                assert isinstance(result["event_id"], int)
                 time.sleep(0.3)
     finally:
         srv.shutdown()

@@ -4,6 +4,7 @@ import json
 import os
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 
 from mcp.server.fastmcp import FastMCP
@@ -61,26 +62,38 @@ def _notify_port() -> int:
     return int(os.environ.get("HERMES_NOTIFY_PORT", str(_NOTIFY_PORT_DEFAULT)))
 
 
-def _post_to_listener(event_id: int, lead: str, type_: str, payload_json: str) -> bool:
-    """POST the event to the hermes_api HTTP listener. Returns True on 2xx."""
-    url = f"http://127.0.0.1:{_notify_port()}/notify"
-    body = json.dumps({
-        "event_id": event_id,
-        "lead": lead,
-        "type": type_,
-        "payload_json": payload_json,
-    }).encode()
-    req = urllib.request.Request(
-        url,
-        data=body,
-        headers={"Content-Type": "application/json"},
-        method="POST",
-    )
+def _listener_url() -> str:
+    """The /notify endpoint. Local leads default to loopback; B-leads get
+    HERMES_NOTIFY_URL=http://<A-tailnet-ip>:9100/notify injected by the guard."""
+    return os.environ.get("HERMES_NOTIFY_URL", f"http://127.0.0.1:{_notify_port()}/notify")
+
+
+def _listener_base() -> str:
+    u = urllib.parse.urlparse(_listener_url())
+    return f"{u.scheme}://{u.netloc}"
+
+
+def _auth_headers() -> dict:
+    tok = os.environ.get("HERMES_NOTIFY_TOKEN", "")
+    return {"Authorization": f"Bearer {tok}"} if tok else {}
+
+
+def _post_json(url: str, obj: dict) -> tuple[bool, dict]:
+    """POST JSON to the listener with the bearer token. Returns (ok, response).
+    Never raises (a notify failure must never break the caller)."""
+    body = json.dumps(obj).encode()
+    headers = {"Content-Type": "application/json", **_auth_headers()}
+    req = urllib.request.Request(url, data=body, headers=headers, method="POST")
     try:
         with urllib.request.urlopen(req, timeout=10) as resp:
-            return 200 <= resp.status < 300
+            ok = 200 <= resp.status < 300
+            try:
+                data = json.loads(resp.read() or b"{}")
+            except (json.JSONDecodeError, ValueError):
+                data = {}
+            return ok, data
     except (urllib.error.URLError, OSError):
-        return False
+        return False, {}
 
 
 def _validate_started(payload: dict) -> str | None:
@@ -230,29 +243,15 @@ def notify_orchestrator(
     payload = _normalize_payload(type, payload)
     payload_json = json.dumps(payload)
 
-    store = _get_store()
-
-    if type == "NEEDS_INPUT":
-        options_json = json.dumps(payload.get("options", [])) if payload.get("options") else None
-        timeout_secs = payload.get("timeout")
-        event_id, _pending_id = store.insert_event_with_pending_input(
-            lead=lead,
-            ts=time.time(),
-            payload_json=payload_json,
-            question=payload["question"],
-            options_json=options_json,
-            timeout_secs=timeout_secs,
-        )
-    else:
-        event_id = store.insert_event(
-            lead=lead,
-            type_=type,
-            ts=time.time(),
-            payload_json=payload_json,
-        )
-
-    delivered = _post_to_listener(event_id, lead, type, payload_json)
-    return {"stored_id": event_id, "delivered": delivered}
+    # The listener on A is the sole writer + id owner. POST the RAW event; A
+    # inserts it (recreating the NEEDS_INPUT pending_inputs companion from
+    # payload_json) and returns A's event id. A remote lead has no access to A's
+    # store, so we never insert locally here.
+    ok, resp = _post_json(
+        _listener_url(),
+        {"lead": lead, "type": type, "payload_json": payload_json},
+    )
+    return {"stored_id": resp.get("event_id"), "delivered": ok}
 
 
 @mcp.tool()
@@ -279,11 +278,11 @@ def set_teammate_handle(handle: str, role: str) -> dict:
 
     handle = handle.strip()
     role = role.strip()
-    _get_registry().upsert_team_member(
-        lead_name=lead,
-        teammate_handle=handle,
-        role=role,
-        brief="self-reported",
+    # POST to A's listener (the registry lives on A); a remote lead cannot write
+    # A's sqlite directly.
+    _post_json(
+        f"{_listener_base()}/teammate",
+        {"lead": lead, "handle": handle, "role": role},
     )
     return {"lead": lead, "handle": handle, "role": role}
 

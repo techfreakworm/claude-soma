@@ -419,9 +419,11 @@ def test_spawn_includes_session_id_before_remote_control(tmp_path: Path) -> None
     assert sid_idx + 1 < rc_idx
 
 
-def test_spawn_injects_hermes_lead_name_and_notify_endpoint(tmp_path: Path) -> None:
-    """_wrap_in_transient_unit must inject HERMES_LEAD_NAME and HERMES_NOTIFY_ENDPOINT
-    so the lead's hermes-notify MCP tool can identify itself and reach the listener."""
+def test_spawn_injects_hermes_lead_name(tmp_path: Path) -> None:
+    """_wrap_in_transient_unit must inject HERMES_LEAD_NAME so the lead's
+    hermes-notify MCP tool can identify itself. (HERMES_NOTIFY_ENDPOINT was
+    retired in Step 7: the notify MCP now uses HERMES_NOTIFY_URL, which defaults
+    to loopback for local leads and is injected by the guard for remote leads.)"""
     cwd = tmp_path / "fi-lead"
     cwd.mkdir()
     with patch("subprocess.run", side_effect=[_ok(), _ok("")]) as run:
@@ -431,7 +433,7 @@ def test_spawn_injects_hermes_lead_name_and_notify_endpoint(tmp_path: Path) -> N
         )
     args = run.call_args_list[0][0][0]
     assert "--setenv=HERMES_LEAD_NAME=fi-lead" in args
-    assert "--setenv=HERMES_NOTIFY_ENDPOINT=http://127.0.0.1:9100" in args
+    assert not any("HERMES_NOTIFY_ENDPOINT" in a for a in args)
 
 
 def test_lead_mcp_config_is_curated_tool_set() -> None:

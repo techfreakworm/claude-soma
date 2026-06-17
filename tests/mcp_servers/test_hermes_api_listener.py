@@ -181,11 +181,7 @@ def test_handle_notify_restart_milestone_fires_dispatch_e2e(
 
     es = _make_store(tmp_path)
     ha_server._milestone_last_dmed = {}
-
-    eid = es.insert_event(
-        lead="l", type_="MILESTONE", ts=time.time(),
-        payload_json=_VALID_RESTART_PAYLOAD,
-    )
+    # Step 7: listener is the writer/id-owner -- POST raw, no pre-insert.
     monkeypatch.setenv("HERMES_AUTO_RESTART_WINDOW_UTC", str(int(time.time()) + 300))
 
     port = _find_free_port()
@@ -198,7 +194,7 @@ def test_handle_notify_restart_milestone_fires_dispatch_e2e(
             mock_popen.return_value = MagicMock()
             with patch.object(ha_server, "_deliver_event"):
                 body = json.dumps({
-                    "event_id": eid, "lead": "l", "type": "MILESTONE",
+                    "lead": "l", "type": "MILESTONE",
                     "payload_json": _VALID_RESTART_PAYLOAD,
                 }).encode()
                 req = urllib.request.Request(
@@ -210,9 +206,9 @@ def test_handle_notify_restart_milestone_fires_dispatch_e2e(
                 with urllib.request.urlopen(req, timeout=5) as resp:
                     result = json.loads(resp.read())
                 assert resp.status == 202
-                assert result["event_id"] == eid
+                new_id = result["event_id"]
 
-        row = es.get_event(eid)
+        row = es.get_event(new_id)
         assert row["action_fired_at"] is not None
         assert row["action_key"] == "restart"
         mock_popen.assert_called_once()
@@ -230,19 +226,18 @@ def test_duplicate_restart_milestones_each_fire_only_once(
     import urllib.request
     from unittest.mock import MagicMock
 
+    # Step 7: the listener owns ids, so two POSTs are two distinct events. The
+    # real idempotency invariant is per-event: claim_action dedups so the same
+    # event's restart dispatch fires exactly once even if triggered twice.
     es = _make_store(tmp_path)
+    ha_server._store = es
     ha_server._milestone_last_dmed = {}
+    monkeypatch.setenv("HERMES_AUTO_RESTART_WINDOW_UTC", str(int(time.time()) + 300))
 
     eid = es.insert_event(
         lead="l", type_="MILESTONE", ts=time.time(),
         payload_json=_VALID_RESTART_PAYLOAD,
     )
-    monkeypatch.setenv("HERMES_AUTO_RESTART_WINDOW_UTC", str(int(time.time()) + 300))
-
-    port = _find_free_port()
-    srv = http.server.ThreadingHTTPServer(("127.0.0.1", port), ha_server._NotifyHandler)
-    t = threading.Thread(target=srv.serve_forever, daemon=True)
-    t.start()
 
     popen_calls: list[list[str]] = []
 
@@ -250,28 +245,14 @@ def test_duplicate_restart_milestones_each_fire_only_once(
         popen_calls.append(argv)
         return MagicMock()
 
-    try:
-        with patch.object(ha_server.subprocess, "Popen", side_effect=fake_popen):
-            with patch.object(ha_server, "_deliver_event"):
-                body = json.dumps({
-                    "event_id": eid, "lead": "l", "type": "MILESTONE",
-                    "payload_json": _VALID_RESTART_PAYLOAD,
-                }).encode()
-                for _ in range(2):
-                    req = urllib.request.Request(
-                        f"http://127.0.0.1:{port}/notify",
-                        data=body,
-                        headers={"Content-Type": "application/json"},
-                        method="POST",
-                    )
-                    with urllib.request.urlopen(req, timeout=5):
-                        pass
+    with patch.object(ha_server.subprocess, "Popen", side_effect=fake_popen):
+        # invoke the dispatch twice for the SAME event id
+        ha_server._maybe_trigger_automation(eid, "l", "MILESTONE", _VALID_RESTART_PAYLOAD)
+        ha_server._maybe_trigger_automation(eid, "l", "MILESTONE", _VALID_RESTART_PAYLOAD)
 
-        assert len(popen_calls) == 1, (
-            f"Expected exactly one Popen call, got {len(popen_calls)}"
-        )
-    finally:
-        srv.shutdown()
+    assert len(popen_calls) == 1, (
+        f"claim_action must dedup per event; got {len(popen_calls)}"
+    )
 
 
 def test_milestone_without_attention_criteria_no_proactive_dm(

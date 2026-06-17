@@ -182,7 +182,6 @@ def _wrap_in_transient_unit(
         f"--setenv=PATH={LEAD_PATH}",
         "--setenv=CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1",
         f"--setenv=HERMES_LEAD_NAME={name}",
-        "--setenv=HERMES_NOTIFY_ENDPOINT=http://127.0.0.1:9100",
         "--",
         *inner_argv,
     ]

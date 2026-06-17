@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import datetime
+import hmac
 import html
 import http.server
 import json
@@ -23,6 +24,36 @@ from . import alarm_worker, claude_state
 from .notify_store import EventStore, VALID_TYPES, URGENT_TYPES
 from .socket import serve_blocking
 from .tg_html import chunk_html_for_telegram, gfm_to_html
+
+# Cross-host FI-NOTIFY (Step 7): the listener is the durable writer + id owner.
+# A remote lead has no access to A's sqlite, so it POSTs a RAW event and A
+# inserts it (assigning A's id). No import cycle: project_orchestrator never
+# imports hermes_api.
+from claude_soma.mcp_servers.project_orchestrator.registry import Registry
+
+_orch_reg: "Registry | None" = None
+
+
+def _orch_registry() -> "Registry":
+    global _orch_reg
+    if _orch_reg is None:
+        _orch_reg = Registry(os.environ.get("HERMES_ORCH_DB", "/opt/claude-soma/registry.sqlite"))
+    return _orch_reg
+
+
+def _check_bearer(auth_header: str | None, expected: str) -> bool:
+    if not auth_header or not auth_header.startswith("Bearer "):
+        return False
+    return hmac.compare_digest(auth_header[len("Bearer "):].strip(), expected)
+
+
+def _ingest_event(lead: str, type_: str, payload_json: str) -> int:
+    """A's listener is the SOLE writer/id-owner: insert the raw event into A's
+    store and return A's id. insert_event also creates the NEEDS_INPUT
+    pending_inputs companion atomically, so this one call covers every type."""
+    return _store.insert_event(
+        lead=lead, type_=type_, ts=time.time(), payload_json=payload_json
+    )
 
 
 # ---- MCP tools exposed to the channel session ------------------------------
@@ -993,29 +1024,67 @@ class _NotifyHandler(http.server.BaseHTTPRequestHandler):
     def do_POST(self) -> None:
         if self.path == "/notify":
             self._handle_notify()
+        elif self.path == "/teammate":
+            self._handle_teammate()
         elif self.path == "/resolve_pending_input":
+            if not self._require_token():
+                return
             self._handle_resolve()
         elif self.path == "/mark_read":
+            if not self._require_token():
+                return
             self._handle_mark_read()
         else:
             self._respond(404, {"error": "not found"})
 
+    def _handle_teammate(self) -> None:
+        if not self._require_token():
+            return
+        body = self._read_json_body()
+        if body is None:
+            return
+        lead = (body.get("lead") or "").strip()
+        handle = (body.get("handle") or "").strip()
+        role = (body.get("role") or "").strip()
+        if not lead or not handle or not role:
+            self._respond(400, {"error": "missing lead/handle/role"})
+            return
+        _orch_registry().upsert_team_member(
+            lead_name=lead, teammate_handle=handle, role=role, brief="self-reported",
+        )
+        self._respond(200, {"lead": lead, "handle": handle, "role": role})
+
+    def _require_token(self) -> bool:
+        expected = os.environ.get("HERMES_NOTIFY_TOKEN", "")
+        if not expected:
+            return True  # backward-compat: unauthenticated until a token is configured
+        if _check_bearer(self.headers.get("Authorization"), expected):
+            return True
+        self._respond(401, {"error": "missing or invalid bearer token"})
+        return False
+
     def _handle_notify(self) -> None:
+        if not self._require_token():
+            return
         body = self._read_json_body()
         if body is None:
             return
 
-        event_id = body.get("event_id")
+        # Any client-supplied event_id is IGNORED -- A owns the id now (a remote
+        # lead cannot reach A's store). Backward-compatible with old leads that
+        # still POST an event_id alongside lead/type/payload_json.
         lead = body.get("lead", "")
         type_ = body.get("type", "")
         payload_json = body.get("payload_json", "")
 
-        if not event_id or not lead or not type_ or not payload_json:
-            self._respond(400, {"error": "missing required fields: event_id, lead, type, payload_json"})
+        if not lead or not type_ or not payload_json:
+            self._respond(400, {"error": "missing required fields: lead, type, payload_json"})
             return
         if type_ not in VALID_TYPES:
             self._respond(400, {"error": f"unknown type {type_!r}"})
             return
+
+        event_id = _ingest_event(lead, type_, payload_json)  # A's id
 
         _maybe_trigger_automation(event_id, lead, type_, payload_json)
 
@@ -1090,16 +1159,26 @@ class _NotifyHandler(http.server.BaseHTTPRequestHandler):
 
 def _start_notify_listener() -> None:
     port = int(os.environ.get("HERMES_NOTIFY_PORT", str(_NOTIFY_PORT_DEFAULT)))
-    try:
-        server = http.server.ThreadingHTTPServer(
-            ("127.0.0.1", port), _NotifyHandler, bind_and_activate=False
-        )
-        server.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        server.server_bind()
-        server.server_activate()
-        server.serve_forever()
-    except Exception as exc:
-        _log_notify_error(f"notify listener failed to start: {exc}")
+    # Multi-bind: loopback for local leads + the A tailnet IP for remote leads.
+    # NEVER 0.0.0.0 (that would expose :9100 on A's public NIC). A failed tailnet
+    # bind must not kill the loopback bind, so each runs in its own daemon thread.
+    binds = [a.strip() for a in
+             os.environ.get("HERMES_NOTIFY_BIND", "127.0.0.1").split(",") if a.strip()]
+    started: list[str] = []
+    for addr in binds:
+        try:
+            server = http.server.ThreadingHTTPServer(
+                (addr, port), _NotifyHandler, bind_and_activate=False
+            )
+            server.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            server.server_bind()
+            server.server_activate()
+            threading.Thread(target=server.serve_forever, daemon=True).start()
+            started.append(addr)
+        except Exception as exc:
+            _log_notify_error(f"notify listener bind {addr}:{port} failed: {exc}")
+    if not started:
+        _log_notify_error("notify listener: NO addresses bound")
 
 
 # ---- Unix-socket bridge for the FastAPI dashboard backend -----------------
