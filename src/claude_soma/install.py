@@ -1020,8 +1020,80 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
+# ---------------------------------------------------------------------------
+# Multi-VPS host subcommands (opt-in; the no-subcommand path is the unchanged
+# single-VPS installer). See docs/multi-vps.md.
+# ---------------------------------------------------------------------------
+_HOST_SUBCOMMANDS = ("enroll-host", "validate-hosts", "remove-host")
+
+
+def _repo_root() -> Path:
+    return Path(__file__).resolve().parents[2]
+
+
+def _cmd_enroll_host(rest: list[str]) -> int:
+    """Forward to scripts/enroll_vps_host.sh (kept standalone-runnable for shell-first ops)."""
+    script = _repo_root() / "scripts" / "enroll_vps_host.sh"
+    if not script.exists():
+        print(f"ERROR: {script} not found", file=sys.stderr)
+        return 1
+    return subprocess.call(["bash", str(script), *rest])
+
+
+def _cmd_validate_hosts(rest: list[str]) -> int:
+    from claude_soma.mcp_servers.project_orchestrator import hosts as H
+
+    p = argparse.ArgumentParser(prog="soma-install validate-hosts")
+    p.add_argument("--path", default=H.HOSTS_JSON)
+    a = p.parse_args(rest)
+    hosts = H.load_hosts(a.path)
+    errs = H.validate_hosts(hosts, check_identity_files=True)
+    if errs:
+        print(f"hosts.json INVALID ({a.path}):", file=sys.stderr)
+        for e in errs:
+            print(f"  - {e}", file=sys.stderr)
+        return 1
+    remotes = [k for k in hosts if k != "local"]
+    print(f"hosts.json OK ({a.path}): local + {len(remotes)} remote host(s)")
+    for k in remotes:
+        print(f"  - {k}: {hosts[k].get('tailnet_ip')} status={hosts[k].get('status', '?')}")
+    return 0
+
+
+def _cmd_remove_host(rest: list[str]) -> int:
+    from claude_soma.mcp_servers.project_orchestrator import hosts as H
+
+    p = argparse.ArgumentParser(prog="soma-install remove-host")
+    p.add_argument("--alias", required=True)
+    p.add_argument("--path", default=H.HOSTS_JSON)
+    a = p.parse_args(rest)
+    if a.alias not in H.load_hosts(a.path):
+        print(f"host {a.alias!r} not in registry; nothing to remove")
+        return 0
+    try:
+        H.remove_host(a.alias, path=a.path)
+    except ValueError as e:
+        print(f"ERROR: {e}", file=sys.stderr)
+        return 1
+    print(f"removed host {a.alias!r} from {a.path}")
+    print("NOTE: move/stop any leads on that host first, then revoke the "
+          "orchestrator key from the host's ~/.ssh/authorized_keys.")
+    return 0
+
+
+def _dispatch_host_subcommand(cmd: str, rest: list[str]) -> int:
+    return {
+        "enroll-host": _cmd_enroll_host,
+        "validate-hosts": _cmd_validate_hosts,
+        "remove-host": _cmd_remove_host,
+    }[cmd](rest)
+
+
 def main(argv: list[str] | None = None) -> int:
     """Entry point: ``python -m claude_soma.install`` or ``soma-install``."""
+    raw = list(sys.argv[1:] if argv is None else argv)
+    if raw and raw[0] in _HOST_SUBCOMMANDS:
+        return _dispatch_host_subcommand(raw[0], raw[1:])
     args = _parse_args(argv)
     _setup_logging(args.verbose)
 

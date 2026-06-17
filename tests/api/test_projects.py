@@ -48,7 +48,7 @@ def test_project_team_returns_roster(tmp_path, monkeypatch) -> None:
     orch._reg().register("tm", agent_id="soma-proj-tm", type_="custom",
                          cwd="/x", rc_url=None)
     roster = [{"handle": "teammate-1", "role": "writer", "status": "active"}]
-    monkeypatch.setattr(orch, "discover_team", lambda agent_id: roster)
+    monkeypatch.setattr(orch, "discover_team", lambda agent_id, host="local": roster)
 
     app = create_app()
     client = TestClient(app)

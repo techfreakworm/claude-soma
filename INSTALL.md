@@ -358,7 +358,41 @@ sudo journalctl -u claude-soma-channel -f
 sudo bash scripts/smoke_install.sh
 ```
 
-See `scripts/smoke_install.sh` for the full check list. It verifies: services active, ports listening, Caddy serving both domains, dashboard HTTP 200, MCPs healthy, timers enabled. All checks must pass before declaring the install complete.
+See `scripts/smoke_install.sh` for the full check list. It verifies: services active, ports listening, Caddy serving both domains, dashboard HTTP 200, MCPs healthy, timers enabled, and `hosts.json` valid. All checks must pass before declaring the install complete.
+
+---
+
+## Adding a second VPS (multi-host orchestration) — optional
+
+The install above produces a single-VPS deployment (`hosts.json` has only
+`local`). To run leads on an **additional** VPS — commanded by this orchestrator
+but isolated on its own RAM (e.g. a crucial-persistent or memory-hungry lead) —
+enroll it once:
+
+**Operator-manual prerequisites** (trust roots, outside the scripts):
+1. Provision the new box (Ubuntu 24.04, ideally same arch as A).
+2. `tailscale up` on it; ACL allows `A → new:22` and `new → A:9100`.
+3. Put your provisioning key's *public* half in `new:~/.ssh/authorized_keys`.
+4. Cloud firewall: deny public inbound (tailnet-only).
+
+**Then, from this (orchestrator) host:**
+
+```bash
+soma-install enroll-host \
+    --alias vps-b --tailnet-ip 100.x.y.z \
+    --identity ~/.ssh/soma-orchestrator \
+    --admin-key ~/.ssh/id_ed25519 \
+    [--degraded-webhook https://discord.com/api/webhooks/...]   # for crucial leads
+```
+
+It provisions the lead-runtime (guard, venv, claude, secrets subset, auth) and
+self-verifies (guard probe + spawn+LLM probe + notify round-trip) before marking
+the host `verified`. Re-running is idempotent. Then place a lead with
+`spawn_project(host="vps-b", tier="critical"|"standard", …)`.
+
+`soma-install validate-hosts` checks the registry; `soma-install remove-host
+--alias vps-b` reverses enrollment. **Full details + security model:
+[`docs/multi-vps.md`](docs/multi-vps.md).**
 
 ---
 

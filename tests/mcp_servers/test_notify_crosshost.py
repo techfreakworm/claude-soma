@@ -83,3 +83,65 @@ def test_listener_url_default_and_override(monkeypatch):
     monkeypatch.setenv("HERMES_NOTIFY_URL", "http://100.103.37.115:9100/notify")
     assert n._listener_url() == "http://100.103.37.115:9100/notify"
     assert n._listener_base() == "http://100.103.37.115:9100"
+
+
+# --- degraded-webhook fallback (A-down safety net for remote financial leads) ---
+
+def test_degraded_fires_on_connection_error(monkeypatch):
+    from claude_soma.mcp_servers.hermes_notify import server as n
+    calls = {}
+    monkeypatch.setattr(n, "_maybe_degraded_alert", lambda obj: calls.setdefault("obj", obj))
+
+    def boom(req, timeout=10):
+        raise n.urllib.error.URLError("Connection refused")
+
+    monkeypatch.setattr(n.urllib.request, "urlopen", boom)
+    ok, _ = n._post_json("http://127.0.0.1:9100/notify", {"lead": "x", "type": "MILESTONE"})
+    assert ok is False
+    assert calls.get("obj", {}).get("lead") == "x"  # degraded path invoked
+
+
+def test_degraded_skipped_on_http_error(monkeypatch):
+    from claude_soma.mcp_servers.hermes_notify import server as n
+    calls = {}
+    monkeypatch.setattr(n, "_maybe_degraded_alert", lambda obj: calls.setdefault("hit", True))
+
+    def http_err(req, timeout=10):
+        raise n.urllib.error.HTTPError("http://a", 401, "no", {}, None)
+
+    monkeypatch.setattr(n.urllib.request, "urlopen", http_err)
+    ok, _ = n._post_json("http://127.0.0.1:9100/notify", {"lead": "x", "type": "MILESTONE"})
+    assert ok is False
+    assert "hit" not in calls  # A responded (up) => no degraded fallback
+
+
+def test_degraded_noop_without_webhook(monkeypatch):
+    from claude_soma.mcp_servers.hermes_notify import server as n
+    monkeypatch.delenv("HERMES_DEGRADED_WEBHOOK", raising=False)
+    posted = {}
+    monkeypatch.setattr(n.urllib.request, "urlopen",
+                        lambda req, timeout=8: posted.setdefault("hit", True))
+    n._maybe_degraded_alert({"lead": "x", "type": "MILESTONE", "payload_json": "{}"})
+    assert "hit" not in posted  # no webhook configured => no outbound post
+
+
+def test_degraded_posts_to_webhook_when_set(monkeypatch):
+    from claude_soma.mcp_servers.hermes_notify import server as n
+    monkeypatch.setenv("HERMES_DEGRADED_WEBHOOK", "https://discord.com/api/webhooks/x")
+    seen = {}
+
+    class R:
+        def close(self): pass
+
+    def fake(req, timeout=8):
+        seen["url"] = req.full_url
+        seen["body"] = req.data
+        seen["ua"] = req.headers.get("User-agent")
+        return R()
+
+    monkeypatch.setattr(n.urllib.request, "urlopen", fake)
+    n._maybe_degraded_alert({"lead": "algo-trader", "type": "ERROR",
+                             "payload_json": '{"error":"feed down"}'})
+    assert seen["url"].startswith("https://discord.com/api/webhooks/")
+    assert b"DEGRADED" in seen["body"] and b"algo-trader" in seen["body"]
+    assert seen["ua"]  # UA present (Discord/Cloudflare)

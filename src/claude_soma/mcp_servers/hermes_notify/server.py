@@ -78,6 +78,45 @@ def _auth_headers() -> dict:
     return {"Authorization": f"Bearer {tok}"} if tok else {}
 
 
+def _degraded_webhook() -> str | None:
+    """Opt-in (per host) outbound-only Discord webhook for the A-down case.
+    Set via `enroll-host --degraded-webhook` (adds HERMES_DEGRADED_WEBHOOK to that
+    host's secrets). Default unset => behaviour unchanged for single-VPS hosts."""
+    return os.environ.get("HERMES_DEGRADED_WEBHOOK") or None
+
+
+def _maybe_degraded_alert(obj: dict) -> None:
+    """Last-resort alert when the orchestrator (A) is *connection-unreachable*.
+
+    Fires ONLY when a degraded webhook is configured. Used so a financial lead on
+    a remote host is not silently blind during an A outage. Never raises; no loop
+    (the webhook is a distinct endpoint, not A's listener)."""
+    url = _degraded_webhook()
+    if not url:
+        return
+    lead = obj.get("lead") or _lead_name() or "?"
+    typ = obj.get("type") or "?"
+    short = ""
+    try:
+        pj = obj.get("payload_json")
+        p = (json.loads(pj) if isinstance(pj, str) else pj) or {}
+        short = (p.get("progress") or p.get("summary") or p.get("description")
+                 or p.get("question") or p.get("error") or "")[:160]
+    except (json.JSONDecodeError, ValueError, AttributeError, TypeError):
+        short = ""
+    content = f"[DEGRADED] orchestrator (A) unreachable — {lead} {typ}: {short}".strip()
+    try:
+        body = json.dumps({"content": content}).encode()
+        req = urllib.request.Request(
+            url, data=body, method="POST",
+            headers={"Content-Type": "application/json",
+                     "User-Agent": "ClaudeSoma-degraded/1.0"},  # Discord/Cloudflare needs a UA
+        )
+        urllib.request.urlopen(req, timeout=8).close()
+    except Exception:  # noqa: BLE001 — truly last-resort; must never raise
+        pass
+
+
 def _post_json(url: str, obj: dict) -> tuple[bool, dict]:
     """POST JSON to the listener with the bearer token. Returns (ok, response).
     Never raises (a notify failure must never break the caller)."""
@@ -92,7 +131,13 @@ def _post_json(url: str, obj: dict) -> tuple[bool, dict]:
             except (json.JSONDecodeError, ValueError):
                 data = {}
             return ok, data
+    except urllib.error.HTTPError:
+        # A responded with an error status => A is UP (auth/validation issue);
+        # do NOT trigger the degraded fallback.
+        return False, {}
     except (urllib.error.URLError, OSError):
+        # connection-level failure (refused/timeout) => A likely DOWN.
+        _maybe_degraded_alert(obj)
         return False, {}
 
 

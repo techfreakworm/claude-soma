@@ -52,6 +52,7 @@ check "/var/log/claude-soma exists" "test -d /var/log/claude-soma"
 check "/var/lib/claude-soma/relay exists" "test -d /var/lib/claude-soma/relay"
 check "/var/lib/claude-soma/engagement exists" "test -d /var/lib/claude-soma/engagement"
 check "/var/lib/claude-soma/engagement/queue.jsonl exists" "test -e /var/lib/claude-soma/engagement/queue.jsonl"
+check "hosts.json valid (multi-VPS registry)" "/opt/claude-soma/.venv/bin/python -c \"import sys; sys.path.insert(0,'/opt/claude-soma/src'); from claude_soma.mcp_servers.project_orchestrator import hosts as H; sys.exit(1 if H.validate_hosts(H.load_hosts()) else 0)\""
 
 # Section 2: services active
 check "claude-soma-api.service active" "systemctl is-active claude-soma-api.service"

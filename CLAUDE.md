@@ -15,6 +15,7 @@ Claude Soma is a Claude Code plugin + companion services that wraps Claude Code 
 - **Week 4 (polish)**: complete.
 - **Post-V1 additions** (shipped 2026-05 → 2026-06): FI-NOTIFY (lead → orchestrator notify channel), FI-DOMAIN (Caddy files relay at https://files.mayankgupta.in), engagement-drip (hourly draft pipeline), proactive-DM coverage for MILESTONE events, generalized auto-restart dispatch table, listener-direct healthcheck, S-EVENT-HANDLING (NEEDS_INPUT bypass-path fix), spawner --mcp-config + --setting-sources fix, usage-tab UTC + graceful-ceilings render, and the admin-upload sanitize-filenames fix. See git log for details.
 - **User-action items** (VPS provisioning, OAuth, Telegram pairing, systemd installs): complete — see [INSTALL.md](INSTALL.md) for the canonical runbook.
+- **Multi-VPS orchestration**: Phase-1 runtime live (forced-command guard, per-lead `host`+`tier`, RemoteRunner, tri-state liveness, cross-host FI-NOTIFY). Shipped the `soma-install enroll-host|validate-hosts|remove-host` feature (one-command, idempotent, self-verifying host provisioner) + opt-in degraded-webhook. Single-VPS stays the default. See [docs/multi-vps.md](docs/multi-vps.md).
 
 ## Hard conventions
 
