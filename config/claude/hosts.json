@@ -1,15 +1,26 @@
 {
-  "local": { "tailnet_ip": null, "ssh_user": null, "ssh_identity": null },
+  "local": {
+    "tailnet_ip": null,
+    "ssh_user": null,
+    "ssh_identity": null
+  },
   "vps-b": {
     "tailnet_ip": "100.102.145.110",
     "ssh_user": "ubuntu",
     "ssh_identity": "/home/ubuntu/.ssh/soma-orchestrator",
     "max_concurrent": 3,
-    "ram_mb": 11000,
-    "headroom_mb": 2000,
+    "ram_mb": 11927,
+    "headroom_mb": 1987,
     "tier_caps": {
-      "critical": { "max_mb": 6000, "high_mb": 5000 },
-      "standard": { "max_mb": 3000, "high_mb": 2500 }
-    }
+      "critical": {
+        "max_mb": 6000,
+        "high_mb": 5000
+      },
+      "standard": {
+        "max_mb": 3000,
+        "high_mb": 2500
+      }
+    },
+    "status": "verified"
   }
 }
