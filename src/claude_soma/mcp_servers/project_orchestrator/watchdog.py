@@ -93,25 +93,37 @@ def _reg() -> Registry:
 
 
 def _notify(text: str) -> None:
-    """Fail-open Telegram DM to the operator via the Bot API sendMessage.
+    """Fail-open operator DM: Discord primary, Telegram best-effort fallback.
 
-    Reads TELEGRAM_BOT_TOKEN + HERMES_NOTIFY_CHAT_ID from the process env
-    (systemd loads them via EnvironmentFile). Swallows ALL exceptions so a
-    notification failure never affects revival. Never logs the token value.
-    Uses urllib so the watchdog adds no new dependency.
+    The dual-route policy lives in claude_soma.operator_dm. The closure below is
+    the legacy Telegram path (form-encoded Bot API sendMessage), preserved as the
+    fallback: it reads TELEGRAM_BOT_TOKEN + HERMES_NOTIFY_CHAT_ID from the process
+    env (systemd EnvironmentFile). Swallows ALL exceptions so a notification
+    failure never affects revival. Never logs the token value.
     """
+    def _telegram_send() -> int | None:
+        try:
+            token = os.environ.get("TELEGRAM_BOT_TOKEN", "")
+            chat_id = os.environ.get("HERMES_NOTIFY_CHAT_ID", "")
+            if not token or not chat_id:
+                logger.info("watchdog: telegram notify skipped (token or chat_id missing)")
+                return None
+            url = f"https://api.telegram.org/bot{token}/sendMessage"
+            data = urllib.parse.urlencode({"chat_id": chat_id, "text": text}).encode()
+            req = urllib.request.Request(url, data=data, method="POST")
+            urllib.request.urlopen(req, timeout=NOTIFY_TIMEOUT_SEC).close()
+            return 1
+        except (urllib.error.URLError, OSError, ValueError) as exc:
+            logger.info("watchdog: telegram notify failed: %s", exc)
+            return None
+        except Exception as exc:  # noqa: BLE001 -- DM must never raise
+            logger.info("watchdog: telegram notify failed (unexpected): %s", exc)
+            return None
+
     try:
-        token = os.environ.get("TELEGRAM_BOT_TOKEN", "")
-        chat_id = os.environ.get("HERMES_NOTIFY_CHAT_ID", "")
-        if not token or not chat_id:
-            logger.info("watchdog: notify skipped (token or chat_id missing)")
-            return
-        url = f"https://api.telegram.org/bot{token}/sendMessage"
-        data = urllib.parse.urlencode({"chat_id": chat_id, "text": text}).encode()
-        req = urllib.request.Request(url, data=data, method="POST")
-        urllib.request.urlopen(req, timeout=NOTIFY_TIMEOUT_SEC).close()
-    except (urllib.error.URLError, OSError, ValueError) as exc:
-        logger.info("watchdog: notify failed: %s", exc)
+        from claude_soma.operator_dm import send_operator_dm
+
+        send_operator_dm(text, is_html=False, telegram_fallback=_telegram_send)
     except Exception as exc:  # noqa: BLE001 -- DM must never raise
         logger.info("watchdog: notify failed (unexpected): %s", exc)
 

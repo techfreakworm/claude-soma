@@ -19,18 +19,10 @@ ENV_FILE=/home/ubuntu/.claude/channels/telegram/.env
 
 log() { echo "[$TS] $*" >> "$LOG"; }
 
-if [[ ! -r "$ENV_FILE" ]]; then
-    log "FATAL: cannot read $ENV_FILE"
-    exit 1
-fi
-
-TELEGRAM_BOT_TOKEN=""
+# Operator notify: Discord primary, Telegram best-effort fallback.
+NOTIFY_LIB="${NOTIFY_LIB:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/notify_lib.sh}"
 # shellcheck source=/dev/null
-source "$ENV_FILE"
-if [[ -z "$TELEGRAM_BOT_TOKEN" ]]; then
-    log "FATAL: TELEGRAM_BOT_TOKEN unset after sourcing $ENV_FILE"
-    exit 1
-fi
+source "$NOTIFY_LIB"
 
 # Day-of-week greeting (Mon morning / Tue morning / ...)
 DOW="$(date +%a)"
@@ -71,20 +63,10 @@ if [[ ${#MSG} -gt 200 ]]; then
     MSG="${MSG:0:197}..."
 fi
 
-API_URL="https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage"
-HTTP=$(curl -s -o /tmp/portfolio_oneliner.resp -w "%{http_code}" \
-    --max-time 15 \
-    -X POST "$API_URL" \
-    -d "chat_id=${CHAT_ID}" \
-    --data-urlencode "text=${MSG}" 2>>"$LOG")
-
-if [[ "$HTTP" == "200" ]]; then
+if soma_notify "$MSG"; then
     log "sent ok (${#MSG} chars): ${MSG}"
-    rm -f /tmp/portfolio_oneliner.resp
     exit 0
 else
-    RESP=$(head -c 500 /tmp/portfolio_oneliner.resp 2>/dev/null || echo "<no response>")
-    log "FAILED http=${HTTP} response=${RESP} msg=${MSG}"
-    rm -f /tmp/portfolio_oneliner.resp
+    log "notify FAILED (discord + telegram both failed) msg=${MSG}"
     exit 2
 fi

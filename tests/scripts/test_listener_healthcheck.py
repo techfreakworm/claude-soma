@@ -36,10 +36,16 @@ def test_health_endpoint_present() -> None:
     assert "http://127.0.0.1:9100/health" in content
 
 
-def test_telegram_curl_present() -> None:
+def test_notify_via_shared_helper() -> None:
+    # The alert now routes through the shared dual-route helper (Discord primary,
+    # Telegram fallback), not a direct curl in this script.
     content = SCRIPT.read_text()
-    assert "api.telegram.org/bot" in content
-    assert "sendMessage" in content
+    assert "notify_lib.sh" in content
+    assert "soma_notify" in content
+    lib = (REPO_ROOT / "scripts" / "notify_lib.sh").read_text()
+    assert "discord.com/api" in lib
+    assert "api.telegram.org/bot" in lib
+    assert "sendMessage" in lib
 
 
 def test_rate_limit_via_state_file(tmp_path: Path) -> None:
@@ -49,11 +55,17 @@ def test_rate_limit_via_state_file(tmp_path: Path) -> None:
     bin_dir.mkdir()
 
     mock_curl = bin_dir / "curl"
+    # Health probe fails (exit 1); the Discord notify call (primary route) returns
+    # HTTP 200 so the alert is delivered without falling back to Telegram.
     mock_curl.write_text(
         "#!/usr/bin/env bash\n"
         f"printf '%s\\n' \"$@\" >> {curl_log}\n"
         "if printf '%s\\n' \"$@\" | grep -q '9100/health'; then\n"
         "    exit 1\n"
+        "fi\n"
+        "if printf '%s\\n' \"$@\" | grep -q '/channels/'; then\n"
+        "    echo 200\n"
+        "    exit 0\n"
         "fi\n"
         "exit 0\n"
     )
@@ -62,6 +74,11 @@ def test_rate_limit_via_state_file(tmp_path: Path) -> None:
     env = os.environ.copy()
     env["PATH"] = str(bin_dir) + ":" + env["PATH"]
     env["LISTENER_HEALTHCHECK_STATE"] = str(state_file)
+    # Deterministic dual-route: a fake Discord token from a throwaway secrets
+    # file, so the helper attempts the (mocked) Discord call and never reads the
+    # real secrets.env.
+    env["DISCORD_BOT_TOKEN"] = "fake-discord-token"
+    env["SOMA_SECRETS_FILE"] = "/dev/null"
 
     result1 = subprocess.run(
         ["bash", str(SCRIPT)],
@@ -82,10 +99,12 @@ def test_rate_limit_via_state_file(tmp_path: Path) -> None:
 
     log_lines = curl_log.read_text().splitlines()
     health_calls = [ln for ln in log_lines if "9100/health" in ln]
+    discord_calls = [ln for ln in log_lines if "/channels/" in ln]
     telegram_calls = [ln for ln in log_lines if "sendMessage" in ln]
 
     assert len(health_calls) == 2, f"Expected 2 health calls, got {len(health_calls)}: {health_calls}"
-    assert len(telegram_calls) == 1, f"Expected 1 telegram call, got {len(telegram_calls)}: {telegram_calls}"
+    assert len(discord_calls) == 1, f"Expected 1 discord call (dedup via state file), got {len(discord_calls)}: {discord_calls}"
+    assert len(telegram_calls) == 0, f"Expected 0 telegram calls (discord succeeded), got {len(telegram_calls)}: {telegram_calls}"
 
 
 def test_success_path_with_whitespaced_json_response(tmp_path: Path) -> None:
@@ -122,6 +141,7 @@ def test_success_path_with_whitespaced_json_response(tmp_path: Path) -> None:
     assert not state_file.exists(), "state file must not be created when listener is healthy"
     log_content = curl_log.read_text() if curl_log.exists() else ""
     assert "sendMessage" not in log_content, f"sendMessage must not be called on success: {log_content!r}"
+    assert "/channels/" not in log_content, f"discord notify must not be called on success: {log_content!r}"
 
 
 def test_success_path_with_no_whitespace_json_response(tmp_path: Path) -> None:
@@ -158,6 +178,7 @@ def test_success_path_with_no_whitespace_json_response(tmp_path: Path) -> None:
     assert not state_file.exists(), "state file must not be created when listener is healthy"
     log_content = curl_log.read_text() if curl_log.exists() else ""
     assert "sendMessage" not in log_content, f"sendMessage must not be called on success: {log_content!r}"
+    assert "/channels/" not in log_content, f"discord notify must not be called on success: {log_content!r}"
 
 
 def test_systemd_unit_workingdir_or_exec_path() -> None:

@@ -8,6 +8,24 @@ from pathlib import Path
 import pytest
 
 
+@pytest.fixture(autouse=True)
+def _disable_discord_dm_route(monkeypatch):
+    """Keep unit tests off the live Discord API.
+
+    src/claude_soma/operator_dm.py is Discord-primary, and on the VPS the real
+    DISCORD_BOT_TOKEN is readable from /etc/claude-soma/secrets.env — so without
+    this guard a notify unit test would send a real Discord message. Disabling
+    the Discord route makes send_operator_dm fall straight through to the
+    Telegram fallback, so the existing notify tests stay deterministic. Tests
+    that specifically exercise the Discord route delenv this var themselves.
+
+    Note: this only affects the Python helper (SOMA_DISCORD_DM_DISABLED). The
+    shell helper uses a different switch (SOMA_NOTIFY_DISCORD_DISABLED), so bash
+    script tests under tests/scripts/ are unaffected.
+    """
+    monkeypatch.setenv("SOMA_DISCORD_DM_DISABLED", "1")
+
+
 @pytest.fixture(scope="session")
 def sample_wav(tmp_path_factory) -> Path:
     """Synthesize a tiny WAV using piper if available, else a silent WAV."""

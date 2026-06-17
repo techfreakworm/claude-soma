@@ -161,11 +161,12 @@ def _parse_when(when: str) -> float:
 
 @mcp.tool()
 def schedule_reminder(when: str, message: str) -> dict:
-    """Schedule a one-shot Telegram reminder.
+    """Schedule a one-shot operator reminder (Discord primary, Telegram fallback).
 
     Spawns a detached bash subprocess that sleeps until the target time, then
-    sends a Telegram message via the Bot API. The process survives parent exit
-    (start_new_session=True). CHAT_ID is read from HERMES_NOTIFY_CHAT_ID.
+    sends the message via the shared notify helper (scripts/notify_lib.sh:
+    Discord first, Telegram best-effort fallback). The process survives parent
+    exit (start_new_session=True).
 
     Args:
         when: When to fire. Accepts relative ("5m", "2h", "1d"),
@@ -186,14 +187,14 @@ def schedule_reminder(when: str, message: str) -> dict:
     reminder_id = uuid.uuid4().hex[:8]
     log_path = f"/tmp/reminder-{reminder_id}.log"
 
-    chat_id = _notify_chat_id()
-
+    # Discord primary, Telegram best-effort fallback via the shared shell helper
+    # (scripts/notify_lib.sh). The detached process inherits DISCORD_BOT_TOKEN /
+    # TELEGRAM_BOT_TOKEN from this process env (or the helper reads secrets.env);
+    # REMINDER_TEXT is passed via env, never interpolated into the script.
     bash_script = (
         f"sleep {delay_secs}\n"
-        f"source ~/.claude/channels/telegram/.env\n"
-        f"curl -sX POST \"https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendMessage\""
-        f" --data-urlencode \"chat_id={chat_id}\""
-        f" --data-urlencode \"text=$REMINDER_TEXT\"\n"
+        "source /opt/claude-soma/scripts/notify_lib.sh\n"
+        'soma_notify "$REMINDER_TEXT"\n'
     )
 
     env = os.environ.copy()
@@ -544,44 +545,58 @@ def _classify_attachments(paths: list[str]) -> tuple[list[str], list[str]]:
 
 
 def _send_proactive_dm(text: str, files: list[str] | None = None) -> int | None:
-    """DM the user. Returns Telegram message_id or None on failure."""
-    try:
-        token = _load_tg_token()
-        base = f"{_TG_API_BASE}/bot{token}"
-        chat_id = _notify_chat_id()
-        # The _format_*_dm helpers already produce Telegram HTML (with user
-        # fields html-escaped); piping that through gfm_to_html would entity-
-        # escape the <b>/<code>/<a>/<pre> tags themselves and Telegram would
-        # render them as literal text. Chunk the pre-rendered HTML directly.
-        chunks = chunk_html_for_telegram(text)
-        last_msg_id: int | None = None
-        for chunk in chunks:
-            result = _tg_post_json(f"{base}/sendMessage", {
-                "chat_id": chat_id,
-                "text": chunk,
-                "parse_mode": "HTML",
-                "link_preview_options": {"is_disabled": True},
-            })
-            last_msg_id = result["result"]["message_id"]
-        if files:
-            fields = {"chat_id": chat_id}
-            for fp in files:
-                try:
-                    path = Path(fp)
-                    ext = path.suffix.lower()
-                    if ext in _PHOTO_EXTS:
-                        r = _tg_post_multipart(f"{base}/sendPhoto", fields, fp)
-                    else:
-                        r = _tg_post_multipart(f"{base}/sendDocument", fields, fp)
-                    last_msg_id = r["result"]["message_id"]
-                except Exception as att_exc:
-                    _log_notify_error(f"attachment failed for {fp}: {att_exc}")
-                    # Continue with the next file — text already delivered;
-                    # partial attachment delivery is better than zero.
-        return last_msg_id
-    except Exception as exc:
-        _log_notify_error(f"proactive DM failed: {exc}")
-        return None
+    """DM the operator. Discord primary, Telegram best-effort fallback.
+
+    Returns a delivered message id (Discord snowflake when Discord wins, or the
+    Telegram message_id from the fallback) or None on total failure. The
+    dual-route policy lives in claude_soma.operator_dm; the closure below is the
+    legacy Telegram path, preserved verbatim as the fallback so delivery
+    auto-resumes when Telegram is reachable again.
+    """
+    def _telegram_send() -> int | None:
+        try:
+            token = _load_tg_token()
+            base = f"{_TG_API_BASE}/bot{token}"
+            chat_id = _notify_chat_id()
+            # The _format_*_dm helpers already produce Telegram HTML (with user
+            # fields html-escaped); piping that through gfm_to_html would entity-
+            # escape the <b>/<code>/<a>/<pre> tags themselves and Telegram would
+            # render them as literal text. Chunk the pre-rendered HTML directly.
+            chunks = chunk_html_for_telegram(text)
+            last_msg_id: int | None = None
+            for chunk in chunks:
+                result = _tg_post_json(f"{base}/sendMessage", {
+                    "chat_id": chat_id,
+                    "text": chunk,
+                    "parse_mode": "HTML",
+                    "link_preview_options": {"is_disabled": True},
+                })
+                last_msg_id = result["result"]["message_id"]
+            if files:
+                fields = {"chat_id": chat_id}
+                for fp in files:
+                    try:
+                        path = Path(fp)
+                        ext = path.suffix.lower()
+                        if ext in _PHOTO_EXTS:
+                            r = _tg_post_multipart(f"{base}/sendPhoto", fields, fp)
+                        else:
+                            r = _tg_post_multipart(f"{base}/sendDocument", fields, fp)
+                        last_msg_id = r["result"]["message_id"]
+                    except Exception as att_exc:
+                        _log_notify_error(f"attachment failed for {fp}: {att_exc}")
+                        # Continue with the next file — text already delivered;
+                        # partial attachment delivery is better than zero.
+            return last_msg_id
+        except Exception as exc:
+            _log_notify_error(f"proactive DM (telegram) failed: {exc}")
+            return None
+
+    from claude_soma.operator_dm import send_operator_dm
+
+    return send_operator_dm(
+        text, files=files, is_html=True, telegram_fallback=_telegram_send
+    )
 
 
 def _log_notify_error(msg: str) -> None:

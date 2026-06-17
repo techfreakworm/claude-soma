@@ -15,12 +15,10 @@ fi
 TS="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 echo "$TS" > "$STATE"
 
-if [[ -r /home/ubuntu/.claude/channels/telegram/.env ]]; then
-    source /home/ubuntu/.claude/channels/telegram/.env
-    curl -sX POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
-        --data-urlencode "chat_id=${HERMES_NOTIFY_CHAT_ID:-${TELEGRAM_CHAT_ID:-}}" \
-        --data-urlencode "text=ALERT: hermes_api listener /health failed at $TS" \
-        --max-time 5 >/dev/null 2>&1 || true
-fi
+# Operator notify: Discord primary, Telegram best-effort fallback.
+NOTIFY_LIB="${NOTIFY_LIB:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/notify_lib.sh}"
+# shellcheck source=/dev/null
+source "$NOTIFY_LIB"
+soma_notify "ALERT: hermes_api listener /health failed at $TS" || true
 
 exit 0

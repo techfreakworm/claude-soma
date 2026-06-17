@@ -58,6 +58,9 @@ def _run_script(
     env["PATH"] = f"{tmp_path}:{env.get('PATH', '/usr/bin:/bin')}"
     env["HERMES_AUTO_RESTART_WINDOW_UTC"] = window
     env["SOMA_AUTO_RESTART_LOCKFILE"] = str(tmp_path / "auto-restart.lock")
+    # Keep the post-restart operator notify (soma_notify) off the network in tests.
+    env["SOMA_NOTIFY_DISCORD_DISABLED"] = "1"
+    env["SOMA_NOTIFY_TELEGRAM_DISABLED"] = "1"
     if env_extra:
         env.update(env_extra)
 

@@ -57,7 +57,21 @@ def broadcast(body: BroadcastBody) -> dict:
     ts = time.time()
     with queue.open("a") as f:
         f.write(json.dumps({"ts": ts, "message": body.message}) + "\n")
-    delivered, error = _send_telegram(body.message)
+
+    # Discord primary, Telegram best-effort fallback (see claude_soma.operator_dm).
+    tg_error: dict[str, str | None] = {}
+
+    def _telegram_send() -> int | None:
+        ok, err = _send_telegram(body.message)
+        if not ok:
+            tg_error["error"] = err
+        return 1 if ok else None
+
+    from claude_soma.operator_dm import send_operator_dm
+
+    mid = send_operator_dm(body.message, is_html=False, telegram_fallback=_telegram_send)
+    delivered = mid is not None
+    error = None if delivered else tg_error.get("error", "discord and telegram both failed")
     return {"queued_at": ts, "delivered": delivered, "error": error}
 
 

@@ -28,18 +28,10 @@ TS="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 DATE="$(date -u +%Y-%m-%d)"
 log() { echo "[$TS] $*" >> "$LOG"; }
 
-if [[ ! -r "$ENV_FILE" ]]; then
-    log "FATAL: cannot read $ENV_FILE"
-    exit 1
-fi
-
-TELEGRAM_BOT_TOKEN=""
+# Operator notify: Discord primary, Telegram best-effort fallback.
+NOTIFY_LIB="${NOTIFY_LIB:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/notify_lib.sh}"
 # shellcheck source=/dev/null
-source "$ENV_FILE"
-if [[ -z "${TELEGRAM_BOT_TOKEN:-}" ]]; then
-    log "FATAL: TELEGRAM_BOT_TOKEN unset after sourcing $ENV_FILE"
-    exit 1
-fi
+source "$NOTIFY_LIB"
 
 if [[ ! -r "$REGISTRY" ]]; then
     log "FATAL: registry not readable: $REGISTRY"
@@ -113,20 +105,9 @@ fi
 DIGEST=$("$CLAUDE_BIN" -p "$PROMPT" --output-format text 2>/dev/null \
     || echo "(claude -p failed)")
 
-API_URL="https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage"
-RESP_FILE="/tmp/daily-status-$$.resp"
-HTTP=$(curl -s -o "$RESP_FILE" -w "%{http_code}" \
-    --max-time 30 \
-    -X POST "$API_URL" \
-    -d "chat_id=${CHAT_ID}" \
-    --data-urlencode "text=${DIGEST}" 2>>"$LOG")
-
-if [[ "$HTTP" == "200" ]]; then
+if soma_notify "$DIGEST"; then
     log "sent ok (${COUNT} leads, ${#DIGEST} chars)"
-    rm -f "$RESP_FILE"
 else
-    RESP=$(head -c 500 "$RESP_FILE" 2>/dev/null || echo "<no response>")
-    log "Telegram send FAILED http=${HTTP} resp=${RESP}"
-    rm -f "$RESP_FILE"
+    log "notify FAILED (discord + telegram both failed) (${COUNT} leads, ${#DIGEST} chars)"
     exit 2
 fi

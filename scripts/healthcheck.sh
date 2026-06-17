@@ -140,15 +140,13 @@ if [ -n "$BOT_PID" ]; then
     fi
 fi
 
-# 5. NEEDS_REAUTH sentinel scan — DM the user once per platform per day when
+# 5. NEEDS_REAUTH sentinel scan — DM the operator once per platform per day when
 #    pw-refresh.js drops a ~/.claude-pw/NEEDS_REAUTH-<platform> file.
-#    Uses the Telegram Bot API directly (same pattern as portfolio_oneliner.sh).
+#    Notify: Discord primary, Telegram best-effort fallback (scripts/notify_lib.sh).
 #    Soft-fail: any error in this section logs and continues; it MUST NOT abort
 #    the rest of the healthcheck.
 (
     CLAUDE_PW_DIR="${CLAUDE_PW_DIR:-/home/ubuntu/.claude-pw}"
-    TG_ENV_FILE="${TG_ENV_FILE:-/home/ubuntu/.claude/channels/telegram/.env}"
-    CHAT_ID="${HERMES_NOTIFY_CHAT_ID:-${TELEGRAM_CHAT_ID:-}}"
     PINGED_FILE="/home/ubuntu/.claude-soma/needs_reauth_pinged.txt"
     TODAY="$(date -u +%Y%m%d)"
 
@@ -160,23 +158,10 @@ fi
         exit 0
     fi
 
-    # Load Telegram token — soft-fail if absent or empty.
-    TELEGRAM_BOT_TOKEN=""
-    if [ -r "$TG_ENV_FILE" ]; then
-        # shellcheck source=/dev/null
-        source "$TG_ENV_FILE" 2>/dev/null || true
-    fi
-    if [ -z "${TELEGRAM_BOT_TOKEN:-}" ]; then
-        # Log once per sentinel found, then skip all pings.
-        for sentinel in "${CLAUDE_PW_DIR}"/NEEDS_REAUTH-*; do
-            [ -e "$sentinel" ] || continue
-            plat="${sentinel##*NEEDS_REAUTH-}"
-            echo "[$TS] reauth: SKIP ping for $plat — TELEGRAM_BOT_TOKEN empty (populate $TG_ENV_FILE)" >> "$LOG"
-        done
-        exit 0
-    fi
-
-    API_URL="https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage"
+    # Operator notify: Discord primary, Telegram best-effort fallback.
+    NOTIFY_LIB="${NOTIFY_LIB:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/notify_lib.sh}"
+    # shellcheck source=/dev/null
+    source "$NOTIFY_LIB"
 
     for sentinel in "${CLAUDE_PW_DIR}"/NEEDS_REAUTH-*; do
         [ -e "$sentinel" ] || continue    # handle empty glob
@@ -189,21 +174,12 @@ fi
         fi
 
         MSG="Playwright needs re-auth: ${plat}. VNC in and run scripts/pw-login.js."
-        RESP_FILE="/tmp/needs_reauth_${plat}.resp"
-        HTTP=$(curl -s -o "$RESP_FILE" -w "%{http_code}" \
-            --max-time 15 \
-            -X POST "$API_URL" \
-            -d "chat_id=${CHAT_ID}" \
-            --data-urlencode "text=${MSG}" 2>>"$LOG" || echo "000")
-
-        if [ "$HTTP" = "200" ]; then
+        if soma_notify "$MSG"; then
             echo "$key" >> "$PINGED_FILE"
-            echo "[$TS] reauth ping ${plat} -> http ${HTTP}" >> "$LOG"
+            echo "[$TS] reauth ping ${plat} -> delivered" >> "$LOG"
         else
-            RESP_BODY="$(head -c 200 "$RESP_FILE" 2>/dev/null || echo "<no response>")"
-            echo "[$TS] reauth ping ${plat} FAILED http=${HTTP} resp=${RESP_BODY}" >> "$LOG"
+            echo "[$TS] reauth ping ${plat} FAILED (discord + telegram both failed)" >> "$LOG"
         fi
-        rm -f "$RESP_FILE"
         # Do NOT remove the sentinel — only pw-login.js should clear it.
     done
 ) || true

@@ -53,18 +53,28 @@ def _alarm_chat_id() -> str:
 
 
 def _send_alarm_dm(text: str) -> None:
+    """DM the operator a context-pressure alarm. Discord primary, TG fallback."""
+    def _telegram_send() -> int | None:
+        try:
+            token = _alarm_load_tg_token()
+            chat_id = _alarm_chat_id()
+            payload = json.dumps({"chat_id": chat_id, "text": text}).encode()
+            req = urllib.request.Request(
+                f"{_TG_API_BASE}/bot{token}/sendMessage",
+                data=payload,
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            with urllib.request.urlopen(req, timeout=30):
+                pass
+            return 1
+        except Exception:
+            return None
+
     try:
-        token = _alarm_load_tg_token()
-        chat_id = _alarm_chat_id()
-        payload = json.dumps({"chat_id": chat_id, "text": text}).encode()
-        req = urllib.request.Request(
-            f"{_TG_API_BASE}/bot{token}/sendMessage",
-            data=payload,
-            headers={"Content-Type": "application/json"},
-            method="POST",
-        )
-        with urllib.request.urlopen(req, timeout=30):
-            pass
+        from claude_soma.operator_dm import send_operator_dm
+
+        send_operator_dm(text, is_html=False, telegram_fallback=_telegram_send)
     except Exception:
         pass
 
