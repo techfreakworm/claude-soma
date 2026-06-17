@@ -15,7 +15,8 @@ from mcp.server.fastmcp import FastMCP
 from .registry import Registry
 from .spawner import (
     spawn_background_lead, resume_background_lead, kill_session,
-    is_lead_alive, discover_team,
+    is_lead_alive, lead_liveness, discover_team,
+    load_hosts, _host_cfg,
     LEAD_SOCKET_PREFIX, TMUX_SESSION_PREFIX,
 )
 from .templates import load_template, list_template_names, TemplateNotFound
@@ -67,11 +68,46 @@ def _reconcile_active() -> list[dict]:
     """
     live: list[dict] = []
     for r in _reg().list_active():
-        if is_lead_alive(r["name"]):
+        host = r.get("host", "local")
+        # Local: bool liveness (today's behavior, conservative on tool error).
+        # Remote: tri-state so a momentarily-unreachable host is never demoted to
+        # 'dead' (only a confirmed-dead remote session is demoted).
+        if host == "local":
+            keep = is_lead_alive(r["name"], host)
+        else:
+            keep = lead_liveness(r["name"], host) != "dead"
+        if keep:
             live.append(r)
         else:
             _reg().set_status(r["name"], "dead", bump_activity=False)
     return live
+
+
+def _host_cap(host: str) -> int:
+    return int(_host_cfg(host).get("max_concurrent", MAX_CONCURRENT))
+
+
+def _admit_or_raise(host: str, tier: str, active: list[dict]) -> None:
+    """Per-host concurrency + memory admission. Raises RuntimeError if refused."""
+    on_host = [p for p in active if p.get("host", "local") == host]
+    cap = _host_cap(host)
+    if len(on_host) >= cap:
+        raise RuntimeError(
+            f"host {host!r} at concurrency cap ({cap}); "
+            f"active there: {[p['name'] for p in on_host]}"
+        )
+    cfg = _host_cfg(host)
+    caps = cfg.get("tier_caps")
+    if caps and cfg.get("ram_mb"):
+        used = sum(
+            caps.get(p.get("tier", "standard"), {}).get("max_mb", 0) for p in on_host
+        )
+        newmb = caps.get(tier, {}).get("max_mb", 0)
+        if used + newmb + int(cfg.get("headroom_mb", 0)) > int(cfg["ram_mb"]):
+            raise RuntimeError(
+                f"host {host!r} memory admission refused: reserved {used}M + new "
+                f"{newmb}M + headroom {cfg.get('headroom_mb', 0)}M > ram {cfg['ram_mb']}M"
+            )
 
 
 def _check_safety_gate() -> None:
@@ -99,17 +135,14 @@ def _check_safety_gate() -> None:
 
 
 def spawn_project_impl(
-    *, name: str, type_: str, brief: str, permission_mode: str = "acceptEdits"
+    *, name: str, type_: str, brief: str, permission_mode: str = "acceptEdits",
+    host: str = "local", tier: str = "standard",
 ) -> dict:
     # Reconcile first so ghost leads (dead but still 'active' in the registry)
-    # don't wrongly count against the concurrency cap and block a real spawn.
+    # don't wrongly count against the per-host concurrency cap.
     _check_safety_gate()
     active = _reconcile_active()
-    if len(active) >= MAX_CONCURRENT:
-        raise RuntimeError(
-            f"already at concurrency cap ({MAX_CONCURRENT}); "
-            f"kill one project first. Active: {[p['name'] for p in active]}"
-        )
+    _admit_or_raise(host, tier, active)
     tmpl = _resolve_template(type_)
     projects_root = os.environ.get("HERMES_PROJECTS_ROOT", PROJECTS_ROOT)
     cwd = Path(projects_root) / name
@@ -122,11 +155,13 @@ def spawn_project_impl(
     spawn = spawn_background_lead(
         name=name, brief=composed_brief, cwd=cwd,
         permission_mode=permission_mode or tmpl.get("permission_mode", "acceptEdits"),
+        host=host, tier=tier,
     )
     _reg().register(
         name, agent_id=spawn["agent_id"], type_=tmpl["type"],
         cwd=str(cwd), rc_url=spawn.get("rc_url"),
         permission_mode=permission_mode, brief=composed_brief,
+        host=host, tier=tier,
     )
     _reg().set_session_uuid(name, spawn["session_uuid"])
     return {
@@ -135,6 +170,8 @@ def spawn_project_impl(
         "cwd": str(cwd),
         "type": tmpl["type"],
         "session_uuid": spawn["session_uuid"],
+        "host": host,
+        "tier": tier,
     }
 
 
@@ -157,7 +194,12 @@ def send_to_project_impl(*, name: str, message: str) -> dict:
     p = _reg().get(name)
     if not p:
         raise RuntimeError(f"no project named {name!r}")
-    if not is_lead_alive(name):
+    host = p.get("host", "local")
+    if host != "local":
+        raise NotImplementedError(
+            "messaging a remote lead needs a future guard 'send' verb"
+        )
+    if not is_lead_alive(name, host):
         raise RuntimeError(f"lead {name!r} is not running")
     tmux = os.environ.get("HERMES_TMUX_BIN", "/usr/bin/tmux")
     socket = f"{LEAD_SOCKET_PREFIX}{name}"
@@ -205,10 +247,11 @@ def kill_project_impl(*, name: str, archive: bool = True) -> dict:
     # lead alive while the registry would show it as killed, hiding zombie leads.
     # If the lead survives both kill attempts we raise instead of flipping the
     # registry, so the caller can investigate and retry.
-    kill_session(p["agent_id"])
-    if is_lead_alive(p["agent_id"]):
-        kill_session(p["agent_id"])
-        if is_lead_alive(p["agent_id"]):
+    host = p.get("host", "local")
+    kill_session(p["agent_id"], host)
+    if is_lead_alive(p["agent_id"], host):
+        kill_session(p["agent_id"], host)
+        if is_lead_alive(p["agent_id"], host):
             agent_id = p["agent_id"]
             bare = agent_id[len("soma-proj-"):] if agent_id.startswith("soma-proj-") else agent_id
             raise RuntimeError(
@@ -231,13 +274,10 @@ def resume_project_impl(*, name: str, force: bool = False) -> dict:
     """
     _check_safety_gate()
     active = _reconcile_active()
-    if len(active) >= MAX_CONCURRENT:
-        raise RuntimeError(
-            f"concurrency cap ({MAX_CONCURRENT}) reached; kill a lead first"
-        )
     p = _reg().get(name)
     if not p:
         raise RuntimeError(f"no project named {name!r}")
+    _admit_or_raise(p.get("host", "local"), p.get("tier", "standard"), active)
 
     session_uuid = _reg().get_session_uuid(name)
     if session_uuid is None:
@@ -247,7 +287,7 @@ def resume_project_impl(*, name: str, force: bool = False) -> dict:
             "create a new session (resume requires a cloud session ID)."
         )
 
-    if is_lead_alive(name):
+    if is_lead_alive(name, p.get("host", "local")):
         raise RuntimeError(
             f"project {name!r} is still alive; kill it before resuming."
         )
@@ -272,6 +312,8 @@ def resume_project_impl(*, name: str, force: bool = False) -> dict:
         session_uuid=session_uuid,
         resume_prompt_suffix=resume_prompt_suffix,
         force=force,
+        host=p.get("host", "local"),
+        tier=p.get("tier", "standard"),
     )
     # Refresh agent_id and rc_url in registry (new tmux session, same uuid).
     # register() upsert does not touch session_uuid, so it is preserved.
@@ -283,6 +325,8 @@ def resume_project_impl(*, name: str, force: bool = False) -> dict:
         rc_url=spawn.get("rc_url"),
         permission_mode=p["permission_mode"],
         brief=p["brief"],
+        host=p.get("host", "local"),
+        tier=p.get("tier", "standard"),
     )
     return {
         "agent_id": spawn["agent_id"],
@@ -299,13 +343,22 @@ def get_status_impl(name: str) -> dict:
         raise RuntimeError(f"no project named {name!r}")
     # Reconcile: if the registry thinks it's active but the tmux session is
     # gone, the lead vanished -- report (and persist) 'dead' rather than lie.
+    host = p.get("host", "local")
     status = p["status"]
-    if status == "active" and not is_lead_alive(name):
+    # Local: bool liveness (today's behavior). Remote: tri-state.
+    liveness = None
+    if status == "active":
+        if host == "local":
+            liveness = "alive" if is_lead_alive(name, host) else "dead"
+        else:
+            liveness = lead_liveness(name, host)
+    if status == "active" and liveness == "dead":
         _reg().set_status(name, "dead", bump_activity=False)
         status = "dead"
     return {
         "name": p["name"], "agent_id": p["agent_id"], "type": p["type"],
         "cwd": p["cwd"], "rc_url": p["rc_url"], "status": status,
+        "host": host, "tier": p.get("tier", "standard"), "liveness": liveness,
         "spawned_at": p["spawned_at"],
         "idle_for_seconds": _reg().idle_for(name),
         "estimated_next_turn_cost": 1.50,  # Heuristic: $15/MT @ 100k tokens
@@ -325,7 +378,7 @@ def get_team_impl(name: str) -> dict:
     p = _reg().get(name)
     if not p:
         raise RuntimeError(f"no project named {name!r}")
-    team = discover_team(p["agent_id"])
+    team = discover_team(p["agent_id"], p.get("host", "local"))
     for member in team:
         _reg().upsert_team_member(
             lead_name=name,
@@ -341,11 +394,18 @@ mcp = FastMCP("project_orchestrator")
 
 @mcp.tool()
 def spawn_project(
-    name: str, type: str, brief: str, permission_mode: str = "acceptEdits"
+    name: str, type: str, brief: str, permission_mode: str = "acceptEdits",
+    host: str = "local", tier: str = "standard",
 ) -> dict:
-    """Spawn a new project-lead background session with its own team scaffold."""
+    """Spawn a new project-lead background session with its own team scaffold.
+
+    host: 'local' (this VPS, default) or a remote host from
+    config/claude/hosts.json (e.g. 'vps-b'). tier: 'standard' (default) or
+    'critical' (per-host memory cap on a remote host).
+    """
     return spawn_project_impl(
-        name=name, type_=type, brief=brief, permission_mode=permission_mode
+        name=name, type_=type, brief=brief, permission_mode=permission_mode,
+        host=host, tier=tier,
     )
 
 

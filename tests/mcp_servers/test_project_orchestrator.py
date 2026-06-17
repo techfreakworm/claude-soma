@@ -307,7 +307,7 @@ def test_cap_intersect_skips_dead_leads(monkeypatch) -> None:
 
     # Effective count = 4: leads 0 and 1 are dead, 2-5 are alive.
     dead = {"cap-lead-0", "cap-lead-1"}
-    def _liveness(name: str) -> bool:
+    def _liveness(name: str, host: str = "local") -> bool:
         return name not in dead
 
     with patch("subprocess.run", side_effect=_tmux_side_effect("")):
@@ -666,9 +666,14 @@ def test_resume_project_quota_gate_raises() -> None:
 
 
 def test_resume_project_concurrency_cap_raises() -> None:
-    """resume_project_impl must raise with 'concurrency cap' when _reconcile_active
-    returns MAX_CONCURRENT live leads, mirroring the guard in spawn_project_impl."""
-    fake_active = [{"name": f"lead-{i}"} for i in range(orch.MAX_CONCURRENT)]
+    """resume_project_impl must raise a per-host concurrency-cap error when the
+    host already has MAX_CONCURRENT live leads (mirrors spawn_project_impl). The
+    project must exist first: admission is now checked after the project lookup
+    (it needs the lead's host/tier)."""
+    orch._reg().register("any-name", agent_id="soma-proj-any-name", type_="custom",
+                         cwd="/tmp/any-name", rc_url=None, brief="x")
+    fake_active = [{"name": f"lead-{i}", "host": "local", "tier": "standard"}
+                   for i in range(orch.MAX_CONCURRENT)]
     with patch.object(orch, "_reconcile_active", return_value=fake_active):
         with pytest.raises(RuntimeError, match="concurrency cap"):
             orch.resume_project_impl(name="any-name")

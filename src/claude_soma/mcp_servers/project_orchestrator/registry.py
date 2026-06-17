@@ -22,6 +22,8 @@ CREATE TABLE IF NOT EXISTS projects (
     rc_url         TEXT,
     status         TEXT NOT NULL DEFAULT 'active',
     permission_mode TEXT NOT NULL DEFAULT 'acceptEdits',
+    host           TEXT NOT NULL DEFAULT 'local',
+    tier           TEXT NOT NULL DEFAULT 'standard',
     spawned_at     REAL NOT NULL,
     last_activity  REAL NOT NULL,
     brief          TEXT,
@@ -107,6 +109,15 @@ class Registry:
                 )
             except sqlite3.OperationalError:
                 pass
+            # Backward-compat migration: multi-VPS host + tier columns.
+            for _ddl in (
+                "ALTER TABLE projects ADD COLUMN host TEXT NOT NULL DEFAULT 'local'",
+                "ALTER TABLE projects ADD COLUMN tier TEXT NOT NULL DEFAULT 'standard'",
+            ):
+                try:
+                    self._conn.execute(_ddl)
+                except sqlite3.OperationalError:
+                    pass
 
     def register(
         self,
@@ -118,21 +129,26 @@ class Registry:
         rc_url: str | None,
         permission_mode: str = "acceptEdits",
         brief: str | None = None,
+        host: str = "local",
+        tier: str = "standard",
     ) -> None:
         now = time.time()
         with self._lock:
             self._conn.execute(
                 """
                 INSERT INTO projects(name, agent_id, type, cwd, rc_url, status,
-                                     permission_mode, spawned_at, last_activity, brief)
-                VALUES(?, ?, ?, ?, ?, 'active', ?, ?, ?, ?)
+                                     permission_mode, host, tier, spawned_at,
+                                     last_activity, brief)
+                VALUES(?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(name) DO UPDATE SET
                     agent_id=excluded.agent_id, type=excluded.type, cwd=excluded.cwd,
                     rc_url=excluded.rc_url, status='active',
                     permission_mode=excluded.permission_mode,
+                    host=excluded.host, tier=excluded.tier,
                     last_activity=excluded.last_activity, brief=excluded.brief
                 """,
-                (name, agent_id, type_, cwd, rc_url, permission_mode, now, now, brief),
+                (name, agent_id, type_, cwd, rc_url, permission_mode,
+                 host, tier, now, now, brief),
             )
 
     def get(self, name: str) -> dict[str, Any] | None:
@@ -169,7 +185,7 @@ class Registry:
             rows = self._conn.execute(
                 """
                 SELECT name, cwd, permission_mode, brief, status, session_uuid,
-                       last_activity
+                       last_activity, host, tier
                 FROM projects
                 WHERE status IN ('active', 'dead')
                 ORDER BY last_activity DESC

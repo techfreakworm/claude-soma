@@ -49,7 +49,7 @@ def calls(monkeypatch: pytest.MonkeyPatch) -> dict:
     alive_map: dict[str, list[bool]] = {}
     rec["_alive_map"] = alive_map
 
-    def fake_alive(name: str) -> bool:
+    def fake_alive(name: str, host: str = "local") -> bool:
         rec["alive_calls"].append(name)
         bare = name
         seq = alive_map.get(bare)
@@ -59,7 +59,12 @@ def calls(monkeypatch: pytest.MonkeyPatch) -> dict:
             return seq[0]
         return seq.pop(0)
 
-    def fake_kill(name: str) -> None:
+    def fake_liveness(name: str, host: str = "local") -> str:
+        # Map the bool queue to tri-state so the new _process_row primary check
+        # (lead_liveness) consumes the same queue as the legacy is_lead_alive flow.
+        return "alive" if fake_alive(name, host) else "dead"
+
+    def fake_kill(name: str, host: str = "local") -> None:
         rec["kill"].append(name)
 
     def fake_resume(**kwargs) -> dict:
@@ -79,6 +84,7 @@ def calls(monkeypatch: pytest.MonkeyPatch) -> dict:
         rec["notify"].append(text)
 
     monkeypatch.setattr(watchdog, "is_lead_alive", fake_alive)
+    monkeypatch.setattr(watchdog, "lead_liveness", fake_liveness)
     monkeypatch.setattr(watchdog, "kill_session", fake_kill)
     monkeypatch.setattr(watchdog, "resume_background_lead", fake_resume)
     monkeypatch.setattr(watchdog, "spawn_background_lead", fake_spawn)

@@ -44,6 +44,7 @@ from typing import Any
 from .registry import Registry
 from .spawner import (
     is_lead_alive,
+    lead_liveness,
     kill_session,
     resume_background_lead,
     spawn_background_lead,
@@ -128,15 +129,15 @@ def _notify(text: str) -> None:
         logger.info("watchdog: notify failed (unexpected): %s", exc)
 
 
-def _grace_alive(name: str) -> bool:
+def _grace_alive(name: str, host: str = "local") -> bool:
     """Poll live tmux up to GRACE_POLLS times; True as soon as the lead is alive."""
     polls = max(1, _env_int("HERMES_LEAD_WATCHDOG_GRACE_POLLS", GRACE_POLLS))
     interval = _env_float("HERMES_LEAD_WATCHDOG_GRACE_INTERVAL_SEC", GRACE_INTERVAL_SEC)
     for _ in range(polls):
-        if is_lead_alive(name):
+        if is_lead_alive(name, host):
             return True
         time.sleep(interval)
-    return is_lead_alive(name)
+    return is_lead_alive(name, host)
 
 
 def run_once() -> dict[str, Any]:
@@ -197,8 +198,21 @@ def _process_row(
     """Process one revivable lead: self-heal if alive, else revive with backoff."""
     name = row["name"]
     status = row["status"]
+    host = row.get("host", "local")
 
-    if is_lead_alive(name):
+    liveness = lead_liveness(name, host)
+    if liveness == "unreachable":
+        # Host momentarily unreachable (ssh transport/timeout): the lead may be
+        # perfectly alive on it -- NEVER kill or revive. Alert and retry next sweep.
+        summary["unreachable"] = summary.get("unreachable", 0) + 1
+        logger.info("watchdog: host %r unreachable for %s; not reviving", host, name)
+        if not dry_run:
+            _notify(
+                f"Lead watchdog: host {host!r} UNREACHABLE for '{name}'; "
+                f"not reviving, will retry."
+            )
+        return
+    if liveness == "alive":
         summary["alive"] += 1
         if status != "active":
             if dry_run:
@@ -245,7 +259,7 @@ def _process_row(
     # Another revival path (operator resume_project, orchestrator auto-restart)
     # may have brought the lead back since the check above -- killing it here
     # would tear down a live session.
-    if is_lead_alive(name):
+    if is_lead_alive(name, host):
         summary["alive"] += 1
         if status != "active":
             reg.set_status(name, "active", bump_activity=False)
@@ -259,7 +273,7 @@ def _process_row(
     # Clear any lingering `active (exited)` unit so the respawn isn't rejected
     # with "already exists". Best-effort.
     try:
-        kill_session(name)
+        kill_session(name, host)
     except Exception as exc:  # noqa: BLE001
         logger.info("watchdog: kill_session(%s) failed (continuing): %s", name, exc)
 
@@ -272,6 +286,8 @@ def _process_row(
                 permission_mode=permission_mode,
                 session_uuid=row["session_uuid"],
                 force=False,
+                host=host,
+                tier=row.get("tier", "standard"),
             )
         except Exception as exc:  # noqa: BLE001 -- any resume failure -> fresh fallback
             # Context guard >200k tokens, a bad session, etc. -- fall back to a
@@ -288,6 +304,8 @@ def _process_row(
                 brief=row.get("brief") or "",
                 cwd=cwd,
                 permission_mode=permission_mode,
+                host=host,
+                tier=row.get("tier", "standard"),
             )
             reg.set_session_uuid(name, spawn["session_uuid"])
         except Exception as exc:  # noqa: BLE001
@@ -301,7 +319,7 @@ def _process_row(
         return
 
     # Grace period: confirm the respawned lead actually came up.
-    if _grace_alive(name):
+    if _grace_alive(name, host):
         reg.set_status(name, "active", bump_activity=False)
         reg.record_revive_attempt(name, method=method, outcome="revived", success=True)
         summary["revived"] += 1

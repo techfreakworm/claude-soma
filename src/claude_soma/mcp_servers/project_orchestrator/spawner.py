@@ -1,6 +1,7 @@
 # src/claude_soma/mcp_servers/project_orchestrator/spawner.py
 from __future__ import annotations
 
+import base64
 import json
 import os
 import re
@@ -33,6 +34,13 @@ TMUX_SESSION_PREFIX = "soma-proj-"
 # not the orchestrator's. See docs/notes/2026-05-25-project-lead-cgroup-teardown.md.
 SUDO_BIN = os.environ.get("HERMES_SUDO_BIN", "/usr/bin/sudo")
 SYSTEMD_RUN_BIN = os.environ.get("HERMES_SYSTEMD_RUN_BIN", "/usr/bin/systemd-run")
+
+# Multi-VPS: remote hosts run leads via the forced-command guard over ssh-on-tailnet.
+SSH_BIN = os.environ.get("HERMES_SSH_BIN", "/usr/bin/ssh")
+HOSTS_JSON = os.environ.get("HERMES_HOSTS_JSON", "/opt/claude-soma/config/claude/hosts.json")
+SSH_CONNECT_TIMEOUT = int(os.environ.get("HERMES_SSH_CONNECT_TIMEOUT", "8"))
+SSH_OP_TIMEOUT = int(os.environ.get("HERMES_SSH_OP_TIMEOUT", "15"))
+SPAWN_REMOTE_TIMEOUT = int(os.environ.get("HERMES_SSH_SPAWN_TIMEOUT", "25"))
 SYSTEMCTL_BIN = os.environ.get("HERMES_SYSTEMCTL_BIN", "/usr/bin/systemctl")
 LEAD_SOCKET_PREFIX = "soma-lead-"
 LEAD_UNIT_PREFIX = "claude-soma-lead-"
@@ -153,9 +161,14 @@ def _lead_log_path(name: str) -> Path:
     return Path(base) / f"{name}.log"
 
 
-def _wrap_in_transient_unit(name: str, inner_argv: list[str]) -> list[str]:
+def _wrap_in_transient_unit(
+    name: str, inner_argv: list[str], mem_props: list[str] | None = None
+) -> list[str]:
     """Wrap `inner_argv` so it runs inside its own transient systemd service,
-    giving the lead a cgroup independent of claude-soma-channel.service."""
+    giving the lead a cgroup independent of claude-soma-channel.service.
+
+    `mem_props` are optional per-tier --property=MemoryMax/MemoryHigh flags; the
+    default (None/[]) keeps the local argv byte-for-byte unchanged."""
     return [
         SUDO_BIN, "-n", SYSTEMD_RUN_BIN, "--collect", "--quiet",
         f"--unit={_lead_unit(name)}",
@@ -164,6 +177,7 @@ def _wrap_in_transient_unit(name: str, inner_argv: list[str]) -> list[str]:
         f"--property=User={LEAD_USER}",
         f"--property=Group={LEAD_GROUP}",
         f"--property=EnvironmentFile=-{LEAD_ENV_FILE}",
+        *list(mem_props or []),
         f"--setenv=HOME={LEAD_HOME}",
         f"--setenv=PATH={LEAD_PATH}",
         "--setenv=CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1",
@@ -257,6 +271,158 @@ def _capture_rc_url(session: str, socket: str, timeout: float | None = None) -> 
     return ""
 
 
+# ---------------------------------------------------------------------------
+# Multi-VPS: host registry + RemoteRunner (speaks the forced-command guard
+# contract in scripts/remote-exec-guard.sh). For a remote host RemoteRunner
+# NEVER builds systemd-run/tmux -- the guard constructs those on B with
+# User=ubuntu + unit hardcoded. Local host keeps today's path unchanged.
+# ---------------------------------------------------------------------------
+
+GUARD_DENY_RC = 99
+
+
+def load_hosts() -> dict:
+    try:
+        with open(HOSTS_JSON) as f:
+            return json.load(f)
+    except (OSError, json.JSONDecodeError):
+        return {"local": {"tailnet_ip": None, "ssh_identity": None}}
+
+
+def _host_cfg(host: str) -> dict:
+    hosts = load_hosts()
+    if host not in hosts:
+        raise RuntimeError(f"unknown host {host!r}; not in {HOSTS_JSON}")
+    return hosts[host]
+
+
+def build_guard_command(verb, name, *, mode=None, uuid_=None, tier=None, brief=None) -> str:
+    """Build ONE guard-contract line. brief is base64 (== `base64 -w0`, no newlines)."""
+    if verb in ("spawn", "resume"):
+        b64 = base64.b64encode(brief.encode("utf-8")).decode("ascii")
+        return f"{verb} {name} {mode} {uuid_} {tier} {b64}"
+    if verb in ("kill", "capture", "list", "has-session", "stat-transcript", "rc-url"):
+        return f"{verb} {name}"
+    raise ValueError(f"unknown guard verb {verb!r}")
+
+
+class RemoteRunner:
+    """Speaks the forced-command guard contract over ssh-on-tailnet."""
+
+    def __init__(self, host: str) -> None:
+        self.host = host
+        cfg = _host_cfg(host)
+        if not cfg.get("tailnet_ip"):
+            raise RuntimeError(f"host {host!r} has no tailnet_ip (not remote-capable)")
+        self.ip = cfg["tailnet_ip"]
+        self.user = cfg.get("ssh_user") or "ubuntu"
+        self.identity = cfg["ssh_identity"]
+
+    def _argv(self, line: str) -> list[str]:
+        return [
+            SSH_BIN, "-i", self.identity,
+            "-o", "IdentitiesOnly=yes", "-o", "BatchMode=yes",
+            "-o", f"ConnectTimeout={SSH_CONNECT_TIMEOUT}",
+            f"{self.user}@{self.ip}", line,
+        ]
+
+    def run(self, line: str, *, timeout: int) -> subprocess.CompletedProcess:
+        return subprocess.run(
+            self._argv(line), capture_output=True, text=True, timeout=timeout
+        )
+
+    def spawn(self, name, mode, uuid_, tier, brief, *, timeout=SPAWN_REMOTE_TIMEOUT):
+        return self.run(
+            build_guard_command("spawn", name, mode=mode, uuid_=uuid_, tier=tier, brief=brief),
+            timeout=timeout,
+        )
+
+    def resume(self, name, mode, uuid_, tier, prompt, *, timeout=SPAWN_REMOTE_TIMEOUT):
+        return self.run(
+            build_guard_command("resume", name, mode=mode, uuid_=uuid_, tier=tier, brief=prompt),
+            timeout=timeout,
+        )
+
+    def kill(self, name, *, timeout=SSH_OP_TIMEOUT):
+        return self.run(f"kill {name}", timeout=timeout)
+
+    def capture(self, name, *, timeout=SSH_OP_TIMEOUT):
+        return self.run(f"capture {name}", timeout=timeout)
+
+    def list_panes(self, name, *, timeout=SSH_OP_TIMEOUT):
+        return self.run(f"list {name}", timeout=timeout)
+
+    def has_session(self, name, *, timeout=SSH_OP_TIMEOUT):
+        return self.run(f"has-session {name}", timeout=timeout)
+
+    def rc_url(self, name, *, timeout=SSH_OP_TIMEOUT):
+        return self.run(f"rc-url {name}", timeout=timeout)
+
+
+def _classify_remote_liveness(rc: int) -> str:
+    if rc == 0:
+        return "alive"
+    if rc == 1:
+        return "dead"  # tmux has-session: no such session
+    # rc==255 ssh transport; rc==99 guard DENY; anything else -> NOT 'dead'
+    # (never revive on ambiguity).
+    return "unreachable"
+
+
+def _local_mem_props(host: str, tier: str) -> list[str]:
+    caps = _host_cfg(host).get("tier_caps", {}).get(tier)
+    if not caps:
+        return []
+    return [
+        f"--property=MemoryMax={caps['max_mb']}M",
+        f"--property=MemoryHigh={caps['high_mb']}M",
+    ]
+
+
+def _raise_on_guard_error(cp: subprocess.CompletedProcess, ctx: str) -> None:
+    stderr = cp.stderr or ""
+    if cp.returncode == GUARD_DENY_RC or "remote-exec-guard: DENY" in stderr:
+        raise RuntimeError(f"{ctx}: guard DENY: {stderr[-300:]}")
+    if cp.returncode == 255:
+        raise RuntimeError(f"{ctx}: ssh transport failure: {stderr[-300:]}")
+    if cp.returncode != 0:
+        raise RuntimeError(f"{ctx}: rc={cp.returncode}: {stderr[-300:]}")
+
+
+def _capture_rc_url_remote(rr: "RemoteRunner", name: str, timeout: float | None = None) -> str:
+    deadline = time.monotonic() + (RC_URL_POLL_SECONDS if timeout is None else timeout)
+    while time.monotonic() < deadline:
+        try:
+            cp = rr.rc_url(name)  # reads the URL from B's pipe-pane log
+        except (subprocess.SubprocessError, OSError):
+            return ""
+        m = RC_URL_RX.search(cp.stdout or "")
+        if m:
+            return m.group(0)
+        time.sleep(RC_URL_POLL_INTERVAL)
+    return ""
+
+
+def _spawn_remote(*, name, brief, cwd, permission_mode, session_uuid, host, tier) -> dict:
+    if session_uuid is None:
+        session_uuid = str(uuid.uuid4())
+    rr = RemoteRunner(host)
+    cp = rr.spawn(name, permission_mode, session_uuid, tier, brief)
+    _raise_on_guard_error(cp, f"remote spawn {name!r} on {host}")
+    rc_url = _capture_rc_url_remote(rr, name)
+    return {"agent_id": _session_name(name), "rc_url": rc_url,
+            "cwd": str(cwd), "session_uuid": session_uuid}
+
+
+def _resume_remote(*, name, prompt, cwd, permission_mode, session_uuid, host, tier) -> dict:
+    rr = RemoteRunner(host)
+    cp = rr.resume(name, permission_mode, session_uuid, tier, prompt)
+    _raise_on_guard_error(cp, f"remote resume {name!r} on {host}")
+    rc_url = _capture_rc_url_remote(rr, name)
+    return {"agent_id": _session_name(name), "rc_url": rc_url,
+            "cwd": str(cwd), "session_uuid": session_uuid}
+
+
 def spawn_background_lead(
     *,
     name: str,
@@ -265,6 +431,8 @@ def spawn_background_lead(
     permission_mode: str,
     session_uuid: str | None = None,
     extra_args: list[str] | None = None,
+    host: str = "local",
+    tier: str = "standard",
 ) -> dict:
     if not NAME_RX.match(name):
         raise InvalidProjectName(
@@ -272,6 +440,15 @@ def spawn_background_lead(
         )
     if len(brief) > MAX_BRIEF_CHARS:
         raise BriefTooLong(f"brief is {len(brief)} chars (max {MAX_BRIEF_CHARS})")
+
+    # Remote host: the forced-command guard on B builds systemd-run+tmux+claude-safe
+    # itself (pretrust/mkdir/RC-capture included). We only emit the guard contract.
+    if host != "local":
+        return _spawn_remote(
+            name=name, brief=brief, cwd=cwd, permission_mode=permission_mode,
+            session_uuid=session_uuid, host=host, tier=tier,
+        )
+
     cwd.mkdir(parents=True, exist_ok=True)
 
     # Mark the cwd as trusted BEFORE spawning, otherwise claude blocks on the
@@ -357,7 +534,9 @@ def spawn_background_lead(
         ";", "pipe-pane", "-O", "-o", "-t", session,
         f"cat >> {shlex.quote(str(log_path))}",
     ]
-    cmd: list[str] = _wrap_in_transient_unit(name, tmux_argv)
+    cmd: list[str] = _wrap_in_transient_unit(
+        name, tmux_argv, mem_props=_local_mem_props(host, tier)
+    )
 
     try:
         subprocess.run(
@@ -415,6 +594,8 @@ def resume_background_lead(
     extra_args: list[str] | None = None,
     resume_prompt_suffix: str | None = None,
     force: bool = False,
+    host: str = "local",
+    tier: str = "standard",
 ) -> dict:
     """Spawn a tmux+systemd lead using --resume <session_uuid> instead of --continue.
 
@@ -436,6 +617,21 @@ def resume_background_lead(
             f"context guard: {name} estimated at {est_tokens} tokens > {threshold}; "
             "kill + re-spawn fresh, or pass force=True to override"
         )
+
+    # Remote host: the guard's `resume` verb stops the old unit and re-spawns
+    # with --resume on B. We only emit the contract.
+    if host != "local":
+        resume_prompt = (
+            "You have been resumed after an interruption. "
+            "Review your prior work in this session and continue from where you left off."
+        )
+        if resume_prompt_suffix:
+            resume_prompt = resume_prompt + "\n\n" + resume_prompt_suffix
+        return _resume_remote(
+            name=name, prompt=resume_prompt, cwd=cwd, permission_mode=permission_mode,
+            session_uuid=session_uuid, host=host, tier=tier,
+        )
+
     cwd.mkdir(parents=True, exist_ok=True)
     _pretrust_cwd(cwd)
 
@@ -483,7 +679,9 @@ def resume_background_lead(
         ";", "pipe-pane", "-O", "-o", "-t", session,
         f"cat >> {shlex.quote(str(log_path))}",
     ]
-    cmd: list[str] = _wrap_in_transient_unit(name, tmux_argv)
+    cmd: list[str] = _wrap_in_transient_unit(
+        name, tmux_argv, mem_props=_local_mem_props(host, tier)
+    )
 
     try:
         subprocess.run(
@@ -504,25 +702,22 @@ def resume_background_lead(
     }
 
 
-def is_lead_alive(name: str) -> bool:
-    """True iff the lead's tmux session is alive on its dedicated socket.
+def lead_liveness(name: str, host: str = "local") -> str:
+    """Tri-state liveness: 'alive' | 'dead' | 'unreachable'.
 
-    Ground-truth liveness: the lead's claude process IS the tmux pane process,
-    and with remain-on-exit off (the default) tmux destroys the session the
-    instant claude exits, so a live session means a live lead. We deliberately
-    do NOT trust the systemd unit state: the transient unit is Type=oneshot +
-    RemainAfterExit=yes, so it reads `active (exited)` even after the tmux
-    server inside it has died -- `systemctl is-active` would call a dead lead
-    alive.
-
-    `tmux has-session` exits non-zero (no exception) when the session is gone
-    OR the socket no longer exists, which is exactly the vanished-lead case.
-    Conservative on a genuine tool error (tmux missing, timeout): return True so
-    a transient glitch never demotes a live lead to 'dead' -- a false 'dead'
-    hides a running lead from list_projects and risks a duplicate respawn, a
-    worse outcome than briefly showing a ghost.
+    Local is never 'unreachable': a local tmux tool-error stays 'alive',
+    preserving the old conservative True-on-error (a false 'dead' would hide a
+    running lead and risk a duplicate respawn). Remote distinguishes an
+    ssh-transport failure ('unreachable' -> never revive) from a tmux-reported
+    dead session ('dead' -> safe to revive).
     """
     bare = _bare_name(name)
+    if host != "local":
+        try:
+            cp = RemoteRunner(host).has_session(bare)
+        except (subprocess.TimeoutExpired, subprocess.SubprocessError, OSError):
+            return "unreachable"
+        return _classify_remote_liveness(cp.returncode)
     session = _session_name(bare)
     socket = _lead_socket(bare)
     try:
@@ -531,11 +726,21 @@ def is_lead_alive(name: str) -> bool:
             capture_output=True, text=True, timeout=10,
         )
     except (subprocess.SubprocessError, OSError):
-        return True
-    return result.returncode == 0
+        return "alive"  # conservative (== old True-on-error)
+    return "alive" if result.returncode == 0 else "dead"
 
 
-def discover_team(name: str) -> list[dict[str, str]]:
+def is_lead_alive(name: str, host: str = "local") -> bool:
+    """Bool wrapper over lead_liveness (alive => True) for existing callers.
+
+    NOTE: remote 'unreachable' reads False here. Callers that must distinguish
+    unreachable from dead (the watchdog, _reconcile_active, get_status) call
+    lead_liveness() directly so they never revive/demote an unreachable-host lead.
+    """
+    return lead_liveness(name, host) == "alive"
+
+
+def discover_team(name: str, host: str = "local") -> list[dict[str, str]]:
     """Best-effort roster of a lead's agent-team teammates, read live from its
     tmux panes.
 
@@ -556,19 +761,29 @@ def discover_team(name: str) -> list[dict[str, str]]:
     every teammate nests under its true parent.
     """
     bare = _bare_name(name)
-    session = _session_name(bare)
-    socket = _lead_socket(bare)
-    try:
-        result = subprocess.run(
-            [_tmux(), "-L", socket, "list-panes", "-s", "-t", session,
-             "-F", "#{pane_index}\t#{pane_dead}\t#{pane_title}"],
-            capture_output=True, text=True, timeout=10,
-        )
-    except (subprocess.SubprocessError, OSError):
-        return []
-    if result.returncode != 0:
-        return []
-    lines = [ln for ln in result.stdout.splitlines() if ln.strip()]
+    if host != "local":
+        try:
+            cp = RemoteRunner(host).list_panes(bare)
+        except (subprocess.SubprocessError, OSError):
+            return []
+        if cp.returncode != 0:
+            return []
+        stdout = cp.stdout or ""
+    else:
+        session = _session_name(bare)
+        socket = _lead_socket(bare)
+        try:
+            result = subprocess.run(
+                [_tmux(), "-L", socket, "list-panes", "-s", "-t", session,
+                 "-F", "#{pane_index}\t#{pane_dead}\t#{pane_title}"],
+                capture_output=True, text=True, timeout=10,
+            )
+        except (subprocess.SubprocessError, OSError):
+            return []
+        if result.returncode != 0:
+            return []
+        stdout = result.stdout
+    lines = [ln for ln in stdout.splitlines() if ln.strip()]
     # The first pane is the lead itself; the rest are its teammates.
     team: list[dict[str, str]] = []
     for i, line in enumerate(lines[1:], start=1):
@@ -585,8 +800,15 @@ def discover_team(name: str) -> list[dict[str, str]]:
     return team
 
 
-def kill_session(name: str) -> None:
+def kill_session(name: str, host: str = "local") -> None:
     bare = _bare_name(name)
+    if host != "local":
+        # The guard's `kill` verb stops the unit + kills the tmux session on B and
+        # exits 0 even if already gone; a non-zero rc means DENY or ssh transport
+        # failure, which should surface rather than falsely report "killed".
+        cp = RemoteRunner(host).kill(bare)
+        _raise_on_guard_error(cp, f"remote kill {bare!r}")
+        return
     session = _session_name(bare)
     socket = _lead_socket(bare)
     unit = _lead_unit(bare)
