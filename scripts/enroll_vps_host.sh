@@ -169,6 +169,11 @@ fi
 # claude-safe wrapper (shipped in repo) -> /usr/local/bin
 b_admin "sudo install -m 0755 '$REPO_DIR/scripts/claude-safe.sh' /usr/local/bin/claude-safe" \
   || die "claude-safe install failed"
+# somux (soma/tmux lead helper) -> ~/.local/bin (host-agnostic; satellites omit the
+# channel row automatically). Idempotent symlink; stock Ubuntu ~/.profile puts
+# ~/.local/bin on PATH at login once the dir exists.
+b_admin "chmod +x '$REPO_DIR/scripts/somux' 2>/dev/null; mkdir -p ~/.local/bin && ln -sf '$REPO_DIR/scripts/somux' ~/.local/bin/somux && echo somux-linked" \
+  || echo "  WARN: somux symlink failed (non-fatal)"
 
 # ---------------------------------------------------------------------------
 info "6/13  forced-command guard authorized_keys line (orchestrator key)"

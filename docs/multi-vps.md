@@ -85,6 +85,8 @@ soma-install enroll-host \
 What it provisions on the new host, **idempotently**: apt base, the repo (via
 `git archive HEAD` — exact commit, no GitHub creds), a venv + editable install,
 the `claude` CLI pinned to A's current version + the `claude-safe` wrapper, the
+`somux` lead helper (symlinked into `~/.local/bin`; on a satellite it lists the
+host's local leads and omits the channel row), the
 forced-command guard `authorized_keys` line, scoped sudoers, `settings.json`
 (`skipDangerousModePermissionPrompt`), the lean `lead-mcp-b.json`, a **secrets
 subset**, and the **claude auth** (see Security). Finally it **self-verifies**

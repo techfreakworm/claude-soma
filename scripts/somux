@@ -68,6 +68,18 @@ channel_alive() {
     "$TMUX_BIN" has-session -t "$CHANNEL_SESSION" 2>/dev/null
 }
 
+# Is THIS host a channel host (runs the Telegram/Discord channel)? The orchestrator
+# host has claude-soma-channel.service; satellite (lead-runtime-only) hosts do not,
+# and there the channel row is just noise. Override with SOMUX_CHANNEL=0|1.
+is_channel_host() {
+    case "${SOMUX_CHANNEL:-auto}" in
+        1) return 0;; 0) return 1;;
+    esac
+    channel_alive && return 0
+    systemctl list-unit-files claude-soma-channel.service --no-legend 2>/dev/null | grep -q . && return 0
+    return 1
+}
+
 # Is a given lead alive? Args: <name>
 lead_alive() {
     local name="$1"
@@ -126,10 +138,12 @@ cmd_ls() {
     printf "$fmt" "NAME" "SESSION" "SOCKET" "STATE" "UNIT"
     printf "$fmt" "----" "-------" "------" "-----" "----"
 
-    # Channel first.
-    local cstate
-    if channel_alive; then cstate="ALIVE"; else cstate="DEAD"; fi
-    printf "$fmt" "$CHANNEL_NAME" "$CHANNEL_SESSION" "default" "$cstate" "-"
+    # Channel first (only on a channel host; satellites have no channel).
+    if is_channel_host; then
+        local cstate
+        if channel_alive; then cstate="ALIVE"; else cstate="DEAD"; fi
+        printf "$fmt" "$CHANNEL_NAME" "$CHANNEL_SESSION" "default" "$cstate" "-"
+    fi
 
     # Then leads, alphabetically.
     local name state unit
@@ -144,7 +158,7 @@ cmd_ls() {
 # Build a comma-free, space-joined list of available names for error messages.
 available_names() {
     {
-        printf '%s\n' "$CHANNEL_NAME"
+        is_channel_host && printf '%s\n' "$CHANNEL_NAME"
         enumerate_leads
     } | paste -sd' ' -
 }
