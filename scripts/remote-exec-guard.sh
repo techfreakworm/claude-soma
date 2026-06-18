@@ -146,6 +146,7 @@ PY
     cmd=( "$SUDO" -n "$SYSTEMD_RUN" --collect --quiet "--unit=${UNIT}"
       --property=Type=oneshot --property=RemainAfterExit=yes
       --property=User=ubuntu --property=Group=ubuntu
+      --property=OOMScoreAdjust=800
       "--property=MemoryMax=${TIER_MAX[$TIER]}M" "--property=MemoryHigh=${TIER_HIGH[$TIER]}M"
       --property=EnvironmentFile=-/etc/claude-soma/secrets.env
       --setenv=HOME=/home/ubuntu "--setenv=PATH=${LEAD_PATH}"
@@ -210,6 +211,7 @@ PY
     cmd=( "$SUDO" -n "$SYSTEMD_RUN" --collect --quiet "--unit=${UNIT}"
       --property=Type=oneshot --property=RemainAfterExit=yes
       --property=User=ubuntu --property=Group=ubuntu
+      --property=OOMScoreAdjust=800
       "--property=MemoryMax=${TIER_MAX[$TIER]}M" "--property=MemoryHigh=${TIER_HIGH[$TIER]}M"
       --property=EnvironmentFile=-/etc/claude-soma/secrets.env
       --setenv=HOME=/home/ubuntu "--setenv=PATH=${LEAD_PATH}"

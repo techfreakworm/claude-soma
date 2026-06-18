@@ -21,6 +21,10 @@
         "high_mb": 2500
       }
     },
+    "extra_paths": [
+      "/home/ubuntu/finAgent",
+      "/etc/claude-soma/algo-trader-dhan.env"
+    ],
     "status": "verified"
   }
 }

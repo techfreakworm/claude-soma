@@ -233,6 +233,16 @@ info "9b/13 mirror out-of-cwd runtime deps (--extra-paths)"
 # Leads may import deps that live OUTSIDE their project cwd (e.g. ~/finAgent that
 # algo-trader's ws_shadow needs). Mirror each A->B preserving perms so a remote
 # lead does not hit FileNotFoundError. Idempotent (rsync).
+# re-enroll convenience: if not passed, mirror whatever was recorded in hosts.json
+if [ -z "$EXTRA_PATHS" ]; then
+  EXTRA_PATHS="$("$REPO_DIR/.venv/bin/python" - "$ALIAS" <<'PY' 2>/dev/null || true
+import sys; sys.path.insert(0,"/opt/claude-soma/src")
+from claude_soma.mcp_servers.project_orchestrator import hosts as H
+print(",".join((H.load_hosts().get(sys.argv[1],{}) or {}).get("extra_paths") or []))
+PY
+)"
+  [ -n "$EXTRA_PATHS" ] && echo "(using recorded extra_paths from hosts.json: $EXTRA_PATHS)"
+fi
 if [ -z "$EXTRA_PATHS" ]; then
   echo "(none specified)"
 else
@@ -337,14 +347,18 @@ info "12/13 register host in A's hosts.json (status=unverified)"
 # ---------------------------------------------------------------------------
 HOSTS_PY_ARGS="alias='$ALIAS';ip='$TAILNET_IP';user='$SSH_USER';ident='$IDENTITY';ram=$RAM_MB;mc=$MAX_CONCURRENT"
 if [ "$DRY_RUN" = 1 ]; then echo "DRY: upsert_host($ALIAS, ...) status=unverified"; else
-  "$REPO_DIR/.venv/bin/python" - "$ALIAS" "$TAILNET_IP" "$SSH_USER" "$IDENTITY" "$RAM_MB" "$MAX_CONCURRENT" <<'PY' || die "hosts.json upsert failed"
+  "$REPO_DIR/.venv/bin/python" - "$ALIAS" "$TAILNET_IP" "$SSH_USER" "$IDENTITY" "$RAM_MB" "$MAX_CONCURRENT" "$EXTRA_PATHS" <<'PY' || die "hosts.json upsert failed"
 import sys
 sys.path.insert(0,"/opt/claude-soma/src")
 from claude_soma.mcp_servers.project_orchestrator import hosts as H
 alias,ip,user,ident,ram,mc=sys.argv[1],sys.argv[2],sys.argv[3],sys.argv[4],int(sys.argv[5]),int(sys.argv[6])
-cfg=H.build_host_cfg(tailnet_ip=ip, ssh_user=user, ssh_identity=ident, ram_mb=ram, max_concurrent=mc, status="unverified")
+xp=[p for p in (sys.argv[7] if len(sys.argv)>7 else "").split(",") if p.strip()]
+# preserve an existing host's recorded extra_paths if none passed this run
+if not xp:
+    xp = (H.load_hosts().get(alias, {}) or {}).get("extra_paths") or None
+cfg=H.build_host_cfg(tailnet_ip=ip, ssh_user=user, ssh_identity=ident, ram_mb=ram, max_concurrent=mc, extra_paths=xp, status="unverified")
 H.upsert_host(alias, cfg, check_identity_files=True)
-print("hosts.json upserted:", alias, "status=unverified")
+print("hosts.json upserted:", alias, "status=unverified", "extra_paths=%s" % (xp or []))
 PY
 fi
 

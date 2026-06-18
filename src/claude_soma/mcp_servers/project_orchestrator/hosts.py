@@ -114,6 +114,10 @@ def _validate_remote(alias: str, cfg: dict, *, check_identity_files: bool) -> li
     if status is not None and status not in VALID_STATUS:
         err(f"status {status!r} not in {VALID_STATUS}")
 
+    xp = cfg.get("extra_paths")
+    if xp is not None and (not isinstance(xp, list) or not all(isinstance(p, str) for p in xp)):
+        err("extra_paths must be a list of absolute-path strings")
+
     return errs
 
 
@@ -217,10 +221,11 @@ def build_host_cfg(
     max_concurrent: int,
     headroom_mb: int | None = None,
     tier_caps: dict | None = None,
+    extra_paths: list[str] | None = None,
     status: str = "unverified",
 ) -> dict:
     """Assemble a well-formed host cfg from enroll inputs (defaults filled in)."""
-    return {
+    cfg = {
         "tailnet_ip": tailnet_ip,
         "ssh_user": ssh_user,
         "ssh_identity": ssh_identity,
@@ -230,3 +235,6 @@ def build_host_cfg(
         "tier_caps": tier_caps or json.loads(json.dumps(DEFAULT_TIER_CAPS)),
         "status": status,
     }
+    if extra_paths:
+        cfg["extra_paths"] = list(extra_paths)
+    return cfg
