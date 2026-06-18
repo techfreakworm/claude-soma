@@ -157,14 +157,57 @@ Edits go through the atomic, schema-validated helper
    EXCLUDE-set key (`AUTH_*`, `GITHUB_TOKEN`, `TELEGRAM_BOT_TOKEN`,
    `DISCORD_BOT_TOKEN`, `HERMES_FILES_PASSWORD`, `HF_TOKEN`,
    `HERMES_ALLOWED_GITHUB_HANDLES`, `HERMES_NOTIFY_CHAT_ID`) leaked onto the host.
-5. **Claude auth = `claudeAiOauth` WITH its `refreshToken`** (and *only* that key —
-   never `mcpOAuth`). Enroll asserts BOTH `accessToken` and `refreshToken` are
-   present before shipping. *(An earlier hand-bootstrap copied only the access
-   token; it expired and the host 401'd — this assertion prevents a recurrence.)*
+5. **Claude auth — prefer a durable long-lived token.** See "Cross-host auth" below.
+   When falling back to copying `claudeAiOauth`, enroll copies *only* that key
+   (never `mcpOAuth`) and asserts BOTH `accessToken` and `refreshToken` before
+   shipping.
 6. No secret **value** is ever printed or logged; every secret hop is a pipe and
    every check reports key-names + perms only.
 
 ---
+
+## Cross-host auth (durable) — avoid the shared-OAuth 401
+
+A and B must **not** share one interactive OAuth credential long-term. Claude Code's
+interactive `claudeAiOauth` periodically **refreshes**, and that refresh rotates the
+token at the IdP — which **invalidates the copy on the other host**. Symptom: a
+remote lead authenticates fine, then hours later its pane shows
+`Please run /login · API Error: 401` while A is unaffected. (Root-caused on
+algo-trader@vps-b, 2026-06-18.)
+
+**Durable fix — a long-lived token per remote host:**
+
+```bash
+claude setup-token          # one-time; prints a URL to authorize, returns a long-lived token
+soma-install enroll-host --alias vps-b --tailnet-ip 100.… \
+    --identity ~/.ssh/soma-orchestrator --admin-key ~/.ssh/id_ed25519 \
+    --claude-oauth-token <token>        # or --claude-oauth-token @/path/to/tokenfile
+```
+
+Enroll writes it to the host's `secrets.env` as `CLAUDE_CODE_OAUTH_TOKEN` (0600,
+loaded by the lead unit's `EnvironmentFile`). A long-lived token **takes precedence
+over `~/.claude/.credentials.json` and does not refresh/rotate**, so A's refresh
+cannot break it. `claude setup-token` requires an interactive authorize step
+(operator action) — it does **not** disturb A's existing login.
+
+**Fallback (no token):** enroll copies A's `claudeAiOauth` (asserting it has a
+`refreshToken`). This restores a 401'd host immediately but is **unstable** — A's
+next refresh can rotate it; re-enroll with `--claude-oauth-token` for a permanent
+fix. Re-shipping A's fresh creds + restarting the lead (`resume_project host=…`) is
+the stopgap to recover in the meantime.
+
+## Out-of-cwd dependencies
+
+A lead may import code outside its project cwd (e.g. algo-trader's `ws_shadow`
+imports `~/finAgent`). Mirror such paths at enroll time so a remote lead doesn't hit
+`FileNotFoundError`:
+
+```bash
+soma-install enroll-host … --extra-paths ~/finAgent,/opt/shared-lib
+```
+
+Each path is rsynced A→B preserving perms (idempotent). For a one-off after enroll,
+rsync it directly with the admin key.
 
 ## Degraded mode — when A is unreachable
 

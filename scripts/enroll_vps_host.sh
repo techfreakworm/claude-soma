@@ -16,7 +16,14 @@
 #       [--admin-key ~/.ssh/id_ed25519] \
 #       [--ram-mb auto] [--max-concurrent 3] \
 #       [--degraded-webhook https://discord.com/api/webhooks/...] \
+#       [--claude-oauth-token <tok>|@file]   # DURABLE auth (`claude setup-token`); preferred
+#       [--extra-paths ~/finAgent,/opt/foo]  # mirror out-of-cwd lead deps A->B \
 #       [--no-verify-spawn] [--skip-apt] [--dry-run]
+#
+# DURABLE CROSS-HOST AUTH: prefer --claude-oauth-token (a long-lived token from
+#   `claude setup-token`). It does NOT share A's interactive refresh state, so A's
+#   token rotation cannot invalidate it. Without it, enroll copies A's claudeAiOauth
+#   (works initially, but A's refresh eventually rotates/invalidates B's copy -> 401).
 #
 # PREREQUISITES that stay operator-manual (outside the trust boundary):
 #   1. The box exists and is reachable on the tailnet (tailscale up / ACL A<->B).
@@ -45,6 +52,13 @@ VERIFY_SPAWN=1 ; SKIP_APT=0 ; DRY_RUN=0
 REPO_DIR="${SOMA_REPO_DIR:-/opt/claude-soma}"
 SECRETS_A="/etc/claude-soma/secrets.env"
 CREDS_A="$HOME/.claude/.credentials.json"
+# durable cross-host auth: a long-lived CLAUDE_CODE_OAUTH_TOKEN (`claude setup-token`)
+# is PREFERRED over copying claudeAiOauth — the latter shares A's refresh state and
+# A's refresh rotation invalidates the copy (the recurring-401 root cause). Value or
+# @file; also read from $CLAUDE_CODE_OAUTH_TOKEN env if set.
+CLAUDE_OAUTH_TOKEN="${CLAUDE_CODE_OAUTH_TOKEN:-}"
+# out-of-cwd runtime deps to mirror A->B (comma-separated abs paths, e.g. ~/finAgent)
+EXTRA_PATHS=""
 
 die() { echo "enroll: ERROR: $*" >&2; exit 1; }
 info() { echo "==== $* ===="; }
@@ -61,6 +75,8 @@ while [ $# -gt 0 ]; do
     --ram-mb) RAM_MB="$2"; shift 2;;
     --max-concurrent) MAX_CONCURRENT="$2"; shift 2;;
     --degraded-webhook) DEGRADED_WEBHOOK="$2"; shift 2;;
+    --claude-oauth-token) CLAUDE_OAUTH_TOKEN="$2"; shift 2;;
+    --extra-paths) EXTRA_PATHS="$2"; shift 2;;
     --no-verify-spawn) VERIFY_SPAWN=0; shift;;
     --skip-apt) SKIP_APT=1; shift;;
     --dry-run) DRY_RUN=1; shift;;
@@ -75,6 +91,12 @@ done
 [ -f "$ADMIN_KEY" ] || die "admin key $ADMIN_KEY not found"
 [ -f "$IDENTITY" ] || die "orchestrator key $IDENTITY not found"
 [ -f "${IDENTITY}.pub" ] || die "orchestrator PUBLIC key ${IDENTITY}.pub not found"
+
+# resolve --claude-oauth-token @file -> contents (kept in a var, never echoed)
+case "$CLAUDE_OAUTH_TOKEN" in
+  @*) f="${CLAUDE_OAUTH_TOKEN#@}"; [ -f "$f" ] || die "token file $f not found"
+      CLAUDE_OAUTH_TOKEN="$(tr -d '\r\n' < "$f")";;
+esac
 
 ADMIN=( ssh -i "$ADMIN_KEY" -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=12 "${SSH_USER}@${TAILNET_IP}" )
 ORCH=( ssh -i "$IDENTITY" -o IdentitiesOnly=yes -o BatchMode=yes -o ConnectTimeout=12 "${SSH_USER}@${TAILNET_IP}" )
@@ -206,6 +228,33 @@ b_admin "test -f '$REPO_DIR/config/claude/lead-mcp-b.json' && echo present || { 
   || die "lead-mcp-b.json missing after repo ship (commit it on A?)"
 
 # ---------------------------------------------------------------------------
+info "9b/13 mirror out-of-cwd runtime deps (--extra-paths)"
+# ---------------------------------------------------------------------------
+# Leads may import deps that live OUTSIDE their project cwd (e.g. ~/finAgent that
+# algo-trader's ws_shadow needs). Mirror each A->B preserving perms so a remote
+# lead does not hit FileNotFoundError. Idempotent (rsync).
+if [ -z "$EXTRA_PATHS" ]; then
+  echo "(none specified)"
+else
+  IFS=',' read -ra _XP <<< "$EXTRA_PATHS"
+  for p in "${_XP[@]}"; do
+    p="${p/#\~/$HOME}"; p="${p%/}"
+    [ -e "$p" ] || { echo "  WARN: $p not found on A — skipping"; continue; }
+    if [ "$DRY_RUN" = 1 ]; then echo "DRY: rsync $p -> B:$p"; continue; fi
+    if [ -d "$p" ]; then
+      b_admin "mkdir -p '$p'" >/dev/null 2>&1 || true
+      rsync -aHAX --delete -e "ssh -i $ADMIN_KEY -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new" \
+        "$p/" "${SSH_USER}@${TAILNET_IP}:$p/" >/dev/null 2>&1 || { echo "  WARN: rsync $p failed"; continue; }
+    else
+      b_admin "mkdir -p '$(dirname "$p")'" >/dev/null 2>&1 || true
+      rsync -aHAX -e "ssh -i $ADMIN_KEY -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new" \
+        "$p" "${SSH_USER}@${TAILNET_IP}:$p" >/dev/null 2>&1 || { echo "  WARN: rsync $p failed"; continue; }
+    fi
+    echo "  mirrored $p"
+  done
+fi
+
+# ---------------------------------------------------------------------------
 info "10/13 secrets.env subset (INCLUDE allowlist) + EXCLUDE audit"
 # ---------------------------------------------------------------------------
 # INCLUDE allowlist — only what a lead-runtime host needs. Auth is the native
@@ -221,6 +270,8 @@ if [ "$DRY_RUN" = 1 ]; then echo "DRY: write B /etc/claude-soma/secrets.env (3-4
     [ -n "$RELAY_DOMAIN" ] && printf 'SOMA_RELAY_DOMAIN=%s\n' "$RELAY_DOMAIN"
     printf 'HERMES_MAX_CONCURRENT_PROJECTS=%s\n' "$MAXPROj"
     [ -n "$DEGRADED_WEBHOOK" ] && printf 'HERMES_DEGRADED_WEBHOOK=%s\n' "$DEGRADED_WEBHOOK"
+    # durable cross-host auth (preferred): long-lived token wins over credentials.json
+    [ -n "$CLAUDE_OAUTH_TOKEN" ] && printf 'CLAUDE_CODE_OAUTH_TOKEN=%s\n' "$CLAUDE_OAUTH_TOKEN"
     true   # ensure the brace group exits 0 (empty optional vars must not fail the pipe)
   } | "${ADMIN[@]}" "umask 077; sudo mkdir -p /etc/claude-soma; sudo tee /etc/claude-soma/secrets.env >/dev/null && sudo chmod 600 /etc/claude-soma/secrets.env && sudo chown ${SSH_USER}:${SSH_USER} /etc/claude-soma/secrets.env" \
     || die "secrets write failed"
@@ -232,10 +283,23 @@ if [ "$DRY_RUN" = 1 ]; then echo "DRY: write B /etc/claude-soma/secrets.env (3-4
 fi
 
 # ---------------------------------------------------------------------------
-info "11/13 claude auth: claudeAiOauth WITH refreshToken (the B-401 fix)"
+info "11/13 claude auth (durable token preferred; claudeAiOauth fallback)"
 # ---------------------------------------------------------------------------
-# Extract ONLY claudeAiOauth (never mcpOAuth); assert BOTH tokens; ship via pipe; 0600.
+# DURABLE: a long-lived CLAUDE_CODE_OAUTH_TOKEN (`claude setup-token`) was written to
+# B's secrets.env in step 10 and takes precedence — it does NOT share A's refresh
+# state, so A's refresh rotation can't invalidate it (the recurring-401 root cause).
+# FALLBACK (no token given): copy claudeAiOauth WITH refreshToken — works initially
+# but is UNSTABLE across A's refresh; we warn and recommend setup-token.
+if [ -n "$CLAUDE_OAUTH_TOKEN" ]; then
+  echo "durable CLAUDE_CODE_OAUTH_TOKEN installed on B (primary auth); claudeAiOauth copy is now only a fallback"
+fi
 if [ "$DRY_RUN" = 1 ]; then echo "DRY: ship claudeAiOauth (with refreshToken) to B ~/.claude/.credentials.json"; else
+  if [ -z "$CLAUDE_OAUTH_TOKEN" ]; then
+    echo "  WARNING: no --claude-oauth-token given — using the claudeAiOauth COPY, which"
+    echo "           A's periodic refresh will eventually invalidate (B will 401 again)."
+    echo "           DURABLE FIX: run 'claude setup-token' and re-enroll with"
+    echo "           --claude-oauth-token <token>  (or @/path/to/tokenfile)."
+  fi
   AUTH_JSON="$(python3 - "$CREDS_A" <<'PY'
 import json,sys
 d=json.load(open(sys.argv[1]))
