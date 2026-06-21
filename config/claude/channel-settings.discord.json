@@ -1,5 +1,6 @@
 {
   "enabledPlugins": {
     "discord@claude-plugins-official": true
-  }
+  },
+  "promptSuggestionEnabled": false
 }

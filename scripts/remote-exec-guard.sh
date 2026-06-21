@@ -151,6 +151,7 @@ PY
       --property=EnvironmentFile=-/etc/claude-soma/secrets.env
       --setenv=HOME=/home/ubuntu "--setenv=PATH=${LEAD_PATH}"
       --setenv=CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1
+      --setenv=CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION=0
       "--setenv=HERMES_LEAD_NAME=${NAME}"
       "--setenv=HERMES_NOTIFY_URL=${NOTIFY_URL}"
       --setenv=DISABLE_AUTOUPDATER=1
@@ -216,6 +217,7 @@ PY
       --property=EnvironmentFile=-/etc/claude-soma/secrets.env
       --setenv=HOME=/home/ubuntu "--setenv=PATH=${LEAD_PATH}"
       --setenv=CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1
+      --setenv=CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION=0
       "--setenv=HERMES_LEAD_NAME=${NAME}"
       "--setenv=HERMES_NOTIFY_URL=${NOTIFY_URL}"
       --setenv=DISABLE_AUTOUPDATER=1

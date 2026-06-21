@@ -41,6 +41,10 @@ WorkingDirectory=/opt/claude-soma
 EnvironmentFile=/etc/claude-soma/secrets.env
 Environment=PATH=/opt/claude-soma/.venv/bin:/usr/local/bin:/usr/bin:/bin
 Environment=CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1
+# Disable Claude Code prompt suggestions in the channel session: the faint
+# autosuggested input-box text can be mistaken for / accidentally submitted as
+# operator input. Env overrides the promptSuggestionEnabled setting.
+Environment=CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION=0
 
 ExecStartPre=/usr/bin/install -d -o ubuntu -g ubuntu /var/log/claude-soma
 ExecStartPre=/bin/bash -c '/usr/bin/tmux kill-session -t hermes 2>/dev/null || true'

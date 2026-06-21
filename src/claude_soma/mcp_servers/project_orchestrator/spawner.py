@@ -181,6 +181,11 @@ def _wrap_in_transient_unit(
         f"--setenv=HOME={LEAD_HOME}",
         f"--setenv=PATH={LEAD_PATH}",
         "--setenv=CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1",
+        # Disable Claude Code prompt suggestions in leads: the faint autosuggested
+        # input-box text can be mistaken for / accidentally submitted as operator
+        # input over the channel. The env var overrides the promptSuggestionEnabled
+        # setting and is independent of --setting-sources.
+        "--setenv=CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION=0",
         f"--setenv=HERMES_LEAD_NAME={name}",
         "--",
         *inner_argv,

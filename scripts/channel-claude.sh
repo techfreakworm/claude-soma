@@ -80,6 +80,11 @@ if [[ "${1:-}" == "--print-channel" ]]; then
     exit 0
 fi
 
+# Disable Claude Code prompt suggestions: the faint autosuggested input-box text
+# can be mistaken for / accidentally submitted as operator input. The env var
+# overrides the promptSuggestionEnabled setting and is scope-independent.
+export CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION=0
+
 exec /home/ubuntu/.local/bin/claude \
     --channels "${CHANNEL_PLUGIN}" \
     --continue \

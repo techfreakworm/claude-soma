@@ -52,6 +52,12 @@ if [ -z "$real_claude" ]; then
     exit 127
 fi
 
+# Disable Claude Code prompt suggestions for every claude launched through this
+# wrapper: the faint autosuggested input-box text can be mistaken for / accidentally
+# submitted as operator input. Applies to both exec paths below; the env var
+# overrides the promptSuggestionEnabled setting and is independent of --setting-sources.
+export CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION=0
+
 # Pass-through cases: an explicit channel consumer (the bot), management
 # subcommands, and info flags. These either MUST load the plugin or never boot a
 # channel poller.
