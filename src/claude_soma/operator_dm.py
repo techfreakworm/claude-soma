@@ -71,6 +71,22 @@ def _discord_channel_id() -> str:
     return os.environ.get("SOMA_DISCORD_DM_CHANNEL_ID", _DISCORD_DM_CHANNEL_ID_DEFAULT)
 
 
+def _kill_switch_enabled(name: str) -> bool:
+    """True if `name` is set to "1" in the process env OR, failing that, in
+    /etc/claude-soma/secrets.env.
+
+    Long-lived leads / listeners capture their env at spawn time. A kill switch
+    (e.g. SOMA_DISCORD_DM_DISABLED) added to secrets.env AFTER spawn would never
+    reach the process env, so a stale-env process would ignore it. Falling back
+    to a live read of secrets.env makes the switch honour the current on-disk
+    value at send-time regardless of when the process was started. Mirrors the
+    shell notify_lib.sh / neet common.sh secrets.env fallback. Never raises.
+    """
+    if os.environ.get(name) == "1":
+        return True
+    return _read_var_from_file(_SECRETS_ENV, name) == "1"
+
+
 def _read_var_from_file(path: str, name: str) -> str:
     """Return the last `name=value` from an env-style file, quotes stripped."""
     try:
@@ -271,7 +287,7 @@ def send_operator_dm(
 
     Returns the delivered message id, or None if all routes failed. Never raises.
     """
-    if os.environ.get("SOMA_DISCORD_DM_DISABLED") != "1":
+    if not _kill_switch_enabled("SOMA_DISCORD_DM_DISABLED"):
         try:
             mid = _send_via_discord(text, files, is_html, timeout)
             if mid is not None:
@@ -281,7 +297,7 @@ def send_operator_dm(
         except Exception as exc:  # noqa: BLE001 -- notify must never raise
             _log(f"discord route failed (unexpected): {type(exc).__name__}")
 
-    if os.environ.get("SOMA_TELEGRAM_DM_DISABLED") == "1":
+    if _kill_switch_enabled("SOMA_TELEGRAM_DM_DISABLED"):
         return None
     if telegram_fallback is None:
         return None

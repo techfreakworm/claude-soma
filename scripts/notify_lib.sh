@@ -51,7 +51,11 @@ _soma_read_var() {
 
 # _soma_discord_send "msg" -> 0 on HTTP 200/201, else 1. Token never echoed.
 _soma_discord_send() {
-    [[ "${SOMA_NOTIFY_DISCORD_DISABLED:-}" == "1" ]] && return 1
+    # Honor the kill switch from the process env, or fall back to secrets.env
+    # (timer-run callers don't always export it into their environment).
+    local _disc_off="${SOMA_NOTIFY_DISCORD_DISABLED:-}"
+    [[ -z "$_disc_off" ]] && _disc_off="$(_soma_read_var "$SOMA_SECRETS_FILE" SOMA_NOTIFY_DISCORD_DISABLED)"
+    [[ "$_disc_off" == "1" ]] && return 1
     local msg="$1" token payload http
     token="${DISCORD_BOT_TOKEN:-}"
     [[ -z "$token" ]] && token="$(_soma_read_var "$SOMA_SECRETS_FILE" DISCORD_BOT_TOKEN)"

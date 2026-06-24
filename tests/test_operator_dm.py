@@ -60,8 +60,24 @@ def test_discord_disabled_uses_telegram_fallback() -> None:
     assert calls == [True]
 
 
+def test_secrets_env_fallback_disables_discord_for_stale_proc(monkeypatch, tmp_path) -> None:
+    # Stale process: flag absent from os.environ but present in secrets.env.
+    monkeypatch.delenv("SOMA_DISCORD_DM_DISABLED", raising=False)
+    secrets = tmp_path / "secrets.env"
+    secrets.write_text("SOMA_DISCORD_DM_DISABLED=1\n")
+    monkeypatch.setattr(operator_dm, "_SECRETS_ENV", str(secrets))
+    monkeypatch.setenv("DISCORD_BOT_TOKEN", "tok")
+
+    def boom(*_a, **_k):  # would be hit only if Discord route were attempted
+        raise AssertionError("Discord route must be skipped via secrets.env flag")
+
+    monkeypatch.setattr(operator_dm.urllib.request, "urlopen", boom)
+    assert operator_dm.send_operator_dm("hi", telegram_fallback=lambda: 77, is_html=False) == 77
+
+
 def test_discord_success_skips_fallback(monkeypatch) -> None:
     monkeypatch.delenv("SOMA_DISCORD_DM_DISABLED", raising=False)
+    monkeypatch.setattr(operator_dm, "_SECRETS_ENV", "/dev/null")
     monkeypatch.setenv("DISCORD_BOT_TOKEN", "tok")
     monkeypatch.setattr(
         operator_dm.urllib.request, "urlopen",
@@ -77,6 +93,7 @@ def test_discord_success_skips_fallback(monkeypatch) -> None:
 
 def test_discord_failure_falls_back(monkeypatch) -> None:
     monkeypatch.delenv("SOMA_DISCORD_DM_DISABLED", raising=False)
+    monkeypatch.setattr(operator_dm, "_SECRETS_ENV", "/dev/null")
     monkeypatch.setenv("DISCORD_BOT_TOKEN", "tok")
 
     def boom(*_a, **_k):
@@ -88,6 +105,7 @@ def test_discord_failure_falls_back(monkeypatch) -> None:
 
 def test_never_raises_when_all_routes_fail(monkeypatch) -> None:
     monkeypatch.delenv("SOMA_DISCORD_DM_DISABLED", raising=False)
+    monkeypatch.setattr(operator_dm, "_SECRETS_ENV", "/dev/null")
     monkeypatch.setenv("DISCORD_BOT_TOKEN", "tok")
 
     def boom(*_a, **_k):
