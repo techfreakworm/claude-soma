@@ -183,3 +183,19 @@ def test_send_to_project_routes_remote_to_guard_and_touches(monkeypatch):
     assert calls["sent"] == ("x", "hello remote")
     assert calls["touched"] == "x"          # idle clock bumped on the remote path
     assert out["delivered"] is True
+
+
+def test_get_transcript_routes_remote_to_tail_log(monkeypatch):
+    monkeypatch.setattr(srv, "_reg", lambda: type("R", (), {
+        "get": staticmethod(lambda n: {"agent_id": "soma-proj-x", "host": "vps-b"}),
+    })())
+
+    class FakeRR:
+        def __init__(self, host): self.host = host
+        def tail_log(self, name): return b"remote transcript tail \xff"
+
+    monkeypatch.setattr(sp, "RemoteRunner", FakeRR)
+    out = srv.get_transcript_impl(name="x")
+    assert out["host"] == "vps-b"
+    assert out["bytes"] == len(b"remote transcript tail \xff")
+    assert "remote transcript tail" in out["transcript"]

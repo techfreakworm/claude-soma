@@ -30,10 +30,10 @@ Mirror the LOCAL path (`server.send_to_project_impl`: `tmux send-keys -l <msg>` 
 ## §3 `tail-log <name>` — pull the remote lead's transcript (fixed target, no caller path)
 - **Contract:** `tail-log <name>` (2 tokens, like `capture`). Guard branch:
   1. `[ "${#P[@]}" -eq 2 ] || deny "tail-log needs 1 arg"`; `name` ∈ NAME_RX.
-  2. `LOG="${LOG_DIR}/${NAME}.log"` — **guard-constructed** from NAME (LOG_DIR=/var/log/claude-soma). No caller-supplied path ⇒ none of realpath/symlink/hardlink/`..`/fifo/device logic is needed; inherits the same NAME_RX-only safety as `capture`/`stat-transcript`/`rc-url`.
-  3. `[ -f "$LOG" ] || deny "no transcript"`.
-  4. `exec sh -c '"$1" -c "$2" "$3" | "$4" -w0' _ "$TAIL" "$MAX_READ_BYTES" "$LOG" "$BASE64"` → i.e. `tail -c MAX_READ_BYTES "$LOG" | base64 -w0`. The byte cap bounds output; `base64 -w0` keeps it on the existing `text=True` ssh pipe (binary-safe; orchestrator decodes). MAX_READ_BYTES const (e.g. 2 MB → ~2.7 MB b64).
-  - (Building the pipe via a fixed `sh -c` with positional args — NO interpolation of any caller value — is acceptable here because every argument is guard-owned; or use a tiny here-the-args form. The point: NAME is the only variable and it is NAME_RX-validated.)
+  2. `LOG="${LOG_DIR}/${NAME}.log"` — the path STRING is **guard-constructed** from NAME (LOG_DIR=/var/log/claude-soma), so the *string* carries no caller-supplied path (no `..`/metachar — NAME_RX + CHARSET_RX). **BUT the LEAF is not trusted:** LOG_DIR is lead-writable (the lead runs as `ubuntu`), so a lead can plant a **symlink or hardlink** at `<name>.log` pointing at `secrets.env`/`~/.ssh`/`.credentials.json`. (This is the same shared-uid class that killed the general `read` — and it's why `tail-log` is unlike `capture`/`stat-transcript`/`rc-url`, which emit pane text / size+mtime / one URL line, never arbitrary file CONTENT.)
+  3. **Leaf hardening (defeats symlink + hardlink, no TOCTOU):** read via a guard-owned `python3` (NAME-derived `LOG` is the only input): `os.open(LOG, O_RDONLY|O_NOFOLLOW)` (a symlink open fails → DENY), `os.fstat` requires `S_ISREG` AND `st_nlink == 1` (rejects hardlinks), then `lseek` to the last `MAX_READ_BYTES` and `base64` — all on ONE held fd (no recheck/reopen). On any failure → `deny`.
+  4. `MAX_READ_BYTES` const (2 MB → ~2.7 MB b64); `base64`-out keeps it on the existing `text=True` ssh pipe. The same `_read_log_tail_safe` (O_NOFOLLOW + S_ISREG + nlink==1) hardens `get_transcript_impl`'s LOCAL branch too.
+  - **Deferred root-cause fix:** the durable defeat of the shared-uid leaf problem is a uid split / root-owned transcript dir (lead's pipe-pane writes via a root-owned drop-box). Until that lands, O_NOFOLLOW + `st_nlink==1` is the enforced minimum bar (and `/var/log` is root-owned, so LOG_DIR itself isn't lead-replaceable).
 
 ## §4 Orchestrator-side integration (host-aware)
 - `build_guard_command`: add `send` → `send <name> <b64msg>`; `tail-log` → `tail-log <name>`.
@@ -44,7 +44,7 @@ Mirror the LOCAL path (`server.send_to_project_impl`: `tmux send-keys -l <msg>` 
 ## §5 Security invariants (asserted by the guard matrix)
 1. Guard never `sh -c`/`eval`s **caller-supplied** input; the only `sh -c` (tail-log pipe) takes guard-owned argv only; every other leaf is a tmux/printf argv token.
 2. `send`: NUL-rejected on the decoded stream; C0 control bytes (incl. `\n`) rejected; delivered via `send-keys -l -- "$MSG"` with the chain separator a bare `;` argv token; MSG always a single argv element ⇒ no key interpretation, no flag/again-no command injection.
-3. **No verb takes a caller-supplied filesystem path.** Every filesystem target (`tail-log`'s LOG) is guard-CONSTRUCTED from NAME_RX'd `<name>` — so the hardlink/TOCTOU/symlink class is structurally absent (the strongest posture; identical invariant set to today's verbs).
+3. **No verb takes a caller-supplied filesystem path** (the path STRING is always guard-constructed from NAME_RX'd `<name>`). For `tail-log`, which streams file CONTENT from a lead-writable dir, the LEAF is additionally hardened against a planted symlink/hardlink via `O_NOFOLLOW` + `S_ISREG` + `st_nlink == 1` on a single held fd. (The other read-ish verbs — capture/stat-transcript/rc-url — need no leaf hardening because they never emit arbitrary file bytes.) Durable fix = uid split / root-owned transcript dir (deferred).
 4. All inputs bounded by NAME_RX + B64_RX + MAX_B64_LEN + MAX_READ_BYTES; the escalation-substring scan never scans any b64 payload.
 5. Orchestrator key stays forced-command-only — these are verbs on the same guard, not a shell.
 

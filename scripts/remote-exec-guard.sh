@@ -37,6 +37,7 @@ LEAD_MCP_B="/opt/claude-soma/config/claude/lead-mcp-b.json"   # optional; omitte
 CLAUDE_SAFE="/usr/local/bin/claude-safe"
 SUDO=/usr/bin/sudo; SYSTEMD_RUN=/usr/bin/systemd-run; SYSTEMCTL=/usr/bin/systemctl
 TMUX=/usr/bin/tmux; BASE64=/usr/bin/base64
+MAX_READ_BYTES=2000000   # tail-log: cap the transcript tail (~2.7MB base64)
 
 # Per-tier memory caps. The guard OWNS these (A cannot pass --property=...): A
 # sends only a tier label and the guard maps it to MemoryMax/MemoryHigh here.
@@ -316,6 +317,52 @@ PY
     cmd=( "$TMUX" -L "$SOCK" send-keys -t "$SESS" -l -- "$MSG"
           ";" send-keys -t "$SESS" Enter )
     exec "${cmd[@]}"
+    ;;
+
+  tail-log)
+    # Pull the tail of a remote lead's transcript log. The target is
+    # guard-CONSTRUCTED from the NAME_RX'd <name> (LOG_DIR/<name>.log) — NO
+    # caller-supplied path, so none of the realpath/symlink/hardlink/.. machinery
+    # is needed (same NAME-only safety as capture/stat-transcript/rc-url).
+    [ "${#P[@]}" -eq 2 ] || deny "tail-log needs 1 arg" tail-log "$NAME"
+    valid_name "$NAME"   || deny "bad name" tail-log "$NAME"
+    LOG="${LOG_DIR}/${NAME}.log"
+    # LOG_DIR is lead-writable (the lead runs as ubuntu), so a lead could plant a
+    # SYMLINK or HARDLINK at <name>.log pointing at secrets.env/~/.ssh/.credentials.
+    # The path STRING is guard-constructed (NAME_RX'd), but the LEAF is not trusted:
+    # open O_NOFOLLOW (a symlink open fails) + require a regular, single-link file
+    # (st_nlink==1 rejects hardlinks), then read the last MAX_READ_BYTES + base64 —
+    # all on ONE held fd (no recheck/reopen TOCTOU). NAME is the only caller input.
+    if /usr/bin/python3 - "$LOG" "$MAX_READ_BYTES" <<'PY'
+import os, sys, stat, base64
+log, cap = sys.argv[1], int(sys.argv[2])
+try:
+    # O_NONBLOCK so a lead-planted FIFO leaf can't block open() forever (DoS);
+    # it's a no-op for a regular file. S_ISREG below then rejects the FIFO.
+    fd = os.open(log, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+except OSError:
+    sys.exit(1)            # symlink (ELOOP) or missing
+try:
+    st = os.fstat(fd)
+    if not stat.S_ISREG(st.st_mode) or st.st_nlink != 1:
+        sys.exit(1)        # not a regular file, or hardlinked elsewhere
+    os.lseek(fd, max(0, st.st_size - cap), os.SEEK_SET)
+    buf = b""
+    while len(buf) < cap:
+        chunk = os.read(fd, cap - len(buf))
+        if not chunk:
+            break
+        buf += chunk
+finally:
+    os.close(fd)
+sys.stdout.write(base64.b64encode(buf).decode())
+PY
+    then
+      log_line ALLOW tail-log "$NAME" ok 0
+      exit 0
+    else
+      deny "no readable regular transcript (symlink/hardlink/missing?)" tail-log "$NAME"
+    fi
     ;;
 
   *)

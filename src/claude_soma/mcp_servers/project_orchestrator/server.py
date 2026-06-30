@@ -225,6 +225,53 @@ def send_to_project_impl(*, name: str, message: str) -> dict:
     return {"name": name, "agent_id": p["agent_id"], "sent_at": time.time(), "delivered": True}
 
 
+_MAX_TRANSCRIPT_BYTES = 2_000_000  # mirrors the guard tail-log MAX_READ_BYTES
+
+
+def _read_log_tail_safe(path: str, cap: int) -> bytes:
+    """Read the last `cap` bytes of a log, rejecting a symlink/hardlink at the
+    leaf (the log dir is ubuntu-writable; a lead could point its <name>.log at a
+    secret). O_NOFOLLOW + regular + st_nlink==1, atomically on one fd."""
+    import stat
+    try:
+        # O_NONBLOCK so a FIFO at the leaf can't block open() forever (no-op for a
+        # regular file); S_ISREG below rejects the FIFO.
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    except OSError as e:
+        raise RuntimeError(f"no readable transcript ({type(e).__name__})") from e
+    try:
+        st = os.fstat(fd)
+        if not stat.S_ISREG(st.st_mode) or st.st_nlink != 1:
+            raise RuntimeError("transcript is not a regular single-link file")
+        os.lseek(fd, max(0, st.st_size - cap), os.SEEK_SET)
+        out = b""
+        while len(out) < cap:
+            chunk = os.read(fd, cap - len(out))
+            if not chunk:
+                break
+            out += chunk
+        return out
+    finally:
+        os.close(fd)
+
+
+def get_transcript_impl(*, name: str) -> dict:
+    """Pull the tail of a lead's transcript log — host-aware (local read, or the
+    remote guard `tail-log` verb). Returns {name, host, bytes, transcript}."""
+    p = _reg().get(name)
+    if not p:
+        raise RuntimeError(f"no project named {name!r}")
+    host = p.get("host", "local")
+    if host != "local":
+        from .spawner import RemoteRunner
+        data = RemoteRunner(host).tail_log(name)  # bytes (raises on guard error)
+    else:
+        data = _read_log_tail_safe(f"/var/log/claude-soma/{name}.log",
+                                   _MAX_TRANSCRIPT_BYTES)
+    return {"name": name, "host": host, "bytes": len(data),
+            "transcript": data.decode("utf-8", errors="replace")}
+
+
 def touch_project_impl(*, name: str) -> dict:
     """Bump last_activity for a lead that the bot messaged via raw tmux send-keys.
 
@@ -460,6 +507,13 @@ def resume_project(name: str, force: bool = False) -> dict:
 def get_status(name: str) -> dict:
     """Return current status of a project-lead."""
     return get_status_impl(name)
+
+
+@mcp.tool()
+def get_transcript(name: str) -> dict:
+    """Return the tail of a project-lead's transcript log. Works for both local
+    and remote-host leads (remote uses the guard `tail-log` verb)."""
+    return get_transcript_impl(name=name)
 
 
 @mcp.tool()

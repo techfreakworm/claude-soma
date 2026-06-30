@@ -117,3 +117,112 @@ def test_send_denies_no_live_session():
     subprocess.run([TMUX, "-L", SOCK, "kill-session", "-t", SESS], capture_output=True)
     cp = _run_guard(f"send {TN} {b64('hi')}")
     assert cp.returncode == 99 and "DENY" in cp.stderr
+
+
+# ---- tail-log (fixed NAME-derived target; no caller path) ------------------
+
+LOG_DIR = "/var/log/claude-soma"
+_LOGW = os.access(LOG_DIR, os.W_OK) if os.path.isdir(LOG_DIR) else False
+
+
+@pytest.fixture()
+def transcript_log():
+    path = f"{LOG_DIR}/{TN}.log"
+    content = ("x" * 50 + "\nTAIL-LINE-1\nTAIL-LINE-2\n").encode()
+    with open(path, "wb") as fh:
+        fh.write(content)
+    yield path, content
+    try:
+        os.unlink(path)
+    except OSError:
+        pass
+
+
+@pytest.mark.skipif(not _LOGW, reason="/var/log/claude-soma not writable")
+def test_tail_log_accepts_and_decodes(transcript_log):
+    path, content = transcript_log
+    cp = _run_guard(f"tail-log {TN}")
+    assert cp.returncode == 0, cp.stderr
+    got = base64.b64decode(cp.stdout.strip())
+    assert got == content  # whole file fits under the cap
+
+
+@pytest.mark.skipif(not _LOGW, reason="/var/log/claude-soma not writable")
+def test_tail_log_denies_missing_transcript():
+    try:
+        os.unlink(f"{LOG_DIR}/{TN}.log")
+    except OSError:
+        pass
+    cp = _run_guard(f"tail-log {TN}")
+    assert cp.returncode == 99 and "DENY" in cp.stderr
+
+
+def test_tail_log_denies_bad_name():
+    cp = _run_guard("tail-log ../etc")
+    assert cp.returncode == 99 and "DENY" in cp.stderr
+
+
+def test_tail_log_denies_wrong_argcount():
+    cp = _run_guard("tail-log")
+    assert cp.returncode == 99 and "DENY" in cp.stderr
+
+
+@pytest.mark.skipif(not _LOGW, reason="/var/log/claude-soma not writable")
+def test_tail_log_denies_symlink_leaf(tmp_path):
+    # Lead plants a symlink <name>.log -> a "secret"; O_NOFOLLOW must refuse it.
+    secret = tmp_path / "secret"
+    secret.write_text("TOP-SECRET-EXFIL-CANARY")
+    log = f"{LOG_DIR}/{TN}.log"
+    try:
+        os.unlink(log)
+    except OSError:
+        pass
+    os.symlink(str(secret), log)
+    try:
+        cp = _run_guard(f"tail-log {TN}")
+        assert cp.returncode == 99 and "DENY" in cp.stderr
+        assert "TOP-SECRET-EXFIL-CANARY" not in cp.stdout  # nothing leaked
+    finally:
+        os.unlink(log)
+
+
+@pytest.mark.skipif(not _LOGW, reason="/var/log/claude-soma not writable")
+def test_tail_log_denies_hardlink_leaf(tmp_path):
+    # Hardlink keeps realpath in-dir (a naive symlink-only check misses it);
+    # st_nlink>1 must refuse it.
+    secret = tmp_path / "secret2"
+    secret.write_text("HARDLINK-SECRET-CANARY")
+    log = f"{LOG_DIR}/{TN}.log"
+    try:
+        os.unlink(log)
+    except OSError:
+        pass
+    try:
+        os.link(str(secret), log)  # hardlink (same fs); may fail cross-device
+    except OSError:
+        pytest.skip("cannot hardlink across filesystems in this env")
+    try:
+        cp = _run_guard(f"tail-log {TN}")
+        assert cp.returncode == 99 and "DENY" in cp.stderr
+        assert "HARDLINK-SECRET-CANARY" not in cp.stdout
+    finally:
+        os.unlink(log)
+
+
+@pytest.mark.skipif(not _LOGW, reason="/var/log/claude-soma not writable")
+def test_tail_log_denies_fifo_leaf_without_hanging():
+    # A lead-planted FIFO would block a blocking open() forever (DoS). O_NONBLOCK
+    # + S_ISREG must reject it fast.
+    log = f"{LOG_DIR}/{TN}.log"
+    try:
+        os.unlink(log)
+    except OSError:
+        pass
+    os.mkfifo(log)
+    try:
+        t0 = time.monotonic()
+        cp = _run_guard(f"tail-log {TN}")          # _run_guard timeout=20 → a hang would fail
+        assert time.monotonic() - t0 < 8, "tail-log hung on a FIFO leaf"
+        assert cp.returncode == 99 and "DENY" in cp.stderr
+    finally:
+        os.unlink(log)
