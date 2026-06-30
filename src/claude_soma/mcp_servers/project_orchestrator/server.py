@@ -196,27 +196,32 @@ def send_to_project_impl(*, name: str, message: str) -> dict:
         raise RuntimeError(f"no project named {name!r}")
     host = p.get("host", "local")
     if host != "local":
-        raise NotImplementedError(
-            "messaging a remote lead needs a future guard 'send' verb"
-        )
-    if not is_lead_alive(name, host):
-        raise RuntimeError(f"lead {name!r} is not running")
-    tmux = os.environ.get("HERMES_TMUX_BIN", "/usr/bin/tmux")
-    socket = f"{LEAD_SOCKET_PREFIX}{name}"
-    session = f"{TMUX_SESSION_PREFIX}{name}"
-    try:
-        subprocess.run(
-            [tmux, "-L", socket, "send-keys", "-t", session, "-l", message],
-            check=True, timeout=10, capture_output=True, text=True,
-        )
-        subprocess.run(
-            [tmux, "-L", socket, "send-keys", "-t", session, "Enter"],
-            check=True, timeout=10, capture_output=True, text=True,
-        )
-    except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
-        stderr = (getattr(e, "stderr", None) or "")[-500:]
-        raise RuntimeError(f"{tmux}: {stderr}") from e
-    _reg().touch(name)
+        # Remote lead: deliver via the forced-command guard's `send` verb. The
+        # guard checks has-session itself (one ssh hop — no redundant A-side
+        # liveness round-trip), base64s nothing here (RemoteRunner does), and
+        # rejects control bytes/NUL guard-side.
+        from .spawner import RemoteRunner, _raise_on_guard_error
+        cp = RemoteRunner(host).send(name, message)
+        _raise_on_guard_error(cp, f"send to {name!r} on {host}")
+    else:
+        if not is_lead_alive(name, host):
+            raise RuntimeError(f"lead {name!r} is not running")
+        tmux = os.environ.get("HERMES_TMUX_BIN", "/usr/bin/tmux")
+        socket = f"{LEAD_SOCKET_PREFIX}{name}"
+        session = f"{TMUX_SESSION_PREFIX}{name}"
+        try:
+            subprocess.run(
+                [tmux, "-L", socket, "send-keys", "-t", session, "-l", message],
+                check=True, timeout=10, capture_output=True, text=True,
+            )
+            subprocess.run(
+                [tmux, "-L", socket, "send-keys", "-t", session, "Enter"],
+                check=True, timeout=10, capture_output=True, text=True,
+            )
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
+            stderr = (getattr(e, "stderr", None) or "")[-500:]
+            raise RuntimeError(f"{tmux}: {stderr}") from e
+    _reg().touch(name)  # bump idle clock on BOTH local and remote delivery
     return {"name": name, "agent_id": p["agent_id"], "sent_at": time.time(), "delivered": True}
 
 

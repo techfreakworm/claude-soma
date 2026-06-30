@@ -113,3 +113,73 @@ def test_is_lead_alive_bool_wrapper(monkeypatch):
     assert sp.is_lead_alive("x", "vps-b") is False
     monkeypatch.setattr(sp, "lead_liveness", lambda n, h="local": "dead")
     assert sp.is_lead_alive("x", "vps-b") is False
+
+
+# ---- Phase 2: send + tail-log contract + RemoteRunner + host-routing --------
+
+def test_build_send_contract():
+    line = sp.build_guard_command("send", "algo-trader", message="hi; rm -rf / `id`")
+    parts = line.split(" ")
+    assert parts[0] == "send" and parts[1] == "algo-trader" and len(parts) == 3
+    assert "\n" not in line
+    assert base64.b64decode(parts[2]).decode() == "hi; rm -rf / `id`"
+
+
+def test_build_tail_log_contract():
+    assert sp.build_guard_command("tail-log", "x") == "tail-log x"
+
+
+class _CP:
+    def __init__(self, rc=0, stdout="", stderr=""):
+        self.returncode, self.stdout, self.stderr = rc, stdout, stderr
+
+
+def _rr(monkeypatch):
+    monkeypatch.setattr(sp, "load_hosts", lambda: {"vps-b": {
+        "tailnet_ip": "100.102.145.110", "ssh_user": "ubuntu",
+        "ssh_identity": "/k", "tier_caps": {}}})
+    return sp.RemoteRunner("vps-b")
+
+
+def test_remote_runner_send_builds_contract(monkeypatch):
+    rr = _rr(monkeypatch)
+    seen = {}
+    monkeypatch.setattr(rr, "run", lambda line, *, timeout: seen.setdefault("line", line) or _CP())
+    rr.send("algo-trader", "deploy now")
+    parts = seen["line"].split(" ")
+    assert parts[0] == "send" and parts[1] == "algo-trader"
+    assert base64.b64decode(parts[2]).decode() == "deploy now"
+
+
+def test_remote_runner_tail_log_decodes_with_trailing_newline(monkeypatch):
+    rr = _rr(monkeypatch)
+    payload = base64.b64encode(b"report\x00\xff bytes").decode() + "\n"  # ssh trailing \n
+    monkeypatch.setattr(rr, "run", lambda line, *, timeout: _CP(rc=0, stdout=payload))
+    assert rr.tail_log("algo-trader") == b"report\x00\xff bytes"
+
+
+def test_remote_runner_tail_log_raises_on_guard_deny(monkeypatch):
+    rr = _rr(monkeypatch)
+    monkeypatch.setattr(rr, "run", lambda line, *, timeout: _CP(rc=99, stderr="remote-exec-guard: DENY no transcript"))
+    with pytest.raises(RuntimeError):
+        rr.tail_log("algo-trader")
+
+
+def test_send_to_project_routes_remote_to_guard_and_touches(monkeypatch):
+    calls = {}
+    monkeypatch.setattr(srv, "_reg", lambda: type("R", (), {
+        "get": staticmethod(lambda n: {"agent_id": "soma-proj-x", "host": "vps-b"}),
+        "touch": staticmethod(lambda n: calls.setdefault("touched", n)),
+    })())
+
+    class FakeRR:
+        def __init__(self, host): calls["host"] = host
+        def send(self, name, message): calls["sent"] = (name, message); return _CP(rc=0)
+
+    monkeypatch.setattr(sp, "RemoteRunner", FakeRR)
+    monkeypatch.setattr(sp, "_raise_on_guard_error", lambda cp, ctx: None)
+    out = srv.send_to_project_impl(name="x", message="hello remote")
+    assert calls["host"] == "vps-b"
+    assert calls["sent"] == ("x", "hello remote")
+    assert calls["touched"] == "x"          # idle clock bumped on the remote path
+    assert out["delivered"] is True

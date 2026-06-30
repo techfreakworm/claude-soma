@@ -87,12 +87,16 @@ read -r -a P <<< "$CMD"
 VERB="${P[0]-}"
 NAME="${P[1]-}"
 
-# 6. defense-in-depth: forbid escalation substrings in the NON-brief args
-#    (regex on each arg already prevents these; this satisfies the explicit
-#    requirement and guards against a future contract change). Window :0:5 =
-#    verb,name,mode,uuid,tier — deliberately EXCLUDES P[5] (the base64 brief),
-#    whose alphabet [A-Za-z0-9+/=] can legitimately contain "User=root".
-for tok in "${P[@]:0:5}"; do
+# 6. defense-in-depth: forbid escalation substrings in the STRUCTURAL (non-base64)
+#    args only (regex on each arg already prevents these; this is belt). The scan
+#    must NEVER touch a base64 payload, whose alphabet [A-Za-z0-9+/=] can legitimately
+#    contain "ExecStartPre"/"User=root". Base64 lives at P[5] for spawn/resume and at
+#    P[2] for send — so the scan window is verb-aware: structural args, never the b64.
+case "$VERB" in
+  spawn|resume) ESC_SCAN=( "${P[@]:0:5}" ) ;;   # verb,name,mode,uuid,tier (excl P[5] brief)
+  *)            ESC_SCAN=( "${P[@]:0:2}" ) ;;   # verb,name (excl any b64 at P[2], e.g. send)
+esac
+for tok in "${ESC_SCAN[@]}"; do
   case "$tok" in
     *User=root*|*ExecStartPre*|*PermissionsStartOnly*|*--property*)
       deny "forbidden token: $tok" "$VERB" "$NAME" ;;
@@ -279,6 +283,39 @@ PY
     valid_name "$NAME"   || deny "bad name" rc-url "$NAME"
     log_line ALLOW rc-url "$NAME" ok 0
     exec /usr/bin/grep -m1 -oE 'https://(claude\.ai/code/session_[A-Za-z0-9_-]+|rc\.claude\.com/[^[:space:]]+)' "${LOG_DIR}/${NAME}.log"
+    ;;
+
+  send)
+    # Deliver a message into a remote lead's claude pane (mirror the local
+    # server.send_to_project_impl: send-keys -l <msg> then Enter), hardened because
+    # the base64 may originate from an A-side subagent, not only the operator.
+    [ "${#P[@]}" -eq 3 ] || deny "send needs 2 args" send "$NAME"
+    MSGB64="${P[2]}"
+    valid_name "$NAME"                  || deny "bad name" send "$NAME"
+    [[ "$MSGB64" =~ $B64_RX ]]          || deny "message not base64" send "$NAME"
+    [ "${#MSGB64}" -le "$MAX_B64_LEN" ] || deny "message too long" send "$NAME"
+    # NUL guard on the DECODED stream (bash vars silently truncate at NUL, so a
+    # post-decode test is unreliable — inspect the raw bytes).
+    if printf '%s' "$MSGB64" | "$BASE64" -d 2>/dev/null | LC_ALL=C grep -qaP '\x00'; then
+      deny "NUL byte in message" send "$NAME"
+    fi
+    MSG="$(printf '%s' "$MSGB64" | "$BASE64" -d 2>/dev/null)" || deny "message decode failed" send "$NAME"
+    [ -n "$MSG" ] || deny "empty message" send "$NAME"
+    # Reject C0 control bytes (ESC/^C/^U… and newline): with send-keys -l they still
+    # reach the PTY/claude input, and a newline would submit early and inject a second
+    # prompt. TAB (\011) is allowed; NUL handled above.
+    case "$MSG" in
+      *[$'\001'-$'\010'$'\012'-$'\037'$'\177']*) deny "control byte in message" send "$NAME" ;;
+    esac
+    SOCK="soma-lead-${NAME}"; SESS="soma-proj-${NAME}"
+    "$TMUX" -L "$SOCK" has-session -t "$SESS" 2>/dev/null || deny "no live session" send "$NAME"
+    log_line ALLOW send "$NAME" ok "${#MSG}"
+    # Literal text + Enter in ONE tmux call. The chain separator is a BARE ';' argv
+    # token (never a literal "\;" string); MSG is always a single argv element
+    # (-l = literal, -- = end options). No shell, no key/command injection.
+    cmd=( "$TMUX" -L "$SOCK" send-keys -t "$SESS" -l -- "$MSG"
+          ";" send-keys -t "$SESS" Enter )
+    exec "${cmd[@]}"
     ;;
 
   *)

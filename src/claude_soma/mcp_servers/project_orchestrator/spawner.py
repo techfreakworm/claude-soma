@@ -300,12 +300,17 @@ def _host_cfg(host: str) -> dict:
     return hosts[host]
 
 
-def build_guard_command(verb, name, *, mode=None, uuid_=None, tier=None, brief=None) -> str:
-    """Build ONE guard-contract line. brief is base64 (== `base64 -w0`, no newlines)."""
+def build_guard_command(verb, name, *, mode=None, uuid_=None, tier=None, brief=None,
+                        message=None) -> str:
+    """Build ONE guard-contract line. brief/message are base64 (== `base64 -w0`)."""
     if verb in ("spawn", "resume"):
         b64 = base64.b64encode(brief.encode("utf-8")).decode("ascii")
         return f"{verb} {name} {mode} {uuid_} {tier} {b64}"
-    if verb in ("kill", "capture", "list", "has-session", "stat-transcript", "rc-url"):
+    if verb == "send":
+        b64 = base64.b64encode(message.encode("utf-8")).decode("ascii")
+        return f"send {name} {b64}"
+    if verb in ("kill", "capture", "list", "has-session", "stat-transcript",
+                "rc-url", "tail-log"):
         return f"{verb} {name}"
     raise ValueError(f"unknown guard verb {verb!r}")
 
@@ -361,6 +366,18 @@ class RemoteRunner:
 
     def rc_url(self, name, *, timeout=SSH_OP_TIMEOUT):
         return self.run(f"rc-url {name}", timeout=timeout)
+
+    def send(self, name, message, *, timeout=SSH_OP_TIMEOUT):
+        """Deliver a message into the remote lead's claude pane (guard `send`)."""
+        return self.run(build_guard_command("send", name, message=message), timeout=timeout)
+
+    def tail_log(self, name, *, timeout=SSH_OP_TIMEOUT) -> bytes:
+        """Return the tail of the remote lead's transcript log (guard `tail-log`).
+        The guard emits base64 (binary-safe over the text ssh pipe); decode here."""
+        cp = self.run(f"tail-log {name}", timeout=timeout)
+        _raise_on_guard_error(cp, f"tail-log {name!r} on {self.host}")
+        # default validate=False tolerates an ssh-appended trailing newline
+        return base64.b64decode((cp.stdout or "").strip() or b"")
 
 
 def _classify_remote_liveness(rc: int) -> str:
