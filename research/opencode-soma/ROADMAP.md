@@ -140,7 +140,8 @@ It asserts:
 - Pages:
   - leads, each with its attach command;
   - events and activity;
-  - usage, read from each instance's opencode database or API;
+  - usage, from each instance's events and HTTP API (the daemon never opens an instance's
+    `opencode.db`);
   - a memory browser, routines and transcripts.
 
 **Out of scope.** Internet exposure, multi-user accounts.
@@ -213,8 +214,12 @@ asserts:
 
 **Scope.**
 
-- LAN web UI and attach, with a password. Tailscale is an option the user installs.
-- Linux lead memory caps via `systemd-run --user --scope -p MemoryMax=`, which needs no sudo.
+- Remote access with no serve exposed: `opencode-soma attach` on the machine, and from elsewhere
+  an SSH tunnel or a user-installed Tailscale to the loopback ports, with the serve password
+  (desk). Serves never bind beyond 127.0.0.1, and `--lan` exposes only the dashboard
+  (ARCHITECTURE.md section 9).
+- Linux lead memory caps via `systemd-run --user --scope -p MemoryMax=`, which should need no sudo
+  (desk; this phase shows it).
   claude-soma needs a sudoers grant for `systemd-run` (`scripts/bootstrap.sh:454`), which
   `scripts/remote-exec-guard.sh:7` calls "arbitrary-root".
 - The contract-test suite re-run on a newer opencode (1.18.35 or later).
@@ -225,6 +230,7 @@ asserts:
 **Acceptance:** `opencode-soma selftest --contract && opencode-soma doctor`. It asserts:
 
 - the contract suite passes on the pinned opencode, and its diff against 1.18.35 is reviewed;
+- `doctor` finds every serve listening on 127.0.0.1 only and answering 401 without its password;
 - `doctor` passes on Windows 11 WSL2.
 
 **Evidence it rests on.**

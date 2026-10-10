@@ -35,7 +35,8 @@ supported in v1: untested, not impossible.** Reasons:
 - (a) opencode's own docs recommend WSL [1].
 - (b) Agents' bash tool calls assume a POSIX shell, while native opencode falls back to pwsh/cmd, so
   agent reliability degrades silently (desk).
-- (c) It keeps one code path with Linux: systemd user units, tmux for human attach, the same daemon.
+- (c) It keeps one code path with Linux: systemd user units, `opencode-soma attach` for a human
+  look, the same daemon.
 - (d) piper-tts has no Windows arm64 wheel (`artifacts.log`).
 
 **WSL2 keep-alive recipe** (desk-research-only, [3][4]):

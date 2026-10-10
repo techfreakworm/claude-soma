@@ -84,9 +84,9 @@ keys):
 |---|---|---|
 | inject recalled facts into every prompt | `chat.message` hook: push a synthetic text part | *verified*: the model quoted the freshly injected value each turn (`evidence/opencode/P2-hooks/inject.log`) |
 | inject into the system prompt | `experimental.chat.system.transform` | *verified at the transport level*, but qwen3:32b kept repeating a stale answer (same log), so not the primary path |
-| notice that a session went quiet (capture trigger) | `event` hook, `session.idle` bus event | *verified*: the spy plugin received 7 `session.idle` events (`evidence/opencode/P2-hooks/spy.jsonl`, `events.log`) |
+| notice that a session went quiet (capture trigger) | `session.idle` on the serve's SSE stream, or the `event` hook | *verified*: the SSE stream carries it (`evidence/opencode/P8-serve/sse-event.txt`), and the spy plugin received 7 `session.idle` events (`evidence/opencode/P2-hooks/spy.jsonl`, `events.log`) |
 | capture before context is compacted | `experimental.session.compacting` (`output.context`, `output.prompt`) | catalogued only, not exercised; experimental |
-| explicit memory tools | plugin `tool` map, or an MCP server | `tool` catalogued only. MCP tools were exercised by probe-engineer's P2 activity probe |
+| explicit memory tools | an MCP server, or a plugin `tool` map | MCP tools *verified*, with per-agent scoping (`evidence/opencode/P3-mcp/mcp.log`, `scoping-verdict.log`). Plugin `tool` catalogued only. The design uses MCP (6.1) |
 | provenance of tool results | `tool.execute.after` (tool, sessionID, callID, args, output) | *verified* by the P2 activity probe (`activity.log`) |
 | read a session's messages from outside | `opencode serve` HTTP+SSE API | *verified* (`evidence/opencode/P8-serve/serve.log`) |
 
@@ -192,19 +192,24 @@ at every scale, so no fact leaked across leads.
 ### 6.1 Explicit
 
 `memory_save(text, subject?, attribute?, value?, type?, visibility?)`,
-`memory_forget(query | id)` and `memory_search(query)` are plugin `tool` definitions (catalogued).
+`memory_forget(query | id)` and `memory_search(query)` are tools on the daemon's soma MCP server
+(ARCHITECTURE.md 2.4).
 
-- They do not write the database themselves: `memory_save` and `memory_forget` forward to the
-  daemon over localhost (section 12), and `memory_search` reads through the plugin's read-only
-  connection.
-- "Remember X" from Telegram goes straight to the daemon, which owns the Telegram long-poll, and is
-  written with `curator='explicit'`. Explicit facts outrank model-captured ones (6.4).
+- The daemon serves them, so it stays the only writer (section 12). The caller's scope comes from
+  the instance's MCP token, never from tool arguments.
+- MCP tools and per-agent scoping were exercised (`evidence/opencode/P3-mcp/mcp.log`,
+  `scoping-verdict.log`). Plugin `tool` definitions were only catalogued, and they reportedly bypass
+  permission rules (desk), so they are not used.
+- "Remember X" from Telegram becomes the orchestrator's `memory_save` call, written by the daemon
+  with `curator='explicit'`. Explicit facts outrank model-captured ones (6.4).
 
 ### 6.2 Auto-capture (a daemon job)
 
-**Trigger.** The plugin's `event` hook sees `session.idle` (verified) and tells the daemon that the
-session is idle. The daemon debounces about 30 s, then runs capture on the messages added since
-that session's `capture_cursor`, read over the owning `opencode serve` API (verified).
+**Trigger.** The daemon sees `session.idle` on each serve's SSE stream, which it already holds for
+replies (verified: `evidence/opencode/P8-serve/sse-event.txt`; a plugin's `event` hook sees the same
+event, `evidence/opencode/P2-hooks/extras.log`). The daemon debounces about 30 s, then runs
+capture on the messages added since that session's `capture_cursor`, read over the owning
+`opencode serve` API (verified).
 `experimental.session.compacting` is a second, opportunistic trigger: capture what is about to be
 summarized, and push the top memories into `output.context` so they survive compaction. It is
 catalogued but not exercised.
@@ -622,11 +627,12 @@ queries. The extra flat-file code is parsing and cross-file link following.
 ## 12. Process model and concurrency
 
 **The daemon is the single writer.** The memory tables live in the daemon's SQLite database
-(`~/.opencode-soma/soma.db`, WAL mode), next to the lead registry, events, schedules and usage:
+(`~/.opencode-soma/soma.db`, WAL mode), next to the lead registry, events, schedules and usage
+(ARCHITECTURE.md section 4):
 
 - **The opencode-soma daemon** is the only process that opens it read-write. It runs capture jobs,
-  the upsert, `memory_save` / `memory_forget` (forwarded from the plugins over localhost), the digest,
-  backups, schema migrations and the export mirror.
+  the upsert, the memory tools (served on its soma MCP endpoint), the digest, backups, schema
+  migrations and the export mirror.
 - **Each opencode instance's plugin** (the parent and every lead) opens it **read-only**
   (`new Database(path, { readonly: true })` in `bun:sqlite`). That is the per-prompt recall fast
   path: 0.5–1.6 ms p50 at 50k facts (`bun-sqlite.log`), with no hop to the daemon.
@@ -666,9 +672,10 @@ Platform notes:
 
 ## 13. Fallbacks
 
-- **The daemon is down.** Recall still works, because the plugins' read-only connections need no
-  daemon. `memory_save` / `memory_forget` fail visibly ("memory is offline") instead of writing
-  around the daemon, and auto-capture resumes from `capture_cursor` when the daemon returns.
+- **The daemon is down.** Per-prompt recall still works, because the plugins' read-only
+  connections need no daemon. The memory tools go offline with the daemon's MCP endpoint, so they
+  fail visibly instead of writing around the daemon, and auto-capture resumes from
+  `capture_cursor` when the daemon returns.
 - **Corrupt or missing database.** WAL plus nightly `VACUUM INTO` backups; the markdown export
   mirror can rebuild facts, sources and links via the importer (section 14).
 - **No model trustworthy enough for auto-capture.** Auto-capture is off for that model tier (6.5).
@@ -693,8 +700,8 @@ per scope, so the existing dashboard memory view keeps working until it moves to
 
 ## 15. Open items
 
-- `experimental.session.compacting` and plugin-defined tools are catalogued, not exercised. A
-  plugin `tool` probe plus a forced compaction would close this.
+- `experimental.session.compacting` is catalogued, not exercised. A forced compaction would close
+  this. The memory tools are MCP tools (6.1), so no plugin `tool` probe is needed.
 - The curator call through `opencode serve` (6.2): `POST /session/{id}/message` with
   `format: {type: "json_schema", schema}` is in the 1.18.8 OpenAPI but was not probed. Neither was
   aborting it mid-generation when a user message arrives.
