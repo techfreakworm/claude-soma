@@ -1,0 +1,65 @@
+# isolation-check
+date-utc: 2026-10-10T07:24:18Z
+snapshot-utc: 2026-10-10T05:48:44Z
+command: bash research/opencode-soma/probes/opencode/isolation.sh verify
+opencode-version: 1.18.8
+note: the version line above is the ONLY opencode invocation made with the real HOME by this script;
+      Global init only mkdir -p's existing dirs (no mtime change). All probes ran with sandbox.sh.
+
+== /Users/techfreakworm/.config/opencode
+listing (depth<=3, size+mtime): UNCHANGED (364 entries)
+sha256 of top-level files: UNCHANGED (7 files)
+find -newer marker (full depth): nothing
+
+== /Users/techfreakworm/.local/share/opencode
+listing (depth<=3, size+mtime): UNCHANGED (555 entries)
+sha256 of top-level files: UNCHANGED (6 files)
+find -newer marker (full depth): nothing
+
+== /Users/techfreakworm/.cache/opencode
+listing (depth<=3, size+mtime): UNCHANGED (12 entries)
+sha256 of top-level files: UNCHANGED (4 files)
+find -newer marker (full depth): nothing
+
+== /Users/techfreakworm/.local/state/opencode
+listing (depth<=3, size+mtime): UNCHANGED (5 entries)
+sha256 of top-level files: UNCHANGED (3 files)
+find -newer marker (full depth): nothing
+
+== /Users/techfreakworm/.opencode
+listing (depth<=3, size+mtime): UNCHANGED (8 entries)
+sha256 of top-level files: UNCHANGED (4 files)
+find -newer marker (full depth): nothing
+
+== /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/opencode
+listing (depth<=3, size+mtime): UNCHANGED (1 entries)
+sha256 of top-level files: UNCHANGED (0 files)
+find -newer marker (full depth): nothing
+
+== /Library/Application Support/opencode
+listing (depth<=3, size+mtime): UNCHANGED (1 entries)
+sha256 of top-level files: UNCHANGED (0 files)
+
+== /Users/techfreakworm/.claude (top level only; this Claude Code session itself writes here)
+  --- /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/isolation/claude-top.listing	2026-10-10 11:18:44
+  +++ /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/isolation/claude-top.listing.after	2026-10-10 12:54:22
+  @@ -1,11 +1,11 @@
+  -1791610466 1184 /Users/techfreakworm/.claude
+  +1791612130 1184 /Users/techfreakworm/.claude
+   1746357912 241664 /Users/techfreakworm/.claude/__store.db
+   1783949864 10244 /Users/techfreakworm/.claude/.DS_Store
+  -1791606440 24 /Users/techfreakworm/.claude/.last-cleanup
+  +1791611672 24 /Users/techfreakworm/.claude/.last-cleanup
+   1791605841 161 /Users/techfreakworm/.claude/.last-update-result.json
+   1753548653 22 /Users/techfreakworm/.claude/.superclaude-metadata.json
+   1789319008 1280 /Users/techfreakworm/.claude/agents
+  -1791611294 224 /Users/techfreakworm/.claude/backups
+  +1791617007 224 /Users/techfreakworm/.claude/backups
+   1791605830 160 /Users/techfreakworm/.claude/cache
+   1767721822 96 /Users/techfreakworm/.claude/chrome
+   1780989703 64 /Users/techfreakworm/.claude/commands
+entries under /Users/techfreakworm/.claude newer than marker whose path mentions opencode:
+  none
+new top-level entries in /Users/techfreakworm/.claude:
+
+VERDICT: PASS — no opencode-owned real dir changed since the snapshot; all probe I/O stayed in the sandbox.
