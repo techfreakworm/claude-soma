@@ -1,0 +1,158 @@
+# P0-setup/sandbox-verify.log
+date-utc: 2026-10-10T05:53:20Z
+probe-script: research/opencode-soma/probes/opencode/P0-setup/sandbox-verify.sh
+opencode-version: 1.18.8
+model: ollama/lfm2.5-thinking and ollama/qwen3:32b
+sandbox: $TMPDIR/ocsoma-pe/P0-setup (HOME, XDG_*, TMPDIR all inside it)
+purpose: sandbox paths, resolved config, ollama provider + proxy, real context length
+
+## 1. resolved global paths (must all be under the sandbox)
+$ /Users/techfreakworm/.opencode/bin/opencode debug paths
+home       /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P0-setup/home
+data       /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P0-setup/xdg/data/opencode
+bin        /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P0-setup/xdg/cache/opencode/bin
+log        /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P0-setup/xdg/data/opencode/log
+repos      /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P0-setup/xdg/data/opencode/repos
+cache      /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P0-setup/xdg/cache/opencode
+config     /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P0-setup/xdg/config/opencode
+state      /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P0-setup/xdg/state/opencode
+tmp        /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P0-setup/tmp/opencode
+
+[exit=0 wall=0.2s]
+
+## 2. resolved config
+$ /Users/techfreakworm/.opencode/bin/opencode debug config
+{
+  "$schema": "https://opencode.ai/config.json",
+  "autoupdate": false,
+  "share": "disabled",
+  "enabled_providers": [
+    "ollama"
+  ],
+  "model": "ollama/qwen3:32b",
+  "small_model": "ollama/qwen3:32b",
+  "provider": {
+    "ollama": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "Ollama (local)",
+      "options": {
+        "baseURL": "http://127.0.0.1:47101/v1"
+      },
+      "models": {
+        "qwen3:32b": {
+          "name": "Qwen3 32B (thinking off)",
+          "tool_call": true,
+          "reasoning": false,
+          "options": {
+            "reasoningEffort": "none"
+          },
+          "limit": {
+            "context": 40960,
+            "output": 8192
+          }
+        },
+        "lfm2.5-thinking": {
+          "name": "LFM2.5 1.2B thinking",
+          "tool_call": true,
+          "reasoning": true,
+          "limit": {
+            "context": 128000,
+            "output": 8192
+          }
+        }
+      }
+    }
+  },
+  "agent": {},
+  "mode": {},
+  "plugin": [],
+  "command": {},
+  "username": "techfreakworm"
+}
+
+[exit=0 wall=0.5s]
+
+## 3. models visible (enabled_providers=[ollama] hides every hosted provider)
+$ /Users/techfreakworm/.opencode/bin/opencode models
+ollama/lfm2.5-thinking
+ollama/qwen3:32b
+
+[exit=0 wall=0.6s]
+
+## 4. one turn with lfm2.5-thinking (quality irrelevant) through the logging proxy
+$ /Users/techfreakworm/.opencode/bin/opencode run -m ollama/lfm2.5-thinking --format json Reply with the single word PONG and nothing else.
+{"type":"step_start","timestamp":1791611607168,"sessionID":"ses_edba077e8ffee6IgVcx22m9lK5","part":{"id":"prt_1245f9876001zzX8Zqh9NsJL36","messageID":"msg_1245f88df001qFjCCHAU00NoHE","sessionID":"ses_edba077e8ffee6IgVcx22m9lK5","snapshot":"42242d7f9d11cb6e1dc5bbe010f875f741e4ea9d","type":"step-start"}}
+{"type":"text","timestamp":1791611608162,"sessionID":"ses_edba077e8ffee6IgVcx22m9lK5","part":{"id":"prt_1245f9c5a001xAk7QFDBCNZXhN","messageID":"msg_1245f88df001qFjCCHAU00NoHE","sessionID":"ses_edba077e8ffee6IgVcx22m9lK5","type":"text","text":"PONG","time":{"start":1791611608154,"end":1791611608158}}}
+{"type":"step_finish","timestamp":1791611608308,"sessionID":"ses_edba077e8ffee6IgVcx22m9lK5","part":{"id":"prt_1245f9cef001U6QI2gShWjS614","reason":"stop","snapshot":"42242d7f9d11cb6e1dc5bbe010f875f741e4ea9d","messageID":"msg_1245f88df001qFjCCHAU00NoHE","sessionID":"ses_edba077e8ffee6IgVcx22m9lK5","type":"step-finish","tokens":{"total":7356,"input":7178,"output":178,"reasoning":0,"cache":{"write":0,"read":0}},"cost":0}}
+
+[exit=0 wall=6.0s]
+
+## 5. one turn with qwen3:32b through the logging proxy
+$ /Users/techfreakworm/.opencode/bin/opencode run -m ollama/qwen3:32b --format json Reply with the single word PONG and nothing else.
+{"type":"step_start","timestamp":1791611641713,"sessionID":"ses_edba05e5bffeJ1AQvVTdVwsAak","part":{"id":"prt_124601f6d001qqteRjcMkDrTR2","messageID":"msg_1245fa2b900145BTA2hEb6lj8N","sessionID":"ses_edba05e5bffeJ1AQvVTdVwsAak","snapshot":"42242d7f9d11cb6e1dc5bbe010f875f741e4ea9d","type":"step-start"}}
+{"type":"text","timestamp":1791611641920,"sessionID":"ses_edba05e5bffeJ1AQvVTdVwsAak","part":{"id":"prt_124601f6f001u1vEMPYj07tx2N","messageID":"msg_1245fa2b900145BTA2hEb6lj8N","sessionID":"ses_edba05e5bffeJ1AQvVTdVwsAak","type":"text","text":"PONG","time":{"start":1791611641712,"end":1791611641917}}}
+{"type":"step_finish","timestamp":1791611642006,"sessionID":"ses_edba05e5bffeJ1AQvVTdVwsAak","part":{"id":"prt_124602091001kbkv0HDvKFpXke","reason":"stop","snapshot":"42242d7f9d11cb6e1dc5bbe010f875f741e4ea9d","messageID":"msg_1245fa2b900145BTA2hEb6lj8N","sessionID":"ses_edba05e5bffeJ1AQvVTdVwsAak","type":"step-finish","tokens":{"total":6526,"input":6518,"output":3,"reasoning":0,"cache":{"write":0,"read":5}},"cost":0}}
+
+[exit=0 wall=33.6s]
+
+## 6. what ollama allocated (context_length per loaded model)
+$ curl -s http://127.0.0.1:11434/api/ps
+{"models":[{"name":"qwen3:32b","model":"qwen3:32b","size":31373110803,"digest":"030ee887880fc378860c2dd35101da424377520441ae4bfe7be6deff8ade7840","details":{"parent_model":"","format":"gguf","family":"qwen3","families":["qwen3"],"parameter_size":"32.8B","quantization_level":"Q4_K_M"},"expires_at":"2026-10-10T11:29:01.916233+05:30","size_vram":31373110803,"context_length":40960},{"name":"lfm2.5-thinking:latest","model":"lfm2.5-thinking:latest","size":3165598514,"digest":"95bd9d45385f33bfe96d8b3651c8569e152f21f5bdb7c19894ffde650e9cf140","details":{"parent_model":"","format":"gguf","family":"lfm2","families":["lfm2"],"parameter_size":"1.2B","quantization_level":"Q4_K_M"},"expires_at":"2026-10-10T11:28:28.157396+05:30","size_vram":3165598514,"context_length":128000}]}
+[exit=0 wall=0.0s]
+
+## 7. proxy summary: per LLM request -> model, n_tools, system_chars, prompt tokens, wall
+$ python3.12 -I -c 
+import json,sys
+for ln in open(sys.argv[1]):
+    e=json.loads(ln); r=e.get("request") or {}; u=(e.get("response") or {}).get("usage") or {}
+    if not r: continue
+    print(e["ts"], r.get("model"), "tools=%s" % r.get("n_tools"), "tools_json_chars=%s" % r.get("tools_json_chars"),
+          "system_chars=%s" % r.get("system_chars"), "prompt_tokens=%s" % u.get("prompt_tokens"),
+          "completion_tokens=%s" % u.get("completion_tokens"), "reasoning_effort=%s" % (r.get("params") or {}).get("reasoning_effort"),
+          "wall=%ss" % e.get("wall_s"))
+print("tools offered (first request):", (json.loads(open(sys.argv[1]).readline()).get("request") or {}).get("tools_offered"))
+ /Users/techfreakworm/.soma/worktrees/claude-soma/claude-soma-manager/research/opencode-soma/evidence/opencode/P0-setup/proxy.jsonl
+2026-10-10T05:53:23Z qwen3:32b tools=0 tools_json_chars=2 system_chars=2096 prompt_tokens=547 completion_tokens=3 reasoning_effort=none wall=3.86s
+2026-10-10T05:53:24Z lfm2.5-thinking tools=10 tools_json_chars=21211 system_chars=9710 prompt_tokens=7178 completion_tokens=178 reasoning_effort=None wall=4.1s
+2026-10-10T05:53:29Z qwen3:32b tools=0 tools_json_chars=2 system_chars=2096 prompt_tokens=547 completion_tokens=3 reasoning_effort=none wall=0.17s
+2026-10-10T05:53:30Z qwen3:32b tools=10 tools_json_chars=21211 system_chars=9698 prompt_tokens=6523 completion_tokens=3 reasoning_effort=none wall=31.18s
+tools offered (first request): []
+
+[exit=0 wall=0.1s]
+
+## 8. sandbox contents after the runs (where opencode wrote)
+$ find /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P0-setup -maxdepth 4 -not -path */node_modules/* -not -path */project/.git/*
+/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P0-setup
+/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P0-setup/home
+/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P0-setup/proxy-47101.pid
+/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P0-setup/proxy-47101.stderr
+/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P0-setup/project
+/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P0-setup/project/README.md
+/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P0-setup/project/.git
+/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P0-setup/tmp
+/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P0-setup/tmp/.b9dd37e5faff338a-00000000.dylib
+/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P0-setup/tmp/.b9dd37e7eeffdbfa-00000000.dylib
+/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P0-setup/tmp/opencode
+/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P0-setup/xdg
+/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P0-setup/xdg/cache
+/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P0-setup/xdg/cache/opencode
+/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P0-setup/xdg/cache/opencode/bin
+/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P0-setup/xdg/config
+/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P0-setup/xdg/config/opencode
+/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P0-setup/xdg/config/opencode/.gitignore
+/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P0-setup/xdg/config/opencode/opencode.json
+/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P0-setup/xdg/state
+/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P0-setup/xdg/state/opencode
+/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P0-setup/xdg/state/opencode/locks
+/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P0-setup/xdg/data
+/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P0-setup/xdg/data/opencode
+/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P0-setup/xdg/data/opencode/repos
+/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P0-setup/xdg/data/opencode/snapshot
+/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P0-setup/xdg/data/opencode/opencode.db-shm
+/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P0-setup/xdg/data/opencode/opencode.db-wal
+/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P0-setup/xdg/data/opencode/log
+/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P0-setup/xdg/data/opencode/opencode.db
+
+[exit=0 wall=0.1s]
+
+VERDICT: PASS — all opencode paths resolve inside the sandbox and both ollama models answered through the logging proxy.

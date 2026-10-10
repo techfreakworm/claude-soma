@@ -1,0 +1,964 @@
+# cli-help.log
+date-utc: 2026-10-10T05:52:39Z
+probe-script: research/opencode-soma/probes/opencode/P0-setup/cli-help.sh
+opencode-version: 1.18.8
+model: none
+sandbox: $TMPDIR/ocsoma-pe/P0-clihelp (HOME, XDG_*, TMPDIR all inside it)
+purpose: full CLI surface of opencode 1.18.8: top-level and every subcommand --help
+
+$ /Users/techfreakworm/.opencode/bin/opencode --help
+⠀                                ▄     
+█▀▀█ █▀▀█ █▀▀█ █▀▀▄ █▀▀▀ █▀▀█ █▀▀█ █▀▀█
+█  █ █  █ █▀▀▀ █  █ █    █  █ █  █ █▀▀▀
+▀▀▀▀ █▀▀▀ ▀▀▀▀ ▀  ▀ ▀▀▀▀ ▀▀▀▀ ▀▀▀▀ ▀▀▀▀
+
+Commands:
+  opencode completion          generate shell completion script
+  opencode acp                 start ACP (Agent Client Protocol) server
+  opencode mcp                 manage MCP (Model Context Protocol) servers
+  opencode [project]           start opencode tui                                          [default]
+  opencode attach <url>        attach to a running opencode server
+  opencode run [message..]     run opencode with a message
+  opencode debug               debugging and troubleshooting tools
+  opencode providers           manage AI providers and credentials                   [aliases: auth]
+  opencode agent               manage agents
+  opencode upgrade [target]    upgrade opencode to the latest or a specific version
+  opencode uninstall           uninstall opencode and remove all related files
+  opencode serve               starts a headless opencode server
+  opencode web                 start opencode server and open web interface
+  opencode models [provider]   list all available models
+  opencode stats               show token usage and cost statistics
+  opencode export [sessionID]  export session data as JSON
+  opencode import <file>       import session data from JSON file or URL
+  opencode github              manage GitHub agent
+  opencode pr <number>         fetch and checkout a GitHub PR branch, then run opencode
+  opencode session             manage sessions
+  opencode plugin <module>     install plugin and update config                      [aliases: plug]
+  opencode db                  database tools
+
+Positionals:
+  project  path to start opencode in                                                        [string]
+
+Options:
+  -h, --help          show help                                                            [boolean]
+  -v, --version       show version number                                                  [boolean]
+      --print-logs    print logs to stderr                                                 [boolean]
+      --log-level     log level                 [string] [choices: "DEBUG", "INFO", "WARN", "ERROR"]
+      --pure          run without external plugins                                         [boolean]
+      --port          port to listen on                                        [number] [default: 0]
+      --hostname      hostname to listen on                          [string] [default: "127.0.0.1"]
+      --mdns          enable mDNS service discovery (defaults hostname to 0.0.0.0)
+                                                                          [boolean] [default: false]
+      --mdns-domain   custom domain name for mDNS service (default: opencode.local)
+                                                                [string] [default: "opencode.local"]
+      --cors          additional domains to allow for CORS                     [array] [default: []]
+  -m, --model         model to use in the format of provider/model                          [string]
+  -c, --continue      continue the last session                                            [boolean]
+  -s, --session       session id to continue                                                [string]
+      --fork          fork the session when continuing (use with --continue or --session)  [boolean]
+      --prompt        prompt to use                                                         [string]
+      --agent         agent to use                                                          [string]
+      --auto          auto-approve permissions that are not explicitly denied (dangerous!)
+                                                                          [boolean] [default: false]
+      --mini          start the minimal interactive interface             [boolean] [default: false]
+      --no-replay     disable mini session history replay on resume and after resize       [boolean]
+      --replay-limit  cap visible mini replay to the newest N messages                      [number]
+
+[exit=0 wall=0.3s]
+
+$ /Users/techfreakworm/.opencode/bin/opencode completion --help
+⠀                                ▄     
+█▀▀█ █▀▀█ █▀▀█ █▀▀▄ █▀▀▀ █▀▀█ █▀▀█ █▀▀█
+█  █ █  █ █▀▀▀ █  █ █    █  █ █  █ █▀▀▀
+▀▀▀▀ █▀▀▀ ▀▀▀▀ ▀  ▀ ▀▀▀▀ ▀▀▀▀ ▀▀▀▀ ▀▀▀▀
+
+Commands:
+  opencode completion          generate shell completion script
+  opencode acp                 start ACP (Agent Client Protocol) server
+  opencode mcp                 manage MCP (Model Context Protocol) servers
+  opencode [project]           start opencode tui                                          [default]
+  opencode attach <url>        attach to a running opencode server
+  opencode run [message..]     run opencode with a message
+  opencode debug               debugging and troubleshooting tools
+  opencode providers           manage AI providers and credentials                   [aliases: auth]
+  opencode agent               manage agents
+  opencode upgrade [target]    upgrade opencode to the latest or a specific version
+  opencode uninstall           uninstall opencode and remove all related files
+  opencode serve               starts a headless opencode server
+  opencode web                 start opencode server and open web interface
+  opencode models [provider]   list all available models
+  opencode stats               show token usage and cost statistics
+  opencode export [sessionID]  export session data as JSON
+  opencode import <file>       import session data from JSON file or URL
+  opencode github              manage GitHub agent
+  opencode pr <number>         fetch and checkout a GitHub PR branch, then run opencode
+  opencode session             manage sessions
+  opencode plugin <module>     install plugin and update config                      [aliases: plug]
+  opencode db                  database tools
+
+Positionals:
+  project  path to start opencode in                                                        [string]
+
+Options:
+  -h, --help          show help                                                            [boolean]
+  -v, --version       show version number                                                  [boolean]
+      --print-logs    print logs to stderr                                                 [boolean]
+      --log-level     log level                 [string] [choices: "DEBUG", "INFO", "WARN", "ERROR"]
+      --pure          run without external plugins                                         [boolean]
+      --port          port to listen on                                        [number] [default: 0]
+      --hostname      hostname to listen on                          [string] [default: "127.0.0.1"]
+      --mdns          enable mDNS service discovery (defaults hostname to 0.0.0.0)
+                                                                          [boolean] [default: false]
+      --mdns-domain   custom domain name for mDNS service (default: opencode.local)
+                                                                [string] [default: "opencode.local"]
+      --cors          additional domains to allow for CORS                     [array] [default: []]
+  -m, --model         model to use in the format of provider/model                          [string]
+  -c, --continue      continue the last session                                            [boolean]
+  -s, --session       session id to continue                                                [string]
+      --fork          fork the session when continuing (use with --continue or --session)  [boolean]
+      --prompt        prompt to use                                                         [string]
+      --agent         agent to use                                                          [string]
+      --auto          auto-approve permissions that are not explicitly denied (dangerous!)
+                                                                          [boolean] [default: false]
+      --mini          start the minimal interactive interface             [boolean] [default: false]
+      --no-replay     disable mini session history replay on resume and after resize       [boolean]
+      --replay-limit  cap visible mini replay to the newest N messages                      [number]
+
+[exit=1 wall=0.2s]
+
+$ /Users/techfreakworm/.opencode/bin/opencode acp --help
+opencode acp
+
+start ACP (Agent Client Protocol) server
+
+Options:
+  -h, --help         show help                                                             [boolean]
+  -v, --version      show version number                                                   [boolean]
+      --print-logs   print logs to stderr                                                  [boolean]
+      --log-level    log level                  [string] [choices: "DEBUG", "INFO", "WARN", "ERROR"]
+      --pure         run without external plugins                                          [boolean]
+      --port         port to listen on                                         [number] [default: 0]
+      --hostname     hostname to listen on                           [string] [default: "127.0.0.1"]
+      --mdns         enable mDNS service discovery (defaults hostname to 0.0.0.0)
+                                                                          [boolean] [default: false]
+      --mdns-domain  custom domain name for mDNS service (default: opencode.local)
+                                                                [string] [default: "opencode.local"]
+      --cors         additional domains to allow for CORS                      [array] [default: []]
+      --cwd          working directory                                            [string] [default:
+            "/private/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P0-clihelp/project"]
+[exit=0 wall=0.2s]
+
+$ /Users/techfreakworm/.opencode/bin/opencode mcp --help
+opencode mcp
+
+manage MCP (Model Context Protocol) servers
+
+Commands:
+  opencode mcp add [name]     add an MCP server
+  opencode mcp list           list MCP servers and their status                        [aliases: ls]
+  opencode mcp auth [name]    authenticate with an OAuth-enabled MCP server
+  opencode mcp logout [name]  remove OAuth credentials for an MCP server
+  opencode mcp debug <name>   debug OAuth connection for an MCP server
+
+Options:
+  -h, --help        show help                                                              [boolean]
+  -v, --version     show version number                                                    [boolean]
+      --print-logs  print logs to stderr                                                   [boolean]
+      --log-level   log level                   [string] [choices: "DEBUG", "INFO", "WARN", "ERROR"]
+      --pure        run without external plugins                                           [boolean]
+[exit=0 wall=0.2s]
+
+$ /Users/techfreakworm/.opencode/bin/opencode attach --help
+opencode attach <url>
+
+attach to a running opencode server
+
+Positionals:
+  url  http://localhost:4096                                                     [string] [required]
+
+Options:
+  -h, --help          show help                                                            [boolean]
+  -v, --version       show version number                                                  [boolean]
+      --print-logs    print logs to stderr                                                 [boolean]
+      --log-level     log level                 [string] [choices: "DEBUG", "INFO", "WARN", "ERROR"]
+      --pure          run without external plugins                                         [boolean]
+      --dir           directory to run in                                                   [string]
+  -c, --continue      continue the last session                                            [boolean]
+  -s, --session       session id to continue                                                [string]
+      --fork          fork the session when continuing (use with --continue or --session)  [boolean]
+  -p, --password      basic auth password (defaults to OPENCODE_SERVER_PASSWORD)            [string]
+  -u, --username      basic auth username (defaults to OPENCODE_SERVER_USERNAME or 'opencode')
+                                                                                            [string]
+      --mini          start the minimal interactive interface             [boolean] [default: false]
+      --no-replay     disable mini session history replay on resume and after resize       [boolean]
+      --replay-limit  cap visible mini replay to the newest N messages                      [number]
+[exit=0 wall=0.2s]
+
+$ /Users/techfreakworm/.opencode/bin/opencode run --help
+opencode run [message..]
+
+run opencode with a message
+
+Positionals:
+  message  message to send                                                     [array] [default: []]
+
+Options:
+  -h, --help         show help                                                             [boolean]
+  -v, --version      show version number                                                   [boolean]
+      --print-logs   print logs to stderr                                                  [boolean]
+      --log-level    log level                  [string] [choices: "DEBUG", "INFO", "WARN", "ERROR"]
+      --pure         run without external plugins                                          [boolean]
+      --command      the command to run, use message for args                               [string]
+  -c, --continue     continue the last session                                             [boolean]
+  -s, --session      session id to continue                                                 [string]
+      --fork         fork the session before continuing (requires --continue or --session) [boolean]
+      --share        share the session                                                     [boolean]
+  -m, --model        model to use in the format of provider/model                           [string]
+      --agent        agent to use                                                           [string]
+      --format       format: default (formatted) or json (raw JSON events)
+                                          [string] [choices: "default", "json"] [default: "default"]
+  -f, --file         file(s) to attach to message                                            [array]
+      --title        title for the session (uses truncated prompt if no value provided)     [string]
+      --attach       attach to a running opencode server (e.g., http://localhost:4096)      [string]
+  -p, --password     basic auth password (defaults to OPENCODE_SERVER_PASSWORD)             [string]
+  -u, --username     basic auth username (defaults to OPENCODE_SERVER_USERNAME or 'opencode')
+                                                                                            [string]
+      --dir          directory to run in, path on remote server if attaching                [string]
+      --port         port for the local server (defaults to random port if no value provided)
+                                                                                            [number]
+      --variant      model variant (provider-specific reasoning effort, e.g., high, max, minimal)
+                                                                                            [string]
+      --thinking     show thinking blocks                                                  [boolean]
+  -i, --interactive  run in direct interactive split-footer mode          [boolean] [default: false]
+      --auto         auto-approve permissions that are not explicitly denied (dangerous!)
+                                                                          [boolean] [default: false]
+[exit=0 wall=0.3s]
+
+$ /Users/techfreakworm/.opencode/bin/opencode debug --help
+opencode debug
+
+debugging and troubleshooting tools
+
+Commands:
+  opencode debug config        show resolved configuration
+  opencode debug lsp           LSP debugging utilities
+  opencode debug rg            ripgrep debugging utilities
+  opencode debug file          file system debugging utilities
+  opencode debug scrap         list all known projects
+  opencode debug skill         list all available skills
+  opencode debug snapshot      snapshot debugging utilities
+  opencode debug startup       print startup timing
+  opencode debug agent <name>  show agent configuration details
+  opencode debug v2            debug v2 catalog and built-in plugins
+  opencode debug info          show debug information
+  opencode debug paths         show global paths (data, config, cache, state)
+  opencode debug wait          wait indefinitely (for debugging)
+
+Options:
+  -h, --help        show help                                                              [boolean]
+  -v, --version     show version number                                                    [boolean]
+      --print-logs  print logs to stderr                                                   [boolean]
+      --log-level   log level                   [string] [choices: "DEBUG", "INFO", "WARN", "ERROR"]
+      --pure        run without external plugins                                           [boolean]
+[exit=0 wall=0.2s]
+
+$ /Users/techfreakworm/.opencode/bin/opencode providers --help
+opencode providers
+
+manage AI providers and credentials
+
+Commands:
+  opencode providers list               list providers and credentials                 [aliases: ls]
+  opencode providers login [url]        log in to a provider
+  opencode providers logout [provider]  log out from a configured provider
+
+Options:
+  -h, --help        show help                                                              [boolean]
+  -v, --version     show version number                                                    [boolean]
+      --print-logs  print logs to stderr                                                   [boolean]
+      --log-level   log level                   [string] [choices: "DEBUG", "INFO", "WARN", "ERROR"]
+      --pure        run without external plugins                                           [boolean]
+[exit=0 wall=0.2s]
+
+$ /Users/techfreakworm/.opencode/bin/opencode agent --help
+opencode agent
+
+manage agents
+
+Commands:
+  opencode agent create  create a new agent
+  opencode agent list    list all available agents
+
+Options:
+  -h, --help        show help                                                              [boolean]
+  -v, --version     show version number                                                    [boolean]
+      --print-logs  print logs to stderr                                                   [boolean]
+      --log-level   log level                   [string] [choices: "DEBUG", "INFO", "WARN", "ERROR"]
+      --pure        run without external plugins                                           [boolean]
+[exit=0 wall=0.2s]
+
+$ /Users/techfreakworm/.opencode/bin/opencode upgrade --help
+opencode upgrade [target]
+
+upgrade opencode to the latest or a specific version
+
+Positionals:
+  target  version to upgrade to, for ex '0.1.48' or 'v0.1.48'                               [string]
+
+Options:
+  -h, --help        show help                                                              [boolean]
+  -v, --version     show version number                                                    [boolean]
+      --print-logs  print logs to stderr                                                   [boolean]
+      --log-level   log level                   [string] [choices: "DEBUG", "INFO", "WARN", "ERROR"]
+      --pure        run without external plugins                                           [boolean]
+  -m, --method      installation method to use
+                          [string] [choices: "curl", "npm", "pnpm", "bun", "brew", "choco", "scoop"]
+[exit=0 wall=0.2s]
+
+$ /Users/techfreakworm/.opencode/bin/opencode uninstall --help
+opencode uninstall
+
+uninstall opencode and remove all related files
+
+Options:
+  -h, --help         show help                                                             [boolean]
+  -v, --version      show version number                                                   [boolean]
+      --print-logs   print logs to stderr                                                  [boolean]
+      --log-level    log level                  [string] [choices: "DEBUG", "INFO", "WARN", "ERROR"]
+      --pure         run without external plugins                                          [boolean]
+  -c, --keep-config  keep configuration files                             [boolean] [default: false]
+  -d, --keep-data    keep session data and snapshots                      [boolean] [default: false]
+      --dry-run      show what would be removed without removing          [boolean] [default: false]
+  -f, --force        skip confirmation prompts                            [boolean] [default: false]
+[exit=0 wall=0.2s]
+
+$ /Users/techfreakworm/.opencode/bin/opencode serve --help
+opencode serve
+
+starts a headless opencode server
+
+Options:
+  -h, --help         show help                                                             [boolean]
+  -v, --version      show version number                                                   [boolean]
+      --print-logs   print logs to stderr                                                  [boolean]
+      --log-level    log level                  [string] [choices: "DEBUG", "INFO", "WARN", "ERROR"]
+      --pure         run without external plugins                                          [boolean]
+      --port         port to listen on                                         [number] [default: 0]
+      --hostname     hostname to listen on                           [string] [default: "127.0.0.1"]
+      --mdns         enable mDNS service discovery (defaults hostname to 0.0.0.0)
+                                                                          [boolean] [default: false]
+      --mdns-domain  custom domain name for mDNS service (default: opencode.local)
+                                                                [string] [default: "opencode.local"]
+      --cors         additional domains to allow for CORS                      [array] [default: []]
+[exit=0 wall=0.2s]
+
+$ /Users/techfreakworm/.opencode/bin/opencode web --help
+opencode web
+
+start opencode server and open web interface
+
+Options:
+  -h, --help         show help                                                             [boolean]
+  -v, --version      show version number                                                   [boolean]
+      --print-logs   print logs to stderr                                                  [boolean]
+      --log-level    log level                  [string] [choices: "DEBUG", "INFO", "WARN", "ERROR"]
+      --pure         run without external plugins                                          [boolean]
+      --port         port to listen on                                         [number] [default: 0]
+      --hostname     hostname to listen on                           [string] [default: "127.0.0.1"]
+      --mdns         enable mDNS service discovery (defaults hostname to 0.0.0.0)
+                                                                          [boolean] [default: false]
+      --mdns-domain  custom domain name for mDNS service (default: opencode.local)
+                                                                [string] [default: "opencode.local"]
+      --cors         additional domains to allow for CORS                      [array] [default: []]
+[exit=0 wall=0.2s]
+
+$ /Users/techfreakworm/.opencode/bin/opencode models --help
+opencode models [provider]
+
+list all available models
+
+Positionals:
+  provider  provider ID to filter models by                                                 [string]
+
+Options:
+  -h, --help        show help                                                              [boolean]
+  -v, --version     show version number                                                    [boolean]
+      --print-logs  print logs to stderr                                                   [boolean]
+      --log-level   log level                   [string] [choices: "DEBUG", "INFO", "WARN", "ERROR"]
+      --pure        run without external plugins                                           [boolean]
+      --verbose     use more verbose model output (includes metadata like costs)           [boolean]
+      --refresh     refresh the models cache from models.dev                               [boolean]
+[exit=0 wall=0.2s]
+
+$ /Users/techfreakworm/.opencode/bin/opencode stats --help
+opencode stats
+
+show token usage and cost statistics
+
+Options:
+  -h, --help        show help                                                              [boolean]
+  -v, --version     show version number                                                    [boolean]
+      --print-logs  print logs to stderr                                                   [boolean]
+      --log-level   log level                   [string] [choices: "DEBUG", "INFO", "WARN", "ERROR"]
+      --pure        run without external plugins                                           [boolean]
+      --days        show stats for the last N days (default: all time)                      [number]
+      --tools       number of tools to show (default: all)                                  [number]
+      --models      show model statistics (default: hidden). Pass a number to show top N, otherwise
+                    shows all
+      --project     filter by project (default: all projects, empty string: current project)[string]
+[exit=0 wall=0.3s]
+
+$ /Users/techfreakworm/.opencode/bin/opencode export --help
+opencode export [sessionID]
+
+export session data as JSON
+
+Positionals:
+  sessionID  session id to export                                                           [string]
+
+Options:
+  -h, --help        show help                                                              [boolean]
+  -v, --version     show version number                                                    [boolean]
+      --print-logs  print logs to stderr                                                   [boolean]
+      --log-level   log level                   [string] [choices: "DEBUG", "INFO", "WARN", "ERROR"]
+      --pure        run without external plugins                                           [boolean]
+      --sanitize    redact sensitive transcript and file data                              [boolean]
+[exit=0 wall=0.2s]
+
+$ /Users/techfreakworm/.opencode/bin/opencode import --help
+opencode import <file>
+
+import session data from JSON file or URL
+
+Positionals:
+  file  path to JSON file or share URL                                           [string] [required]
+
+Options:
+  -h, --help        show help                                                              [boolean]
+  -v, --version     show version number                                                    [boolean]
+      --print-logs  print logs to stderr                                                   [boolean]
+      --log-level   log level                   [string] [choices: "DEBUG", "INFO", "WARN", "ERROR"]
+      --pure        run without external plugins                                           [boolean]
+[exit=0 wall=0.2s]
+
+$ /Users/techfreakworm/.opencode/bin/opencode github --help
+opencode github
+
+manage GitHub agent
+
+Commands:
+  opencode github install  install the GitHub agent
+  opencode github run      run the GitHub agent
+
+Options:
+  -h, --help        show help                                                              [boolean]
+  -v, --version     show version number                                                    [boolean]
+      --print-logs  print logs to stderr                                                   [boolean]
+      --log-level   log level                   [string] [choices: "DEBUG", "INFO", "WARN", "ERROR"]
+      --pure        run without external plugins                                           [boolean]
+[exit=0 wall=0.2s]
+
+$ /Users/techfreakworm/.opencode/bin/opencode pr --help
+opencode pr <number>
+
+fetch and checkout a GitHub PR branch, then run opencode
+
+Positionals:
+  number  PR number to checkout                                                  [number] [required]
+
+Options:
+  -h, --help        show help                                                              [boolean]
+  -v, --version     show version number                                                    [boolean]
+      --print-logs  print logs to stderr                                                   [boolean]
+      --log-level   log level                   [string] [choices: "DEBUG", "INFO", "WARN", "ERROR"]
+      --pure        run without external plugins                                           [boolean]
+[exit=0 wall=0.2s]
+
+$ /Users/techfreakworm/.opencode/bin/opencode session --help
+opencode session
+
+manage sessions
+
+Commands:
+  opencode session list                list sessions
+  opencode session delete <sessionID>  delete a session
+
+Options:
+  -h, --help        show help                                                              [boolean]
+  -v, --version     show version number                                                    [boolean]
+      --print-logs  print logs to stderr                                                   [boolean]
+      --log-level   log level                   [string] [choices: "DEBUG", "INFO", "WARN", "ERROR"]
+      --pure        run without external plugins                                           [boolean]
+[exit=0 wall=0.2s]
+
+$ /Users/techfreakworm/.opencode/bin/opencode plugin --help
+opencode plugin <module>
+
+install plugin and update config
+
+Positionals:
+  module  npm module name                                                        [string] [required]
+
+Options:
+  -h, --help        show help                                                              [boolean]
+  -v, --version     show version number                                                    [boolean]
+      --print-logs  print logs to stderr                                                   [boolean]
+      --log-level   log level                   [string] [choices: "DEBUG", "INFO", "WARN", "ERROR"]
+      --pure        run without external plugins                                           [boolean]
+  -g, --global      install in global config                              [boolean] [default: false]
+  -f, --force       replace existing plugin version                       [boolean] [default: false]
+[exit=0 wall=0.2s]
+
+$ /Users/techfreakworm/.opencode/bin/opencode db --help
+opencode db
+
+database tools
+
+Commands:
+  opencode db [query]     open an interactive sqlite3 shell or run a query                 [default]
+  opencode db path        print the database path
+
+Positionals:
+  query  SQL query to execute                                                               [string]
+
+Options:
+  -h, --help        show help                                                              [boolean]
+  -v, --version     show version number                                                    [boolean]
+      --print-logs  print logs to stderr                                                   [boolean]
+      --log-level   log level                   [string] [choices: "DEBUG", "INFO", "WARN", "ERROR"]
+      --pure        run without external plugins                                           [boolean]
+      --format      Output format                 [string] [choices: "json", "tsv"] [default: "tsv"]
+[exit=0 wall=0.3s]
+
+$ /Users/techfreakworm/.opencode/bin/opencode mcp add --help
+opencode mcp add [name]
+
+add an MCP server
+
+Positionals:
+  name  name of the MCP server                                                              [string]
+
+Options:
+  -h, --help        show help                                                              [boolean]
+  -v, --version     show version number                                                    [boolean]
+      --print-logs  print logs to stderr                                                   [boolean]
+      --log-level   log level                   [string] [choices: "DEBUG", "INFO", "WARN", "ERROR"]
+      --pure        run without external plugins                                           [boolean]
+      --url         URL for a remote MCP server                                             [string]
+      --env         environment variable for a local MCP server (KEY=VALUE)                  [array]
+      --header      HTTP header for a remote MCP server (KEY=VALUE)                          [array]
+[exit=0 wall=0.2s]
+
+$ /Users/techfreakworm/.opencode/bin/opencode mcp list --help
+opencode mcp list
+
+list MCP servers and their status
+
+Options:
+  -h, --help        show help                                                              [boolean]
+  -v, --version     show version number                                                    [boolean]
+      --print-logs  print logs to stderr                                                   [boolean]
+      --log-level   log level                   [string] [choices: "DEBUG", "INFO", "WARN", "ERROR"]
+      --pure        run without external plugins                                           [boolean]
+[exit=0 wall=0.2s]
+
+$ /Users/techfreakworm/.opencode/bin/opencode mcp auth --help
+opencode mcp auth [name]
+
+authenticate with an OAuth-enabled MCP server
+
+Commands:
+  opencode mcp auth list  list OAuth-capable MCP servers and their auth status         [aliases: ls]
+
+Positionals:
+  name  name of the MCP server                                                              [string]
+
+Options:
+  -h, --help        show help                                                              [boolean]
+  -v, --version     show version number                                                    [boolean]
+      --print-logs  print logs to stderr                                                   [boolean]
+      --log-level   log level                   [string] [choices: "DEBUG", "INFO", "WARN", "ERROR"]
+      --pure        run without external plugins                                           [boolean]
+[exit=0 wall=0.2s]
+
+$ /Users/techfreakworm/.opencode/bin/opencode mcp logout --help
+opencode mcp logout [name]
+
+remove OAuth credentials for an MCP server
+
+Positionals:
+  name  name of the MCP server                                                              [string]
+
+Options:
+  -h, --help        show help                                                              [boolean]
+  -v, --version     show version number                                                    [boolean]
+      --print-logs  print logs to stderr                                                   [boolean]
+      --log-level   log level                   [string] [choices: "DEBUG", "INFO", "WARN", "ERROR"]
+      --pure        run without external plugins                                           [boolean]
+[exit=0 wall=0.3s]
+
+$ /Users/techfreakworm/.opencode/bin/opencode mcp debug --help
+opencode mcp debug <name>
+
+debug OAuth connection for an MCP server
+
+Positionals:
+  name  name of the MCP server                                                   [string] [required]
+
+Options:
+  -h, --help        show help                                                              [boolean]
+  -v, --version     show version number                                                    [boolean]
+      --print-logs  print logs to stderr                                                   [boolean]
+      --log-level   log level                   [string] [choices: "DEBUG", "INFO", "WARN", "ERROR"]
+      --pure        run without external plugins                                           [boolean]
+[exit=0 wall=0.2s]
+
+$ /Users/techfreakworm/.opencode/bin/opencode debug config --help
+opencode debug config
+
+show resolved configuration
+
+Options:
+  -h, --help        show help                                                              [boolean]
+  -v, --version     show version number                                                    [boolean]
+      --print-logs  print logs to stderr                                                   [boolean]
+      --log-level   log level                   [string] [choices: "DEBUG", "INFO", "WARN", "ERROR"]
+      --pure        run without external plugins                                           [boolean]
+[exit=0 wall=0.2s]
+
+$ /Users/techfreakworm/.opencode/bin/opencode debug lsp --help
+opencode debug lsp
+
+LSP debugging utilities
+
+Commands:
+  opencode debug lsp diagnostics <file>      get diagnostics for a file
+  opencode debug lsp symbols <query>         search workspace symbols
+  opencode debug lsp document-symbols <uri>  get symbols from a document
+
+Options:
+  -h, --help        show help                                                              [boolean]
+  -v, --version     show version number                                                    [boolean]
+      --print-logs  print logs to stderr                                                   [boolean]
+      --log-level   log level                   [string] [choices: "DEBUG", "INFO", "WARN", "ERROR"]
+      --pure        run without external plugins                                           [boolean]
+[exit=0 wall=0.2s]
+
+$ /Users/techfreakworm/.opencode/bin/opencode debug rg --help
+opencode debug rg
+
+ripgrep debugging utilities
+
+Commands:
+  opencode debug rg files             list files using ripgrep
+  opencode debug rg search <pattern>  search file contents using ripgrep
+
+Options:
+  -h, --help        show help                                                              [boolean]
+  -v, --version     show version number                                                    [boolean]
+      --print-logs  print logs to stderr                                                   [boolean]
+      --log-level   log level                   [string] [choices: "DEBUG", "INFO", "WARN", "ERROR"]
+      --pure        run without external plugins                                           [boolean]
+[exit=0 wall=0.2s]
+
+$ /Users/techfreakworm/.opencode/bin/opencode debug file --help
+opencode debug file
+
+file system debugging utilities
+
+Commands:
+  opencode debug file read <path>     read file contents as JSON
+  opencode debug file list <path>     list files in a directory
+  opencode debug file search <query>  search files by query
+
+Options:
+  -h, --help        show help                                                              [boolean]
+  -v, --version     show version number                                                    [boolean]
+      --print-logs  print logs to stderr                                                   [boolean]
+      --log-level   log level                   [string] [choices: "DEBUG", "INFO", "WARN", "ERROR"]
+      --pure        run without external plugins                                           [boolean]
+[exit=0 wall=0.2s]
+
+$ /Users/techfreakworm/.opencode/bin/opencode debug scrap --help
+opencode debug scrap
+
+list all known projects
+
+Options:
+  -h, --help        show help                                                              [boolean]
+  -v, --version     show version number                                                    [boolean]
+      --print-logs  print logs to stderr                                                   [boolean]
+      --log-level   log level                   [string] [choices: "DEBUG", "INFO", "WARN", "ERROR"]
+      --pure        run without external plugins                                           [boolean]
+[exit=0 wall=0.2s]
+
+$ /Users/techfreakworm/.opencode/bin/opencode debug skill --help
+opencode debug skill
+
+list all available skills
+
+Options:
+  -h, --help        show help                                                              [boolean]
+  -v, --version     show version number                                                    [boolean]
+      --print-logs  print logs to stderr                                                   [boolean]
+      --log-level   log level                   [string] [choices: "DEBUG", "INFO", "WARN", "ERROR"]
+      --pure        run without external plugins                                           [boolean]
+[exit=0 wall=0.2s]
+
+$ /Users/techfreakworm/.opencode/bin/opencode debug snapshot --help
+opencode debug snapshot
+
+snapshot debugging utilities
+
+Commands:
+  opencode debug snapshot track         track current snapshot state
+  opencode debug snapshot patch <hash>  show patch for a snapshot hash
+  opencode debug snapshot diff <hash>   show diff for a snapshot hash
+
+Options:
+  -h, --help        show help                                                              [boolean]
+  -v, --version     show version number                                                    [boolean]
+      --print-logs  print logs to stderr                                                   [boolean]
+      --log-level   log level                   [string] [choices: "DEBUG", "INFO", "WARN", "ERROR"]
+      --pure        run without external plugins                                           [boolean]
+[exit=0 wall=0.2s]
+
+$ /Users/techfreakworm/.opencode/bin/opencode debug agent --help
+opencode debug agent <name>
+
+show agent configuration details
+
+Positionals:
+  name  Agent name                                                               [string] [required]
+
+Options:
+  -h, --help        show help                                                              [boolean]
+  -v, --version     show version number                                                    [boolean]
+      --print-logs  print logs to stderr                                                   [boolean]
+      --log-level   log level                   [string] [choices: "DEBUG", "INFO", "WARN", "ERROR"]
+      --pure        run without external plugins                                           [boolean]
+      --tool        Tool id to execute                                                      [string]
+      --params      Tool params as JSON or a JS object literal                              [string]
+[exit=0 wall=0.2s]
+
+$ /Users/techfreakworm/.opencode/bin/opencode debug paths --help
+opencode debug paths
+
+show global paths (data, config, cache, state)
+
+Options:
+  -h, --help        show help                                                              [boolean]
+  -v, --version     show version number                                                    [boolean]
+      --print-logs  print logs to stderr                                                   [boolean]
+      --log-level   log level                   [string] [choices: "DEBUG", "INFO", "WARN", "ERROR"]
+      --pure        run without external plugins                                           [boolean]
+[exit=0 wall=0.2s]
+
+$ /Users/techfreakworm/.opencode/bin/opencode debug wait --help
+opencode debug wait
+
+wait indefinitely (for debugging)
+
+Options:
+  -h, --help        show help                                                              [boolean]
+  -v, --version     show version number                                                    [boolean]
+      --print-logs  print logs to stderr                                                   [boolean]
+      --log-level   log level                   [string] [choices: "DEBUG", "INFO", "WARN", "ERROR"]
+      --pure        run without external plugins                                           [boolean]
+[exit=0 wall=0.2s]
+
+$ /Users/techfreakworm/.opencode/bin/opencode providers list --help
+opencode providers list
+
+list providers and credentials
+
+Options:
+  -h, --help        show help                                                              [boolean]
+  -v, --version     show version number                                                    [boolean]
+      --print-logs  print logs to stderr                                                   [boolean]
+      --log-level   log level                   [string] [choices: "DEBUG", "INFO", "WARN", "ERROR"]
+      --pure        run without external plugins                                           [boolean]
+[exit=0 wall=0.2s]
+
+$ /Users/techfreakworm/.opencode/bin/opencode providers login --help
+opencode providers login [url]
+
+log in to a provider
+
+Positionals:
+  url  opencode auth provider                                                               [string]
+
+Options:
+  -h, --help        show help                                                              [boolean]
+  -v, --version     show version number                                                    [boolean]
+      --print-logs  print logs to stderr                                                   [boolean]
+      --log-level   log level                   [string] [choices: "DEBUG", "INFO", "WARN", "ERROR"]
+      --pure        run without external plugins                                           [boolean]
+  -p, --provider    provider id or name to log in to (skips provider selection)             [string]
+  -m, --method      login method label (skips method selection)                             [string]
+[exit=0 wall=0.2s]
+
+$ /Users/techfreakworm/.opencode/bin/opencode providers logout --help
+opencode providers logout [provider]
+
+log out from a configured provider
+
+Positionals:
+  provider  provider id or name to log out from                                             [string]
+
+Options:
+  -h, --help        show help                                                              [boolean]
+  -v, --version     show version number                                                    [boolean]
+      --print-logs  print logs to stderr                                                   [boolean]
+      --log-level   log level                   [string] [choices: "DEBUG", "INFO", "WARN", "ERROR"]
+      --pure        run without external plugins                                           [boolean]
+[exit=0 wall=0.3s]
+
+$ /Users/techfreakworm/.opencode/bin/opencode agent create --help
+opencode agent create
+
+create a new agent
+
+Options:
+  -h, --help                  show help                                                    [boolean]
+  -v, --version               show version number                                          [boolean]
+      --print-logs            print logs to stderr                                         [boolean]
+      --log-level             log level         [string] [choices: "DEBUG", "INFO", "WARN", "ERROR"]
+      --pure                  run without external plugins                                 [boolean]
+      --path                  directory path to generate the agent file                     [string]
+      --description           what the agent should do                                      [string]
+      --mode                  agent mode            [string] [choices: "all", "primary", "subagent"]
+      --permissions, --tools  comma-separated list of permissions to allow (default: all).
+                              Available: "bash, read, edit, glob, grep, webfetch, task, todowrite,
+                              websearch, lsp, skill"                                        [string]
+  -m, --model                 model to use in the format of provider/model                  [string]
+[exit=0 wall=0.3s]
+
+$ /Users/techfreakworm/.opencode/bin/opencode agent list --help
+opencode agent list
+
+list all available agents
+
+Options:
+  -h, --help        show help                                                              [boolean]
+  -v, --version     show version number                                                    [boolean]
+      --print-logs  print logs to stderr                                                   [boolean]
+      --log-level   log level                   [string] [choices: "DEBUG", "INFO", "WARN", "ERROR"]
+      --pure        run without external plugins                                           [boolean]
+[exit=0 wall=0.2s]
+
+$ /Users/techfreakworm/.opencode/bin/opencode session list --help
+opencode session list
+
+list sessions
+
+Options:
+  -h, --help        show help                                                              [boolean]
+  -v, --version     show version number                                                    [boolean]
+      --print-logs  print logs to stderr                                                   [boolean]
+      --log-level   log level                   [string] [choices: "DEBUG", "INFO", "WARN", "ERROR"]
+      --pure        run without external plugins                                           [boolean]
+  -n, --max-count   limit to N most recent sessions                                         [number]
+      --format      output format             [string] [choices: "table", "json"] [default: "table"]
+[exit=0 wall=0.2s]
+
+$ /Users/techfreakworm/.opencode/bin/opencode session delete --help
+opencode session delete <sessionID>
+
+delete a session
+
+Positionals:
+  sessionID  session ID to delete                                                [string] [required]
+
+Options:
+  -h, --help        show help                                                              [boolean]
+  -v, --version     show version number                                                    [boolean]
+      --print-logs  print logs to stderr                                                   [boolean]
+      --log-level   log level                   [string] [choices: "DEBUG", "INFO", "WARN", "ERROR"]
+      --pure        run without external plugins                                           [boolean]
+[exit=0 wall=0.2s]
+
+$ /Users/techfreakworm/.opencode/bin/opencode db path --help
+opencode db path
+
+print the database path
+
+Options:
+  -h, --help        show help                                                              [boolean]
+  -v, --version     show version number                                                    [boolean]
+      --print-logs  print logs to stderr                                                   [boolean]
+      --log-level   log level                   [string] [choices: "DEBUG", "INFO", "WARN", "ERROR"]
+      --pure        run without external plugins                                           [boolean]
+[exit=0 wall=0.2s]
+
+$ /Users/techfreakworm/.opencode/bin/opencode db query --help
+opencode db
+
+database tools
+
+Commands:
+  opencode db [query]     open an interactive sqlite3 shell or run a query                 [default]
+  opencode db path        print the database path
+
+Positionals:
+  query  SQL query to execute                                                               [string]
+
+Options:
+  -h, --help        show help                                                              [boolean]
+  -v, --version     show version number                                                    [boolean]
+      --print-logs  print logs to stderr                                                   [boolean]
+      --log-level   log level                   [string] [choices: "DEBUG", "INFO", "WARN", "ERROR"]
+      --pure        run without external plugins                                           [boolean]
+      --format      Output format                 [string] [choices: "json", "tsv"] [default: "tsv"]
+[exit=0 wall=0.2s]
+
+$ /Users/techfreakworm/.opencode/bin/opencode db migrate --help
+opencode db
+
+database tools
+
+Commands:
+  opencode db [query]     open an interactive sqlite3 shell or run a query                 [default]
+  opencode db path        print the database path
+
+Positionals:
+  query  SQL query to execute                                                               [string]
+
+Options:
+  -h, --help        show help                                                              [boolean]
+  -v, --version     show version number                                                    [boolean]
+      --print-logs  print logs to stderr                                                   [boolean]
+      --log-level   log level                   [string] [choices: "DEBUG", "INFO", "WARN", "ERROR"]
+      --pure        run without external plugins                                           [boolean]
+      --format      Output format                 [string] [choices: "json", "tsv"] [default: "tsv"]
+[exit=0 wall=0.3s]
+
+$ /Users/techfreakworm/.opencode/bin/opencode github install --help
+opencode github install
+
+install the GitHub agent
+
+Options:
+  -h, --help        show help                                                              [boolean]
+  -v, --version     show version number                                                    [boolean]
+      --print-logs  print logs to stderr                                                   [boolean]
+      --log-level   log level                   [string] [choices: "DEBUG", "INFO", "WARN", "ERROR"]
+      --pure        run without external plugins                                           [boolean]
+[exit=0 wall=0.2s]
+
+$ /Users/techfreakworm/.opencode/bin/opencode github run --help
+opencode github run
+
+run the GitHub agent
+
+Options:
+  -h, --help        show help                                                              [boolean]
+  -v, --version     show version number                                                    [boolean]
+      --print-logs  print logs to stderr                                                   [boolean]
+      --log-level   log level                   [string] [choices: "DEBUG", "INFO", "WARN", "ERROR"]
+      --pure        run without external plugins                                           [boolean]
+      --event       GitHub mock event to run the agent for                                  [string]
+      --token       GitHub personal access token (github_pat_********)                      [string]
+[exit=0 wall=0.3s]
+
+VERDICT: PASS — help for the top level and every subcommand captured from the 1.18.8 binary inside the sandbox.

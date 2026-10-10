@@ -1,0 +1,294 @@
+# P2-hooks/fetch-types.log
+date-utc: 2026-10-10T05:51:19Z
+probe-script: research/opencode-soma/probes/opencode/P2-hooks/fetch-types.sh
+opencode-version: 1.18.8
+model: none
+sandbox: $TMPDIR/ocsoma-pe/P2-types (HOME, XDG_*, TMPDIR all inside it)
+purpose: authoritative 1.18.8 plugin/sdk type definitions fetched into the sandbox
+
+$ npm view @opencode-ai/plugin@1.18.8 version dist.tarball dependencies
+version = '1.18.8'
+dist.tarball = 'https://registry.npmjs.org/@opencode-ai/plugin/-/plugin-1.18.8.tgz'
+dependencies = {
+  zod: '4.1.8',
+  effect: '4.0.0-beta.83',
+  '@ai-sdk/provider': '3.0.8',
+  '@opencode-ai/sdk': '1.18.8'
+}
+npm notice
+npm notice New minor version of npm available! 11.11.0 -> 11.21.0
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v11.21.0
+npm notice To update run: npm install -g npm@11.21.0
+npm notice
+[exit=0 wall=1.1s]
+
+$ npm view @opencode-ai/sdk@1.18.8 version dist.tarball
+version = '1.18.8'
+dist.tarball = 'https://registry.npmjs.org/@opencode-ai/sdk/-/sdk-1.18.8.tgz'
+[exit=0 wall=0.7s]
+
+$ npm pack @opencode-ai/plugin@1.18.8 --pack-destination /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P2-types/npm
+npm notice
+npm notice 📦  @opencode-ai/plugin@1.18.8
+npm notice Tarball Contents
+npm notice 141B dist/example-workspace.d.ts
+npm notice 938B dist/example-workspace.js
+npm notice 81B dist/example.d.ts
+npm notice 440B dist/example.js
+npm notice 9.3kB dist/index.d.ts
+npm notice 27B dist/index.js
+npm notice 3.2kB dist/shell.d.ts
+npm notice 11B dist/shell.js
+npm notice 1.5kB dist/tool.d.ts
+npm notice 92B dist/tool.js
+npm notice 17.6kB dist/tui.d.ts
+npm notice 480B dist/tui.js
+npm notice 429B dist/v2/effect/agent.d.ts
+npm notice 11B dist/v2/effect/agent.js
+npm notice 529B dist/v2/effect/aisdk.d.ts
+npm notice 11B dist/v2/effect/aisdk.js
+npm notice 1.1kB dist/v2/effect/catalog.d.ts
+npm notice 11B dist/v2/effect/catalog.js
+npm notice 408B dist/v2/effect/command.d.ts
+npm notice 11B dist/v2/effect/command.js
+npm notice 913B dist/v2/effect/context.d.ts
+npm notice 11B dist/v2/effect/context.js
+npm notice 294B dist/v2/effect/event.d.ts
+npm notice 11B dist/v2/effect/event.js
+npm notice 718B dist/v2/effect/filesystem.d.ts
+npm notice 11B dist/v2/effect/filesystem.js
+npm notice 132B dist/v2/effect/index.d.ts
+npm notice 38B dist/v2/effect/index.js
+npm notice 2.1kB dist/v2/effect/integration.d.ts
+npm notice 11B dist/v2/effect/integration.js
+npm notice 129B dist/v2/effect/location.d.ts
+npm notice 11B dist/v2/effect/location.js
+npm notice 192B dist/v2/effect/npm.d.ts
+npm notice 11B dist/v2/effect/npm.js
+npm notice 192B dist/v2/effect/path.d.ts
+npm notice 11B dist/v2/effect/path.js
+npm notice 476B dist/v2/effect/plugin.d.ts
+npm notice 54B dist/v2/effect/plugin.js
+npm notice 446B dist/v2/effect/reference.d.ts
+npm notice 11B dist/v2/effect/reference.js
+npm notice 378B dist/v2/effect/registration.d.ts
+npm notice 11B dist/v2/effect/registration.js
+npm notice 287B dist/v2/effect/skill.d.ts
+npm notice 11B dist/v2/effect/skill.js
+npm notice 59B dist/v2/options.d.ts
+npm notice 11B dist/v2/options.js
+npm notice 194B dist/v2/promise/agent.d.ts
+npm notice 11B dist/v2/promise/agent.js
+npm notice 529B dist/v2/promise/aisdk.d.ts
+npm notice 11B dist/v2/promise/aisdk.js
+npm notice 250B dist/v2/promise/catalog.d.ts
+npm notice 11B dist/v2/promise/catalog.js
+npm notice 204B dist/v2/promise/command.d.ts
+npm notice 11B dist/v2/promise/command.js
+npm notice 913B dist/v2/promise/context.d.ts
+npm notice 11B dist/v2/promise/context.js
+npm notice 751B dist/v2/promise/index.d.ts
+npm notice 38B dist/v2/promise/index.js
+npm notice 657B dist/v2/promise/integration.d.ts
+npm notice 11B dist/v2/promise/integration.js
+npm notice 369B dist/v2/promise/plugin.d.ts
+npm notice 54B dist/v2/promise/plugin.js
+npm notice 214B dist/v2/promise/reference.d.ts
+npm notice 11B dist/v2/promise/reference.js
+npm notice 295B dist/v2/promise/registration.d.ts
+npm notice 11B dist/v2/promise/registration.js
+npm notice 194B dist/v2/promise/skill.d.ts
+npm notice 11B dist/v2/promise/skill.js
+npm notice 1.8kB package.json
+npm notice Tarball Details
+npm notice name: @opencode-ai/plugin
+npm notice version: 1.18.8
+npm notice filename: opencode-ai-plugin-1.18.8.tgz
+npm notice package size: 12.0 kB
+npm notice unpacked size: 49.5 kB
+npm notice shasum: 2988cf31774e7eb4a5e1320c7a9b7fe08b3eb546
+npm notice integrity: sha512-ADO2XvuStRHWS[...]CRTH/7Mt4OSDg==
+npm notice total files: 69
+npm notice
+opencode-ai-plugin-1.18.8.tgz
+[exit=0 wall=0.6s]
+
+$ npm pack @opencode-ai/sdk@1.18.8 --pack-destination /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P2-types/npm
+npm notice
+npm notice 📦  @opencode-ai/sdk@1.18.8
+npm notice Tarball Contents
+npm notice 317B dist/client.d.ts
+npm notice 1.7kB dist/client.js
+npm notice 776B dist/error-interceptor.d.ts
+npm notice 2.1kB dist/error-interceptor.js
+npm notice 749B dist/gen/client.gen.d.ts
+npm notice 211B dist/gen/client.gen.js
+npm notice 118B dist/gen/client/client.gen.d.ts
+npm notice 5.7kB dist/gen/client/client.gen.js
+npm notice 620B dist/gen/client/index.d.ts
+npm notice 346B dist/gen/client/index.js
+npm notice 6.9kB dist/gen/client/types.gen.d.ts
+npm notice 65B dist/gen/client/types.gen.js
+npm notice 2.4kB dist/gen/client/utils.gen.d.ts
+npm notice 7.3kB dist/gen/client/utils.gen.js
+npm notice 546B dist/gen/core/auth.gen.d.ts
+npm notice 411B dist/gen/core/auth.gen.js
+npm notice 776B dist/gen/core/bodySerializer.gen.d.ts
+npm notice 1.8kB dist/gen/core/bodySerializer.gen.js
+npm notice 927B dist/gen/core/params.gen.d.ts
+npm notice 2.6kB dist/gen/core/params.gen.js
+npm notice 1.5kB dist/gen/core/pathSerializer.gen.d.ts
+npm notice 3.5kB dist/gen/core/pathSerializer.gen.js
+npm notice 705B dist/gen/core/queryKeySerializer.gen.d.ts
+npm notice 2.7kB dist/gen/core/queryKeySerializer.gen.js
+npm notice 2.1kB dist/gen/core/serverSentEvents.gen.d.ts
+npm notice 5.5kB dist/gen/core/serverSentEvents.gen.js
+npm notice 3.3kB dist/gen/core/types.gen.d.ts
+npm notice 65B dist/gen/core/types.gen.js
+npm notice 540B dist/gen/core/utils.gen.d.ts
+npm notice 2.4kB dist/gen/core/utils.gen.js
+npm notice 26.9kB dist/gen/sdk.gen.d.ts
+npm notice 21.6kB dist/gen/sdk.gen.js
+npm notice 76.6kB dist/gen/types.gen.d.ts
+npm notice 65B dist/gen/types.gen.js
+npm notice 302B dist/index.d.ts
+npm notice 419B dist/index.js
+npm notice 223B dist/process.d.ts
+npm notice 1.1kB dist/process.js
+npm notice 565B dist/server.d.ts
+npm notice 3.3kB dist/server.js
+npm notice 442B dist/v2/client.d.ts
+npm notice 2.8kB dist/v2/client.js
+npm notice 281B dist/v2/data.d.ts
+npm notice 527B dist/v2/data.js
+npm notice 723B dist/v2/gen/client.gen.d.ts
+npm notice 206B dist/v2/gen/client.gen.js
+npm notice 118B dist/v2/gen/client/client.gen.d.ts
+npm notice 8.2kB dist/v2/gen/client/client.gen.js
+npm notice 675B dist/v2/gen/client/index.d.ts
+npm notice 422B dist/v2/gen/client/index.js
+npm notice 6.0kB dist/v2/gen/client/types.gen.d.ts
+npm notice 65B dist/v2/gen/client/types.gen.js
+npm notice 2.1kB dist/v2/gen/client/utils.gen.d.ts
+npm notice 7.4kB dist/v2/gen/client/utils.gen.js
+npm notice 546B dist/v2/gen/core/auth.gen.d.ts
+npm notice 411B dist/v2/gen/core/auth.gen.js
+npm notice 1.1kB dist/v2/gen/core/bodySerializer.gen.d.ts
+npm notice 1.8kB dist/v2/gen/core/bodySerializer.gen.js
+npm notice 1.2kB dist/v2/gen/core/params.gen.d.ts
+npm notice 3.1kB dist/v2/gen/core/params.gen.js
+npm notice 1.5kB dist/v2/gen/core/pathSerializer.gen.d.ts
+npm notice 3.5kB dist/v2/gen/core/pathSerializer.gen.js
+npm notice 705B dist/v2/gen/core/queryKeySerializer.gen.d.ts
+npm notice 2.7kB dist/v2/gen/core/queryKeySerializer.gen.js
+npm notice 2.5kB dist/v2/gen/core/serverSentEvents.gen.d.ts
+npm notice 6.3kB dist/v2/gen/core/serverSentEvents.gen.js
+npm notice 3.3kB dist/v2/gen/core/types.gen.d.ts
+npm notice 65B dist/v2/gen/core/types.gen.js
+npm notice 718B dist/v2/gen/core/utils.gen.d.ts
+npm notice 3.1kB dist/v2/gen/core/utils.gen.js
+npm notice 102.5kB dist/v2/gen/sdk.gen.d.ts
+npm notice 133.9kB dist/v2/gen/sdk.gen.js
+npm notice 282.0kB dist/v2/gen/types.gen.d.ts
+npm notice 65B dist/v2/gen/types.gen.js
+npm notice 337B dist/v2/index.d.ts
+npm notice 454B dist/v2/index.js
+npm notice 565B dist/v2/server.d.ts
+npm notice 3.3kB dist/v2/server.js
+npm notice 1.5kB package.json
+npm notice Tarball Details
+npm notice name: @opencode-ai/sdk
+npm notice version: 1.18.8
+npm notice filename: opencode-ai-sdk-1.18.8.tgz
+npm notice package size: 101.0 kB
+npm notice unpacked size: 777.0 kB
+npm notice shasum: 3d77e2e26d4a02c3ba6244e0145c6282713e5362
+npm notice integrity: sha512-8vi5UBKFFgc+f[...]zGgO8hdxXHUaw==
+npm notice total files: 79
+npm notice
+opencode-ai-sdk-1.18.8.tgz
+[exit=0 wall=1.0s]
+
+$ tar -xzf /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P2-types/npm/opencode-ai-plugin-1.18.8.tgz -C /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P2-types/npm/plugin
+[exit=0 wall=0.0s]
+
+$ tar -xzf /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P2-types/npm/opencode-ai-sdk-1.18.8.tgz -C /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P2-types/npm/sdk
+[exit=0 wall=0.0s]
+
+$ find /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P2-types/npm/plugin /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P2-types/npm/sdk -name *.d.ts
+/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P2-types/npm/plugin/package/dist/example-workspace.d.ts
+/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P2-types/npm/plugin/package/dist/tool.d.ts
+/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P2-types/npm/plugin/package/dist/example.d.ts
+/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P2-types/npm/plugin/package/dist/v2/options.d.ts
+/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P2-types/npm/plugin/package/dist/v2/effect/path.d.ts
+/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P2-types/npm/plugin/package/dist/v2/effect/npm.d.ts
+/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P2-types/npm/plugin/package/dist/v2/effect/location.d.ts
+/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P2-types/npm/plugin/package/dist/v2/effect/aisdk.d.ts
+/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P2-types/npm/plugin/package/dist/v2/effect/registration.d.ts
+/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P2-types/npm/plugin/package/dist/v2/effect/agent.d.ts
+/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P2-types/npm/plugin/package/dist/v2/effect/event.d.ts
+/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P2-types/npm/plugin/package/dist/v2/effect/plugin.d.ts
+/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P2-types/npm/plugin/package/dist/v2/effect/reference.d.ts
+/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P2-types/npm/plugin/package/dist/v2/effect/command.d.ts
+/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P2-types/npm/plugin/package/dist/v2/effect/context.d.ts
+/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P2-types/npm/plugin/package/dist/v2/effect/catalog.d.ts
+/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P2-types/npm/plugin/package/dist/v2/effect/index.d.ts
+/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P2-types/npm/plugin/package/dist/v2/effect/integration.d.ts
+/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P2-types/npm/plugin/package/dist/v2/effect/filesystem.d.ts
+/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P2-types/npm/plugin/package/dist/v2/effect/skill.d.ts
+/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P2-types/npm/plugin/package/dist/v2/promise/aisdk.d.ts
+/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P2-types/npm/plugin/package/dist/v2/promise/registration.d.ts
+/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P2-types/npm/plugin/package/dist/v2/promise/agent.d.ts
+/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P2-types/npm/plugin/package/dist/v2/promise/plugin.d.ts
+/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P2-types/npm/plugin/package/dist/v2/promise/reference.d.ts
+/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P2-types/npm/plugin/package/dist/v2/promise/command.d.ts
+/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P2-types/npm/plugin/package/dist/v2/promise/context.d.ts
+/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P2-types/npm/plugin/package/dist/v2/promise/catalog.d.ts
+/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P2-types/npm/plugin/package/dist/v2/promise/index.d.ts
+/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P2-types/npm/plugin/package/dist/v2/promise/integration.d.ts
+/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P2-types/npm/plugin/package/dist/v2/promise/skill.d.ts
+/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P2-types/npm/plugin/package/dist/shell.d.ts
+/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P2-types/npm/plugin/package/dist/tui.d.ts
+/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P2-types/npm/plugin/package/dist/index.d.ts
+/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P2-types/npm/sdk/package/dist/error-interceptor.d.ts
+/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P2-types/npm/sdk/package/dist/server.d.ts
+/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P2-types/npm/sdk/package/dist/gen/sdk.gen.d.ts
+/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P2-types/npm/sdk/package/dist/gen/core/queryKeySerializer.gen.d.ts
+/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P2-types/npm/sdk/package/dist/gen/core/bodySerializer.gen.d.ts
+/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P2-types/npm/sdk/package/dist/gen/core/serverSentEvents.gen.d.ts
+/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P2-types/npm/sdk/package/dist/gen/core/utils.gen.d.ts
+/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P2-types/npm/sdk/package/dist/gen/core/params.gen.d.ts
+/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P2-types/npm/sdk/package/dist/gen/core/auth.gen.d.ts
+/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P2-types/npm/sdk/package/dist/gen/core/pathSerializer.gen.d.ts
+/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P2-types/npm/sdk/package/dist/gen/core/types.gen.d.ts
+/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P2-types/npm/sdk/package/dist/gen/client.gen.d.ts
+/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P2-types/npm/sdk/package/dist/gen/types.gen.d.ts
+/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P2-types/npm/sdk/package/dist/gen/client/utils.gen.d.ts
+/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P2-types/npm/sdk/package/dist/gen/client/client.gen.d.ts
+/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P2-types/npm/sdk/package/dist/gen/client/index.d.ts
+/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P2-types/npm/sdk/package/dist/gen/client/types.gen.d.ts
+/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P2-types/npm/sdk/package/dist/v2/server.d.ts
+/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P2-types/npm/sdk/package/dist/v2/gen/sdk.gen.d.ts
+/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P2-types/npm/sdk/package/dist/v2/gen/core/queryKeySerializer.gen.d.ts
+/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P2-types/npm/sdk/package/dist/v2/gen/core/bodySerializer.gen.d.ts
+/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P2-types/npm/sdk/package/dist/v2/gen/core/serverSentEvents.gen.d.ts
+/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P2-types/npm/sdk/package/dist/v2/gen/core/utils.gen.d.ts
+/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P2-types/npm/sdk/package/dist/v2/gen/core/params.gen.d.ts
+/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P2-types/npm/sdk/package/dist/v2/gen/core/auth.gen.d.ts
+/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P2-types/npm/sdk/package/dist/v2/gen/core/pathSerializer.gen.d.ts
+/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P2-types/npm/sdk/package/dist/v2/gen/core/types.gen.d.ts
+/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P2-types/npm/sdk/package/dist/v2/gen/client.gen.d.ts
+/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P2-types/npm/sdk/package/dist/v2/gen/types.gen.d.ts
+/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P2-types/npm/sdk/package/dist/v2/gen/client/utils.gen.d.ts
+/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P2-types/npm/sdk/package/dist/v2/gen/client/client.gen.d.ts
+/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P2-types/npm/sdk/package/dist/v2/gen/client/index.d.ts
+/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P2-types/npm/sdk/package/dist/v2/gen/client/types.gen.d.ts
+/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P2-types/npm/sdk/package/dist/v2/data.d.ts
+/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P2-types/npm/sdk/package/dist/v2/index.d.ts
+/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P2-types/npm/sdk/package/dist/v2/client.d.ts
+/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P2-types/npm/sdk/package/dist/process.d.ts
+/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P2-types/npm/sdk/package/dist/index.d.ts
+/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P2-types/npm/sdk/package/dist/client.d.ts
+[exit=0 wall=0.0s]
+
+VERDICT: PASS — plugin and sdk 1.18.8 tarballs fetched and unpacked into the sandbox.
