@@ -67,11 +67,20 @@ C9  evidence/opencode/isolation-check.log is committed and non-empty; names ~/.c
     UNCHANGED; no line has the word CHANGED (UNCHANGED is fine); it records `snapshot-utc:` and
     `date-utc:` (YYYY-MM-DDTHH:MM:SSZ) and every committed evidence *.log with a line starting
     `opencode-version:` (outside evidence/verify/) has a `date-utc:` inside that window.
-C10 (--rerun) re-runs the pinned RERUN_LIST from a clean `git archive HEAD` copy, in fresh sandboxes
-    under $TMPDIR/ocsoma-vf/ (OCSOMA_REAL_TMPDIR, TMPDIR, HOME and XDG_* point there), and requires
-    each new list of VERDICT tokens (first word after `VERDICT:`) to equal the committed one;
-    transcripts go to evidence/verify/rerun/. FAILs with "rerun list not yet pinned" until the
-    list covers P1-resume, P2-gate, P3-scoping, P5-tmux and neo4j-timing.
+C10 (--rerun) runs every pinned RERUN_LIST entry from its own clean `git archive HEAD` copy, with
+    HOME, XDG_*, TMPDIR and OCSOMA_REAL_TMPDIR in a fresh dir under $TMPDIR/ocsoma-vf/ and secret,
+    CLAUDE* and TMUX variables removed. Ports and tmux sockets are remapped into 47300-47399 and
+    ocsoma-vf-* (OCSOMA_PORT_BASE=47300, OCSOMA_TMUX_PREFIX=ocsoma-vf-, plus the two port-range
+    guards in ollama_log_proxy.py and mini_mcp.py, edited in the copy only); a remap that no longer
+    matches the script fails as a stale pin. Each entry must exit 0, and every compared log's
+    VERDICT words (first word after `VERDICT:`) must equal HEAD's. The Neo4j entry instead needs
+    HEAD gen.log's dataset_sha256 for 50000 facts, correct = 1.0, and a Q1 p50 within 10x of HEAD's
+    neo4j/Q1/50000 row. Leftover ocsoma-vf-* containers or volumes fail the entry. Transcripts and
+    produced logs go to evidence/verify/rerun/. Pinned: P1-resume (P1-headless/crash-run.sh),
+    P2-gate (P2-hooks run.sh then analyze.sh; gate.log), P3-scoping (P3-mcp/run.sh; mcp, scoping
+    and scoping-verdict logs), P5-tmux (P5-tmux/run.sh; tmux and pane-analysis logs), neo4j-timing
+    (gen_memory.py + bench.py, Q1 at 50000 facts). With an empty list it FAILs "rerun list not yet
+    pinned".
 C11 no file under research/opencode-soma/ (outside venv/cache dirs) contains a credential-shaped
     string (API keys, OAuth/bearer tokens, private keys); only file:line is printed.
 """
@@ -85,6 +94,8 @@ import json
 import math
 import os
 import re
+import shutil
+import signal
 import subprocess
 import sys
 import tarfile
@@ -131,11 +142,58 @@ PROBE_GROUPS = range(1, 8)
 MAX_SHOWN = 8
 SKIP_DIRS = {".venv", "venv", "node_modules", "__pycache__", ".git", ".mypy_cache", ".ruff_cache"}
 
-# C10: pinned once the probe scripts land. Each entry: id, tags, argv, committed (repo-relative log
-# in HEAD to compare with), produces (repo-relative path the script writes, inside the clean copy),
-# env (extra variables), timeout. Placeholders in argv/env: {tree} = clean `git archive HEAD` copy,
-# {base} = this entry's fresh directory under $TMPDIR/ocsoma-vf/rerun-<stamp>/.
-RERUN_LIST: list[dict[str, Any]] = []
+# C10 rerun list. Each entry runs in its own clean `git archive HEAD` copy ({tree}) with HOME,
+# XDG_*, TMPDIR and OCSOMA_REAL_TMPDIR inside its own fresh dir ({base}) under $TMPDIR/ocsoma-vf/.
+# Fields:
+# argv, env, timeout; rewrite = (file, old, new, expected count) literal edits applied to the copy
+# only (ports and tmux sockets into the verifier's 47300-47399 / ocsoma-vf-* space; a count mismatch
+# means the pin is stale and fails); compare = logs whose VERDICT words must equal HEAD's;
+# check = "verdict" (default) or "neo4j-q1"; docker / tmux_sockets = ocsoma-vf-* leftovers to
+# remove.
+OCP = f"{RS_REL}/probes/opencode"
+OCE = f"{EV_REL}/opencode"
+EVM = f"{EV_REL}/memory"
+# rerun-list-begin
+OC_ENV = {"OCSOMA_PORT_BASE": "47300", "OCSOMA_TMUX_PREFIX": "ocsoma-vf-"}
+PROXY_GUARD = (f"{OCP}/ollama_log_proxy.py", "if not 47100 <= a.port <= 47199:",
+               "if not 47300 <= a.port <= 47399:", 1)
+MINI_GUARD = (f"{OCP}/P3-mcp/mini_mcp.py", "if not 47100 <= port <= 47199:",
+              "if not 47300 <= port <= 47399:", 1)
+NEO4J_SH = (
+    'set -euo pipefail\n'
+    'mkdir -p "$OCSOMA_SCRATCH"\n'
+    'python3.12 -m venv "$OCSOMA_SCRATCH/venv"\n'
+    '"$OCSOMA_SCRATCH/venv/bin/pip" install -q neo4j==6.4.0\n'
+    'python3.12 research/opencode-soma/probes/memory/gen_memory.py --n-facts 50000 --seed 7'
+    ' --out "$OCSOMA_SCRATCH/data"\n'
+    '"$OCSOMA_SCRATCH/venv/bin/python" research/opencode-soma/probes/memory/bench.py'
+    ' --data "$OCSOMA_SCRATCH/data" --n-facts 50000 --backends neo4j --queries Q1 --runs 30'
+    ' --out-tag verify\n'
+)
+RERUN_LIST: list[dict[str, Any]] = [
+    {"id": "P1-resume", "tags": ["P1-resume"], "timeout": 1800, "env": OC_ENV,
+     "argv": ["bash", f"{OCP}/P1-headless/crash-run.sh"], "rewrite": [PROXY_GUARD],
+     "compare": [f"{OCE}/P1-headless/crash-run.log"]},
+    {"id": "P2-gate", "tags": ["P2-gate"], "timeout": 2400, "env": OC_ENV,
+     "argv": ["bash", "-c", f"bash {OCP}/P2-hooks/run.sh; bash {OCP}/P2-hooks/analyze.sh"],
+     "rewrite": [PROXY_GUARD], "compare": [f"{OCE}/P2-hooks/gate.log"]},
+    {"id": "P3-scoping", "tags": ["P3-scoping"], "timeout": 2400, "env": OC_ENV,
+     "argv": ["bash", f"{OCP}/P3-mcp/run.sh"], "rewrite": [MINI_GUARD, PROXY_GUARD],
+     "compare": [f"{OCE}/P3-mcp/mcp.log", f"{OCE}/P3-mcp/scoping.log",
+                 f"{OCE}/P3-mcp/scoping-verdict.log"]},
+    {"id": "P5-tmux", "tags": ["P5-tmux"], "timeout": 2400, "env": OC_ENV,
+     "argv": ["bash", f"{OCP}/P5-tmux/run.sh"], "rewrite": [PROXY_GUARD],
+     "tmux_sockets": ["ocsoma-vf-tui"],
+     "compare": [f"{OCE}/P5-tmux/tmux.log", f"{OCE}/P5-tmux/pane-analysis.log"]},
+    {"id": "neo4j-timing", "tags": ["neo4j-timing"], "timeout": 1800, "check": "neo4j-q1",
+     "argv": ["bash", "-c", NEO4J_SH],
+     "env": {"OCSOMA_SCRATCH": "{base}/neo4j", "OCSOMA_NEO4J_NAME": "ocsoma-vf-neo4j",
+             "OCSOMA_NEO4J_VOLUME": "ocsoma-vf-neo4j-data", "OCSOMA_NEO4J_BOLT_PORT": "47397",
+             "OCSOMA_NEO4J_HTTP_PORT": "47398", "PYTHONHASHSEED": "0"},
+     "docker": {"containers": ["ocsoma-vf-neo4j"], "volumes": ["ocsoma-vf-neo4j-data"]},
+     "artifacts": [f"{EVM}/bench-50000-verify.log", f"{EVM}/bench-results-verify.json"]},
+]
+# rerun-list-end
 RERUN_REQUIRED_TAGS = ("P1-resume", "P2-gate", "P3-scoping", "P5-tmux", "neo4j-timing")
 SECRET_ENV = re.compile(
     r"^(CLAUDE|ANTHROPIC|OPENAI|OPENCODE_|AWS_|GOOGLE_|GEMINI|GITHUB_|GH_|AZURE_|GROQ|MISTRAL)"
@@ -1009,65 +1067,239 @@ def c9() -> Result:
 # ---------- C10 ----------
 
 
-def rerun_entry(e: dict[str, Any], tree: Path, base: Path, out_dir: Path) -> tuple[str, str | None]:
-    eid = str(e["id"])
-    sb = base / eid
-    sb.mkdir(parents=True)
-    subst = {"tree": str(tree), "base": str(sb)}
+def quiet(cmd: list[str], env: dict[str, str]) -> str:
     try:
-        committed = git("show", f"HEAD:{e['committed']}")
-    except GitError:
-        return f"{eid} no committed log", f"{eid}: committed log {e['committed']} not in HEAD"
-    produced = tree / str(e.get("produces", e["committed"]))
-    if produced.exists():
-        produced.unlink()
-    env = dict(os.environ)
+        return subprocess.run(cmd, env=env, capture_output=True, text=True, timeout=120).stdout
+    except (OSError, subprocess.SubprocessError):
+        return ""
+
+
+def docker_host() -> str | None:
+    out = quiet(["docker", "context", "inspect", "--format", "{{.Endpoints.docker.Host}}"],
+                dict(os.environ)).strip()
+    return out if "://" in out else None
+
+
+def docker_leftovers(spec: dict[str, Any], env: dict[str, str]) -> list[str]:
+    found: list[str] = []
+    for kind, names in (("container", spec.get("containers", ())),
+                        ("volume", spec.get("volumes", ()))):
+        for name in map(str, names):
+            if not name.startswith("ocsoma-vf-"):
+                found.append(f"refusing to manage {kind} {name} (not ocsoma-vf-*)")
+                continue
+            if kind == "container":
+                ls = ["docker", "ps", "-a", "--filter", f"name=^{name}$", "--format", "{{.Names}}"]
+                rm = ["docker", "rm", "-f", name]
+            else:
+                ls = ["docker", "volume", "ls", "--filter", f"name=^{name}$", "--format",
+                      "{{.Name}}"]
+                rm = ["docker", "volume", "rm", "-f", name]
+            if name in quiet(ls, env).split():
+                quiet(rm, env)
+                found.append(f"{kind} {name} was left behind (removed by the gate)")
+    return found
+
+
+def kill_group(pgid: int) -> None:
+    for sig in (signal.SIGTERM, signal.SIGKILL):
+        try:
+            os.killpg(pgid, sig)
+        except (ProcessLookupError, PermissionError):
+            return
+        time.sleep(0.5)
+
+
+def run_group(argv: list[str], cwd: Path, env: dict[str, str], timeout: int
+              ) -> tuple[str, str, str]:
+    try:
+        proc = subprocess.Popen(argv, cwd=cwd, env=env, stdin=subprocess.DEVNULL,
+                                stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+                                start_new_session=True)
+    except OSError as exc:
+        return "oserror", "", str(exc)
+    try:
+        out, err = proc.communicate(timeout=timeout)
+        rc = str(proc.returncode)
+    except subprocess.TimeoutExpired:
+        kill_group(proc.pid)
+        out, err = proc.communicate()
+        rc = f"timeout after {timeout}s"
+    kill_group(proc.pid)
+    return rc, out or "", err or ""
+
+
+def rerun_env(e: dict[str, Any], sb: Path, sub: Callable[[str], str]) -> dict[str, str]:
+    env = {k: v for k, v in os.environ.items() if not SECRET_ENV.search(k)}
+    if "docker" in e:
+        host = docker_host()
+        if host:
+            env["DOCKER_HOST"] = host
     env.update({"OCSOMA_REAL_TMPDIR": str(sb), "TMPDIR": str(sb) + "/", "HOME": str(sb / "home")})
     for x in ("CONFIG", "DATA", "CACHE", "STATE"):
         env[f"XDG_{x}_HOME"] = str(sb / "xdg" / x.lower())
     for d in ("home", "xdg/config", "xdg/data", "xdg/cache", "xdg/state"):
         (sb / d).mkdir(parents=True, exist_ok=True)
-    for k in list(env):
-        if SECRET_ENV.search(k):
-            del env[k]
-    env.update({k: str(v).format(**subst) for k, v in e.get("env", {}).items()})
-    argv = [str(a).format(**subst) for a in e["argv"]]
-    t0 = time.time()
+    env.update({k: sub(str(v)) for k, v in e.get("env", {}).items()})
+    return env
+
+
+def compare_verdicts(eid: str, compare: list[str], tree: Path) -> tuple[list[str], list[str]]:
+    bits: list[str] = []
+    probs: list[str] = []
+    if not compare:
+        return bits, [f"{eid}: nothing to compare"]
+    for relp in compare:
+        name = relp.rsplit("/", 1)[-1]
+        try:
+            committed = git("show", f"HEAD:{relp}")
+        except GitError:
+            probs.append(f"{eid}: {relp} is not in HEAD")
+            continue
+        fp = tree / relp
+        new = read(fp) if fp.is_file() else ""
+        old_v = [verdict_token(v) for v in verdict_lines(committed)]
+        new_v = [verdict_token(v) for v in verdict_lines(new)]
+        bits.append(f"{name} committed={old_v} rerun={new_v}")
+        if not old_v:
+            probs.append(f"{eid}: committed {name} has no VERDICT line")
+        elif not new_v:
+            probs.append(f"{eid}: the rerun wrote no VERDICT to {name}")
+        elif old_v != new_v:
+            probs.append(f"{eid}: {name} VERDICT mismatch, committed={old_v} rerun={new_v}")
+        if VER_LINE.search(committed):
+            vers = VER_LINE.findall(new)
+            if OC_VERSION not in vers or any(v != OC_VERSION for v in vers):
+                probs.append(f"{eid}: rerun {name} lacks opencode-version {OC_VERSION}")
+    return bits, probs
+
+
+def json_objects(text: str) -> Iterator[dict[str, Any]]:
+    dec = json.JSONDecoder()
+    for m in re.finditer(r"(?m)^\{", text):
+        try:
+            obj, _ = dec.raw_decode(text, m.start())
+        except ValueError:
+            continue
+        if isinstance(obj, dict):
+            yield obj
+
+
+def dataset_sha(text: str, n: int) -> str | None:
+    for obj in json_objects(text):
+        if obj.get("n_facts") == n and isinstance(obj.get("dataset_sha256"), str):
+            return str(obj["dataset_sha256"])
+    return None
+
+
+def bench_row(doc: Any, backend: str, query: str, n: int) -> dict[str, Any] | None:
+    rows = doc.get("rows", []) if isinstance(doc, dict) else []
+    hits = [r for r in rows if isinstance(r, dict) and r.get("backend") == backend
+            and r.get("query") == query and r.get("n_facts") == n]
+    return hits[0] if len(hits) == 1 else None
+
+
+def number(v: Any) -> float | None:
+    return float(v) if isinstance(v, (int, float)) and not isinstance(v, bool) else None
+
+
+def check_neo4j_q1(eid: str, tree: Path, stdout: str) -> tuple[list[str], list[str]]:
+    probs: list[str] = []
     try:
-        proc = subprocess.run(argv, cwd=tree, env=env, capture_output=True, text=True,
-                              timeout=int(e.get("timeout", 1800)))
-        rc: object = proc.returncode
-        out, err = proc.stdout, proc.stderr
-    except subprocess.TimeoutExpired as exc:
-        rc = "timeout"
-        out = exc.stdout if isinstance(exc.stdout, str) else ""
-        err = exc.stderr if isinstance(exc.stderr, str) else ""
-    except OSError as exc:
-        rc, out, err = "oserror", "", str(exc)
+        want = dataset_sha(git("show", f"HEAD:{EVM}/gen.log"), 50000)
+    except GitError:
+        want = None
+    got = dataset_sha(stdout, 50000)
+    if want is None:
+        probs.append(f"{eid}: committed gen.log has no dataset_sha256 for n_facts=50000")
+    elif got != want:
+        probs.append(f"{eid}: dataset_sha256 {got} != committed {want}")
+    try:
+        crow = bench_row(json.loads(git("show", f"HEAD:{EVM}/bench-results.json")), "neo4j", "Q1",
+                         50000)
+    except (GitError, ValueError):
+        crow = None
+    vf = tree / EVM / "bench-results-verify.json"
+    try:
+        nrow = bench_row(json.loads(read(vf)), "neo4j", "Q1", 50000) if vf.is_file() else None
+    except ValueError:
+        nrow = None
+    bits = [f"dataset_sha256 {'matches' if want and got == want else 'MISMATCH'}"]
+    if crow is None:
+        probs.append(f"{eid}: HEAD bench-results.json has no unique neo4j/Q1/50000 row")
+    if nrow is None:
+        probs.append(f"{eid}: the rerun wrote no unique neo4j/Q1/50000 row")
+    if crow is not None and nrow is not None:
+        c, n = number(crow.get("p50_ms")), number(nrow.get("p50_ms"))
+        ok = number(nrow.get("correct"))
+        bits.append(f"p50 committed={c} rerun={n} correct={ok}")
+        if ok != 1.0:
+            probs.append(f"{eid}: rerun correct={ok} (want 1.0)")
+        if c is None or n is None or c <= 0 or not 0.1 <= n / c <= 10:
+            probs.append(f"{eid}: rerun p50 {n} ms is not within 10x of committed {c} ms")
+    return bits, probs
+
+
+def rerun_entry(e: dict[str, Any], base: Path, out_dir: Path, arc: bytes) -> tuple[str, list[str]]:
+    eid = str(e["id"])
+    sb = base / eid
+    tree = sb / "tree"
+    tree.mkdir(parents=True)
+    with tarfile.open(fileobj=io.BytesIO(arc)) as tf:
+        tf.extractall(tree, filter="data")
+    probs: list[str] = []
+    notes: list[str] = []
+    for relp, old, new, count in e.get("rewrite", ()):
+        fp = tree / relp
+        text = fp.read_text(encoding="utf-8") if fp.is_file() else ""
+        if text.count(old) != count:
+            probs.append(f"{eid}: pin is stale, {relp} has {text.count(old)} x {old!r} "
+                         f"(expected {count})")
+            continue
+        fp.write_text(text.replace(old, new), encoding="utf-8")
+        notes.append(f"rewrite (copy only): {relp}: {old!r} -> {new!r} x{count}")
+    if probs:
+        return f"{eid} NOT RUN (stale pin)", probs
+
+    def sub(s: str) -> str:
+        return s.replace("{tree}", str(tree)).replace("{base}", str(sb))
+
+    compare = [str(c) for c in e.get("compare", ())]
+    artifacts = [str(a) for a in e.get("artifacts", ())]
+    for relp in compare + artifacts:
+        (tree / relp).unlink(missing_ok=True)
+    env = rerun_env(e, sb, sub)
+    argv = [sub(str(a)) for a in e["argv"]]
+    t0 = time.time()
+    rc, out, err = run_group(argv, tree, env, int(e.get("timeout", 1800)))
     wall = time.time() - t0
-    new_text = read(produced) if produced.is_file() else ""
-    old_v = [verdict_token(v) for v in verdict_lines(committed)]
-    new_v = [verdict_token(v) for v in verdict_lines(new_text)]
-    vers = VER_LINE.findall(new_text)
-    want_ver = bool(VER_LINE.search(committed))
+    for sock in map(str, e.get("tmux_sockets", ())):
+        if sock.startswith("ocsoma-vf-"):
+            quiet(["tmux", "-L", sock, "kill-server"], env)
+    if "docker" in e:
+        probs += [f"{eid}: {x}" for x in docker_leftovers(e["docker"], env)]
+    if rc != "0":
+        probs.append(f"{eid}: exit {rc}")
+    if e.get("check", "verdict") == "neo4j-q1":
+        bits, cprobs = check_neo4j_q1(eid, tree, out)
+    else:
+        bits, cprobs = compare_verdicts(eid, compare, tree)
+    probs += cprobs
     stamp = dt.datetime.now(dt.UTC).strftime(UTC_FMT)
-    transcript = "\n".join([
-        f"# rerun {eid}", f"date-utc: {stamp}", f"argv: {argv}", f"cwd: {tree}",
-        f"sandbox-base: {sb}", f"committed-log: {e['committed']}", f"exit: {rc}",
-        f"wall-s: {wall:.1f}", f"committed-verdicts: {old_v}", f"rerun-verdicts: {new_v}",
-        "---- stdout ----", out, "---- stderr ----", err, "---- produced log ----", new_text,
-    ])
-    (out_dir / f"{eid}.log").write_text(transcript, encoding="utf-8")
-    line = f"{eid} committed={old_v} rerun={new_v} exit={rc} wall={wall:.0f}s"
-    if not old_v:
-        return line, f"{eid}: committed log has no VERDICT line"
-    if not new_v:
-        return line, f"{eid}: rerun produced no VERDICT (exit {rc})"
-    if want_ver and (OC_VERSION not in vers or any(v != OC_VERSION for v in vers)):
-        return line, f"{eid}: rerun log lacks opencode-version {OC_VERSION}"
-    if old_v != new_v:
-        return line, f"{eid}: VERDICT mismatch committed={old_v} rerun={new_v}"
-    return line + " MATCH", None
+    head = [f"# rerun {eid}", f"date-utc: {stamp}", f"argv: {argv}", f"cwd: {tree}",
+            f"sandbox: {sb}", f"exit: {rc}", f"wall-s: {wall:.1f}", *notes, *bits,
+            "result: " + ("FAIL" if probs else "PASS"), *probs]
+    body = ["---- stdout ----", out, "---- stderr ----", err]
+    (out_dir / f"{eid}.log").write_text("\n".join(head + body) + "\n", encoding="utf-8")
+    for relp in compare + artifacts:
+        fp = tree / relp
+        if fp.is_file():
+            shutil.copyfile(fp, out_dir / f"{eid}.{fp.name}")
+    line = f"{eid}: exit={rc} wall={wall:.0f}s " + "; ".join(bits)
+    return line + (" FAIL" if probs else " MATCH"), probs
+
+
+SCRIPT_REF = re.compile(r"research/opencode-soma/probes/[\w./-]+\.(?:sh|py)")
 
 
 def c10(run: bool) -> Result:
@@ -1081,37 +1313,37 @@ def c10(run: bool) -> Result:
         return Result("C10", "FAIL", f"rerun list not yet pinned: no entry tagged {missing}")
     probs: list[str] = []
     for e in RERUN_LIST:
-        for a in e["argv"]:
-            if str(a).startswith("{tree}/"):
-                srel = str(a)[len("{tree}/"):]
-                if repo().state(srel) != "ok":
-                    probs.append(f"{e['id']}: script {srel} {repo().state(srel)}")
+        refs = {m.group(0) for a in e["argv"] for m in SCRIPT_REF.finditer(str(a))}
+        refs |= {str(r[0]) for r in e.get("rewrite", ())}
+        for srel in sorted(refs):
+            st = repo().state(srel)
+            if st != "ok":
+                probs.append(f"{e['id']}: {srel} {st}")
     if probs:
         return finish("C10", probs, "")
-    real_tmp = os.environ.get("TMPDIR", "/tmp").rstrip("/")
-    stamp = dt.datetime.now(dt.UTC).strftime("%Y%m%dT%H%M%SZ")
-    base = Path(real_tmp) / "ocsoma-vf" / f"rerun-{stamp}-{os.getpid()}"
-    tree = base / "tree"
-    tree.mkdir(parents=True)
     try:
         arc = subprocess.run(["git", "-C", str(ROOT), "archive", "--format=tar", "HEAD"],
                              capture_output=True, timeout=600, check=True).stdout
     except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as exc:
         return finish("C10", [f"git archive HEAD failed: {exc}"], "")
-    with tarfile.open(fileobj=io.BytesIO(arc)) as tf:
-        tf.extractall(tree, filter="data")
+    real_tmp = os.environ.get("TMPDIR", "/tmp").rstrip("/")
+    stamp = dt.datetime.now(dt.UTC).strftime("%Y%m%dT%H%M%SZ")
+    base = Path(real_tmp) / "ocsoma-vf" / f"rerun-{stamp}-{os.getpid()}"
+    base.mkdir(parents=True)
     out_dir = ROOT / VERIFY_REL / "rerun"
     out_dir.mkdir(parents=True, exist_ok=True)
+    for old in out_dir.iterdir():
+        if old.is_file():
+            old.unlink()
     lines = [f"rerun base: {base}", f"HEAD: {git('rev-parse', 'HEAD').strip()}"]
     for e in RERUN_LIST:
-        line, prob = rerun_entry(e, tree, base, out_dir)
+        line, eprobs = rerun_entry(e, base, out_dir, arc)
         lines.append(line)
-        if prob:
-            probs.append(prob)
+        probs += eprobs
     lines.append("RESULT: " + ("FAIL" if probs else "PASS"))
     (out_dir / "SUMMARY.txt").write_text("\n".join(lines) + "\n", encoding="utf-8")
-    return finish("C10", probs, f"{len(RERUN_LIST)} probe(s) re-run, all VERDICTs match "
-                                "(evidence/verify/rerun/)")
+    return finish("C10", probs, f"{len(RERUN_LIST)} pinned probe(s) re-run from clean copies; all "
+                                "match HEAD (evidence/verify/rerun/)")
 
 
 # ---------- C11 ----------
