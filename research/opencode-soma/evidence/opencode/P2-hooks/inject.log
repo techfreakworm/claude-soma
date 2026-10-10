@@ -1,0 +1,29 @@
+# P2-hooks/inject.log
+date-utc: 2026-10-10T06:05:35Z
+probe-script: research/opencode-soma/probes/opencode/P2-hooks/analyze.sh (after run.sh)
+opencode-version: 1.18.8
+model: ollama/qwen3:32b
+sandbox: $TMPDIR/ocsoma-pe/P2-hooks (HOME, XDG_*, TMPDIR all inside it)
+purpose: (a) inject changing context on every prompt (notify_inject.sh analog): chat.message synthetic part + experimental.chat.system.transform
+
+## plugin log (evidence/opencode/P2-hooks/inject.jsonl): what each hook injected, per prompt
+$ cat /Users/techfreakworm/.soma/worktrees/claude-soma/claude-soma-manager/research/opencode-soma/evidence/opencode/P2-hooks/inject.jsonl
+{"ts":"2026-10-10T06:03:12.980Z","hook":"chat.message","sessionID":"ses_edb977777ffeyh3bfUICJssyeP","injected":"LATEST-MSG-CODE=ALPHA-111"}
+{"ts":"2026-10-10T06:03:13.886Z","hook":"system.transform","sessionID":"ses_edb977777ffeyh3bfUICJssyeP","injected":"LATEST-SYS-CODE=ZULU-901"}
+{"ts":"2026-10-10T06:03:36.779Z","hook":"chat.message","sessionID":"ses_edb977777ffeyh3bfUICJssyeP","injected":"LATEST-MSG-CODE=BRAVO-222"}
+{"ts":"2026-10-10T06:03:36.831Z","hook":"system.transform","sessionID":"ses_edb977777ffeyh3bfUICJssyeP","injected":"LATEST-SYS-CODE=YANKEE-902"}
+
+[exit=0 wall=0.0s]
+
+## model answers, turn 1 then turn 2 (files rewritten in between)
+turn 1 final_text: MSG=ALPHA-111 SYS=ZULU-901
+turn 2 final_text: MSG=BRAVO-222 SYS=ZULU-901
+## proxy: what each LLM request actually carried (system tail + last user message)
+$ sh -c jq -c 'select(.request.n_tools > 0) | {ts, roles: .request.roles, sys_has_ZULU: (.request.system_tail|test("ZULU-901")), sys_has_YANKEE: (.request.system_tail|test("YANKEE-902")), user_has_ALPHA: (.request.last_user|test("ALPHA-111")), user_has_BRAVO: (.request.last_user|test("BRAVO-222")), sys_tail: .request.system_tail[-70:], last_user: .request.last_user[-70:]}' '/Users/techfreakworm/.soma/worktrees/claude-soma/claude-soma-manager/research/opencode-soma/evidence/opencode/P2-hooks/proxy.jsonl' | head -2
+{"ts":"2026-10-10T06:03:13Z","roles":["system","system","user"],"sys_has_ZULU":true,"sys_has_YANKEE":false,"user_has_ALPHA":true,"user_has_BRAVO":false,"sys_tail":"l>\n</available_skills>\n[notify-inject-system] LATEST-SYS-CODE=ZULU-901","last_user":"lues. Do not call any tools.\n[notify-inject] LATEST-MSG-CODE=ALPHA-111"}
+{"ts":"2026-10-10T06:03:36Z","roles":["system","system","user","assistant","user"],"sys_has_ZULU":false,"sys_has_YANKEE":true,"user_has_ALPHA":false,"user_has_BRAVO":true,"sys_tail":"\n</available_skills>\n[notify-inject-system] LATEST-SYS-CODE=YANKEE-902","last_user":"lues. Do not call any tools.\n[notify-inject] LATEST-MSG-CODE=BRAVO-222"}
+
+[exit=0 wall=0.0s]
+
+summary: chat.message path model-quoted-latest=1 proxy-fresh=true | system.transform path model-quoted-latest=0 proxy-fresh=true
+VERDICT: PASS — chat.message injection (the additionalContext analog) re-read the file per prompt and the model quoted the latest value; system.transform also delivered the fresh value (proxy) but qwen3:32b repeated its stale earlier answer for that field.

@@ -1,0 +1,575 @@
+# P8-serve/serve.log
+date-utc: 2026-10-10T05:57:04Z
+probe-script: research/opencode-soma/probes/opencode/P8-serve/run.sh
+opencode-version: 1.18.8
+model: ollama/qwen3:32b (thinking off)
+sandbox: $TMPDIR/ocsoma-pe/P8-serve (HOME, XDG_*, TMPDIR all inside it)
+purpose: opencode serve HTTP API: OpenAPI, sessions, sync+async prompt, SSE, auth, attach, web
+
+## A1. start: opencode serve --port 47181 --hostname 127.0.0.1 (no password)
+$ cat /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P8-serve/serve-a.out
+Warning: OPENCODE_SERVER_PASSWORD is not set; server is unsecured.
+opencode server listening on http://127.0.0.1:47181
+
+[exit=0 wall=0.0s]
+
+$ curl -s http://127.0.0.1:47181/global/health
+{"healthy":true,"version":"1.18.8"}
+[exit=0 wall=0.0s]
+
+## A2. OpenAPI spec (saved to evidence/opencode/P8-serve/openapi.json)
+$ python3.12 -I -c 
+import json,sys
+d=json.load(open(sys.argv[1])); n=0
+for p,ops in sorted(d["paths"].items()):
+    for m,o in ops.items():
+        n+=1; print(m.upper().ljust(7), p, "-", o.get("operationId"))
+print(n, "operations; openapi", d.get("openapi")) /Users/techfreakworm/.soma/worktrees/claude-soma/claude-soma-manager/research/opencode-soma/evidence/opencode/P8-serve/openapi.json
+GET     /agent - app.agents
+GET     /api/agent - v2.agent.list
+GET     /api/command - v2.command.list
+PATCH   /api/credential/{credentialID} - v2.credential.update
+DELETE  /api/credential/{credentialID} - v2.credential.remove
+GET     /api/event - v2.event.subscribe
+GET     /api/fs/find - v2.fs.find
+GET     /api/fs/list - v2.fs.list
+GET     /api/fs/read/* - v2.fs.read
+GET     /api/health - v2.health.get
+GET     /api/integration - v2.integration.list
+GET     /api/integration/attempt/{attemptID} - v2.integration.attempt.status
+DELETE  /api/integration/attempt/{attemptID} - v2.integration.attempt.cancel
+POST    /api/integration/attempt/{attemptID}/complete - v2.integration.attempt.complete
+GET     /api/integration/{integrationID} - v2.integration.get
+POST    /api/integration/{integrationID}/connect/key - v2.integration.connect.key
+POST    /api/integration/{integrationID}/connect/oauth - v2.integration.connect.oauth
+GET     /api/location - v2.location.get
+GET     /api/model - v2.model.list
+GET     /api/permission/request - v2.permission.request.list
+GET     /api/permission/saved - v2.permission.saved.list
+DELETE  /api/permission/saved/{id} - v2.permission.saved.remove
+GET     /api/provider - v2.provider.list
+GET     /api/provider/{providerID} - v2.provider.get
+GET     /api/pty - v2.pty.list
+POST    /api/pty - v2.pty.create
+GET     /api/pty/{ptyID} - v2.pty.get
+PUT     /api/pty/{ptyID} - v2.pty.update
+DELETE  /api/pty/{ptyID} - v2.pty.remove
+GET     /api/pty/{ptyID}/connect - v2.pty.connect
+POST    /api/pty/{ptyID}/connect-token - v2.pty.connectToken
+GET     /api/question/request - v2.question.request.list
+GET     /api/reference - v2.reference.list
+GET     /api/session - v2.session.list
+POST    /api/session - v2.session.create
+GET     /api/session/active - v2.session.active
+GET     /api/session/{sessionID} - v2.session.get
+POST    /api/session/{sessionID}/agent - v2.session.switchAgent
+POST    /api/session/{sessionID}/compact - v2.session.compact
+GET     /api/session/{sessionID}/context - v2.session.context
+GET     /api/session/{sessionID}/event - v2.session.events
+GET     /api/session/{sessionID}/history - v2.session.history
+POST    /api/session/{sessionID}/interrupt - v2.session.interrupt
+GET     /api/session/{sessionID}/message - v2.session.messages
+GET     /api/session/{sessionID}/message/{messageID} - v2.session.message
+POST    /api/session/{sessionID}/model - v2.session.switchModel
+POST    /api/session/{sessionID}/permission - v2.session.permission.create
+GET     /api/session/{sessionID}/permission - v2.session.permission.list
+GET     /api/session/{sessionID}/permission/{requestID} - v2.session.permission.get
+POST    /api/session/{sessionID}/permission/{requestID}/reply - v2.session.permission.reply
+POST    /api/session/{sessionID}/prompt - v2.session.prompt
+GET     /api/session/{sessionID}/question - v2.session.question.list
+POST    /api/session/{sessionID}/question/{requestID}/reject - v2.session.question.reject
+POST    /api/session/{sessionID}/question/{requestID}/reply - v2.session.question.reply
+POST    /api/session/{sessionID}/revert/clear - v2.session.revert.clear
+POST    /api/session/{sessionID}/revert/commit - v2.session.revert.commit
+POST    /api/session/{sessionID}/revert/stage - v2.session.revert.stage
+POST    /api/session/{sessionID}/wait - v2.session.wait
+GET     /api/skill - v2.skill.list
+PUT     /auth/{providerID} - auth.set
+DELETE  /auth/{providerID} - auth.remove
+GET     /command - command.list
+GET     /config - config.get
+PATCH   /config - config.update
+GET     /config/providers - config.providers
+GET     /event - event.subscribe
+GET     /experimental/capabilities - experimental.capabilities.get
+GET     /experimental/console - experimental.console.get
+GET     /experimental/console/orgs - experimental.console.listOrgs
+POST    /experimental/console/switch - experimental.console.switchOrg
+POST    /experimental/control-plane/move-session - experimental.controlPlane.moveSession
+POST    /experimental/project/{projectID}/copy - v2.projectCopy.create
+DELETE  /experimental/project/{projectID}/copy - v2.projectCopy.remove
+POST    /experimental/project/{projectID}/copy/generate-name - experimental.projectCopy.generateName
+POST    /experimental/project/{projectID}/copy/refresh - v2.projectCopy.refresh
+GET     /experimental/resource - experimental.resource.list
+GET     /experimental/session - experimental.session.list
+POST    /experimental/session/{sessionID}/background - experimental.session.background
+GET     /experimental/tool - tool.list
+GET     /experimental/tool/ids - tool.ids
+GET     /experimental/workspace - experimental.workspace.list
+POST    /experimental/workspace - experimental.workspace.create
+GET     /experimental/workspace/adapter - experimental.workspace.adapter.list
+GET     /experimental/workspace/status - experimental.workspace.status
+POST    /experimental/workspace/sync-list - experimental.workspace.syncList
+POST    /experimental/workspace/warp - experimental.workspace.warp
+DELETE  /experimental/workspace/{id} - experimental.workspace.remove
+GET     /experimental/worktree - worktree.list
+POST    /experimental/worktree - worktree.create
+DELETE  /experimental/worktree - worktree.remove
+POST    /experimental/worktree/reset - worktree.reset
+GET     /file - file.list
+GET     /file/content - file.read
+GET     /file/status - file.status
+GET     /find - find.text
+GET     /find/file - find.files
+GET     /find/symbol - find.symbols
+GET     /formatter - formatter.status
+GET     /global/config - global.config.get
+PATCH   /global/config - global.config.update
+POST    /global/dispose - global.dispose
+GET     /global/event - global.event
+GET     /global/health - global.health
+POST    /global/upgrade - global.upgrade
+POST    /instance/dispose - instance.dispose
+POST    /log - app.log
+GET     /lsp - lsp.status
+GET     /mcp - mcp.status
+POST    /mcp - mcp.add
+POST    /mcp/{name}/auth - mcp.auth.start
+DELETE  /mcp/{name}/auth - mcp.auth.remove
+POST    /mcp/{name}/auth/authenticate - mcp.auth.authenticate
+POST    /mcp/{name}/auth/callback - mcp.auth.callback
+POST    /mcp/{name}/connect - mcp.connect
+POST    /mcp/{name}/disconnect - mcp.disconnect
+GET     /path - path.get
+GET     /permission - permission.list
+POST    /permission/{requestID}/reply - permission.reply
+GET     /project - project.list
+GET     /project/current - project.current
+POST    /project/git/init - project.initGit
+PATCH   /project/{projectID} - project.update
+GET     /project/{projectID}/directories - project.directories
+GET     /provider - provider.list
+GET     /provider/auth - provider.auth
+POST    /provider/{providerID}/oauth/authorize - provider.oauth.authorize
+POST    /provider/{providerID}/oauth/callback - provider.oauth.callback
+GET     /pty - pty.list
+POST    /pty - pty.create
+GET     /pty/shells - pty.shells
+GET     /pty/{ptyID} - pty.get
+PUT     /pty/{ptyID} - pty.update
+DELETE  /pty/{ptyID} - pty.remove
+GET     /pty/{ptyID}/connect - pty.connect
+POST    /pty/{ptyID}/connect-token - pty.connectToken
+GET     /question - question.list
+POST    /question/{requestID}/reject - question.reject
+POST    /question/{requestID}/reply - question.reply
+GET     /session - session.list
+POST    /session - session.create
+GET     /session/status - session.status
+GET     /session/{sessionID} - session.get
+DELETE  /session/{sessionID} - session.delete
+PATCH   /session/{sessionID} - session.update
+POST    /session/{sessionID}/abort - session.abort
+GET     /session/{sessionID}/children - session.children
+POST    /session/{sessionID}/command - session.command
+GET     /session/{sessionID}/diff - session.diff
+POST    /session/{sessionID}/fork - session.fork
+POST    /session/{sessionID}/init - session.init
+GET     /session/{sessionID}/message - session.messages
+POST    /session/{sessionID}/message - session.prompt
+GET     /session/{sessionID}/message/{messageID} - session.message
+DELETE  /session/{sessionID}/message/{messageID} - session.deleteMessage
+DELETE  /session/{sessionID}/message/{messageID}/part/{partID} - part.delete
+PATCH   /session/{sessionID}/message/{messageID}/part/{partID} - part.update
+POST    /session/{sessionID}/permissions/{permissionID} - permission.respond
+POST    /session/{sessionID}/prompt_async - session.prompt_async
+POST    /session/{sessionID}/revert - session.revert
+POST    /session/{sessionID}/share - session.share
+DELETE  /session/{sessionID}/share - session.unshare
+POST    /session/{sessionID}/shell - session.shell
+POST    /session/{sessionID}/summarize - session.summarize
+GET     /session/{sessionID}/todo - session.todo
+POST    /session/{sessionID}/unrevert - session.unrevert
+GET     /skill - app.skills
+POST    /sync/history - sync.history.list
+POST    /sync/replay - sync.replay
+POST    /sync/start - sync.start
+POST    /sync/steal - sync.steal
+POST    /tui/append-prompt - tui.appendPrompt
+POST    /tui/clear-prompt - tui.clearPrompt
+GET     /tui/control/next - tui.control.next
+POST    /tui/control/response - tui.control.response
+POST    /tui/execute-command - tui.executeCommand
+POST    /tui/open-help - tui.openHelp
+POST    /tui/open-models - tui.openModels
+POST    /tui/open-sessions - tui.openSessions
+POST    /tui/open-themes - tui.openThemes
+POST    /tui/publish - tui.publish
+POST    /tui/select-session - tui.selectSession
+POST    /tui/show-toast - tui.showToast
+POST    /tui/submit-prompt - tui.submitPrompt
+GET     /vcs - vcs.get
+POST    /vcs/apply - vcs.apply
+GET     /vcs/diff - vcs.diff
+GET     /vcs/diff/raw - vcs.diff.raw
+GET     /vcs/status - vcs.status
+188 operations; openapi 3.1.0
+
+[exit=0 wall=0.0s]
+
+## A3. SSE: curl -sN http://127.0.0.1:47181/event  (and v2: http://127.0.0.1:47181/api/event) captured in background
+## A4. create a session over HTTP
+$ jcurl -X POST http://127.0.0.1:47181/session -d {"title":"p8-http"}
+{"id":"ses_edb9d0cdeffeFu5ekCdfveerPs","slug":"lucky-squid","projectID":"954e73c65684fc97d6fd6e88611f8f36ba60e252","directory":"/private/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P8-serve/project","path":"","cost":0,"tokens":{"input":0,"output":0,"reasoning":0,"cache":{"read":0,"write":0}},"title":"p8-http","version":"1.18.8","time":{"created":1791611826977,"updated":1791611826977}}
+[exit=0 wall=0.0s]
+
+created main session: ses_edb9d0cafffef0ck6nAac9dugP
+## A5. sync prompt: POST /session/{id}/message (blocks until the reply is complete)
+$ jcurl -X POST http://127.0.0.1:47181/session/ses_edb9d0cafffef0ck6nAac9dugP/message -d {"model":{"providerID":"ollama","modelID":"qwen3:32b"},"parts":[{"type":"text","text":"Reply with exactly the text P8-SYNC-7731 and nothing else."}]}
+{"info":{"parentID":"msg_12462f375001mElyJLX0no5Otf","role":"assistant","mode":"build","agent":"build","path":{"cwd":"/private/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P8-serve/project","root":"/private/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P8-serve/project"},"cost":0,"tokens":{"total":6838,"input":4964,"output":10,"reasoning":0,"cache":{"write":0,"read":1864}},"modelID":"qwen3:32b","providerID":"ollama","time":{"created":1791611827235,"completed":1791611850868},"finish":"stop","id":"msg_12462f423001nOeHeCt6gs3ZD8","sessionID":"ses_edb9d0cafffef0ck6nAac9dugP"},"parts":[{"snapshot":"46e399344e0ddbd692fa7368d9333132b31956e4","type":"step-start","id":"prt_124634e560013t2MFSxIV70ZQR","sessionID":"ses_edb9d0cafffef0ck6nAac9dugP","messageID":"msg_12462f423001nOeHeCt6gs3ZD8"},{"type":"text","text":"P8-SYNC-7731","time":{"start":1791611850331,"end":1791611850786},"id":"prt_124634e5b001ZyGIYNExL4iwmv","sessionID":"ses_edb9d0cafffef0ck6nAac9dugP","messageID":"msg_12462f423001nOeHeCt6gs3ZD8"},{"reason":"stop","snapshot":"46e399344e0ddbd692fa7368d9333132b31956e4","type":"step-finish","tokens":{"total":6838,"input":4964,"output":10,"reasoning":0,"cache":{"write":0,"read":1864}},"cost":0,"id":"prt_12463504c001JoScnfWwSpB9Wj","sessionID":"ses_edb9d0cafffef0ck6nAac9dugP","messageID":"msg_12462f423001nOeHeCt6gs3ZD8"}]}
+[exit=0 wall=23.8s]
+
+sync wall-clock: 23s
+## A6. async prompt: POST /session/{id}/prompt_async returns 204 at once; poll GET /session/status
+$ curl -s -o /dev/null -w HTTP %{http_code} in %{time_total}s\n -H content-type: application/json -X POST http://127.0.0.1:47181/session/ses_edb9d0cafffef0ck6nAac9dugP/prompt_async -d {"model":{"providerID":"ollama","modelID":"qwen3:32b"},"parts":[{"type":"text","text":"Reply with exactly the text P8-ASYNC-4402 and nothing else."}]}
+HTTP 204 in 0.004691s
+
+[exit=0 wall=0.0s]
+
+status poll 1: {"type":"busy"}
+status poll 2: {"type":"busy"}
+status poll 3: {"type":"busy"}
+status poll 4: "absent(idle)"
+status after poll loop (4 polls): "absent(idle)"; completed assistant messages 1 -> 2
+$ curl -s http://127.0.0.1:47181/session/status
+{}
+[exit=0 wall=0.0s]
+
+## A7. read the conversation back: GET /session/{id}/message (role + text parts)
+$ sh -c curl -s 'http://127.0.0.1:47181/session/ses_edb9d0cafffef0ck6nAac9dugP/message' | jq -c '.[] | {role: .info.role, agent: .info.agent, model: (.info.modelID // .info.model.modelID), tokens: .info.tokens, text: ([.parts[] | select(.type=="text") | .text] | join(" "))}'
+{"role":"user","agent":"build","model":"qwen3:32b","tokens":null,"text":"Reply with exactly the text P8-SYNC-7731 and nothing else."}
+{"role":"assistant","agent":"build","model":"qwen3:32b","tokens":{"total":6838,"input":4964,"output":10,"reasoning":0,"cache":{"read":1864,"write":0}},"text":"P8-SYNC-7731"}
+{"role":"user","agent":"build","model":"qwen3:32b","tokens":null,"text":"Reply with exactly the text P8-ASYNC-4402 and nothing else."}
+{"role":"assistant","agent":"build","model":"qwen3:32b","tokens":{"total":6877,"input":51,"output":11,"reasoning":0,"cache":{"read":6815,"write":0}},"text":"P8-ASYNC-4402"}
+
+[exit=0 wall=0.0s]
+
+## A8. v2 read path: GET /api/session/{id}/message
+$ sh -c curl -s 'http://127.0.0.1:47181/api/session/ses_edb9d0cafffef0ck6nAac9dugP/message' | head -c 1500
+{"data":[],"cursor":{"previous":null,"next":null}}
+[exit=0 wall=0.3s]
+
+## A9. lsof of the running server: every open file must be inside the sandbox (or system libs)
+$ sh -c lsof -p 14325 | awk '{print $4, $5, $9}' | grep ' REG ' | sort -u
+12w REG /private/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P8-serve/xdg/data/opencode/log/opencode.log
+13u REG /private/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P8-serve/xdg/data/opencode/opencode.db
+14u REG /private/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P8-serve/xdg/data/opencode/opencode.db-wal
+1w REG /private/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P8-serve/serve-a.out
+2w REG /private/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P8-serve/serve-a.out
+4w REG /private/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P8-serve/serve-a.out
+5w REG /private/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P8-serve/serve-a.out
+6w REG /private/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P8-serve/xdg/data/opencode/log/opencode.log
+7u REG /private/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P8-serve/xdg/data/opencode/opencode.db
+8u REG /private/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P8-serve/xdg/data/opencode/opencode.db-wal
+9u REG /private/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P8-serve/xdg/data/opencode/opencode.db-shm
+txt REG /Library/Preferences/Logging/.plist-cache.l3aVZNJ3
+txt REG /private/var/db/analyticsd/events.allowlist
+txt REG /private/var/db/mds/messages/502/se_SecurityMessages
+txt REG /private/var/db/timezone/tz/2026c.1.0/icutz/icutz44l.dat
+txt REG /private/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P8-serve/tmp/.b8ff17f78597fee9-00000001.node
+txt REG /private/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P8-serve/tmp/.b9dd37f7f6bf3ffa-00000000.dylib
+txt REG /private/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P8-serve/xdg/data/opencode/opencode.db-shm
+txt REG /Users/techfreakworm/.opencode/bin/opencode
+txt REG /usr/lib/dyld
+txt REG /usr/share/icu/icudt78l.dat
+
+[exit=0 wall=3.4s]
+
+## A10. opencode attach http://127.0.0.1:47181 --session ses_edb9d0cafffef0ck6nAac9dugP  in tmux -L ocsoma-pe-p8 (200x50)
+$ cat /Users/techfreakworm/.soma/worktrees/claude-soma/claude-soma-manager/research/opencode-soma/evidence/opencode/P8-serve/attach-pane-1.txt
+
+  ┃                                                                                                                                                             p8-http-main
+  ┃  Reply with exactly the text P8-SYNC-7731 and nothing else.
+  ┃                                                                                                                                                             Context
+                                                                                                                                                                6,877 tokens
+     P8-SYNC-7731                                                                                                                                               17% used
+                                                                                                                                                                $0.00 spent
+     ▣  Build · Qwen3 32B (thinking off) · 23.8s
+                                                                                                                                                                LSP
+  ┃                                                                                                                                                             LSPs are disabled
+  ┃  Reply with exactly the text P8-ASYNC-4402 and nothing else.
+  ┃
+
+     P8-ASYNC-4402
+
+     ▣  Build · Qwen3 32B (thinking off) · 1.2s
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  ┃
+  ┃                                                                                                                                                             /private/var/folders/lp/
+  ┃                                                                                                                                                             m_0rzyhs19g7l2x5dnql4tjh0000gp/T/
+  ┃  Build · Qwen3 32B (thinking off) Ollama (local)                                                                                                            ocsoma-pe/P8-serve/project:main
+  ╹▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀
+   /private/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P8-serve/project                                           6.9K (17%)  ctrl+p commands    • OpenCode 1.18.8
+
+
+[exit=0 wall=0.0s]
+
+## A11. drive the attached TUI: send-keys -l a prompt + Enter, then read it back over HTTP
+$ cat /Users/techfreakworm/.soma/worktrees/claude-soma/claude-soma-manager/research/opencode-soma/evidence/opencode/P8-serve/attach-pane-2.txt
+
+  ┃                                                                                                                                                             p8-http-main
+  ┃  Reply with exactly the text P8-SYNC-7731 and nothing else.
+  ┃                                                                                                                                                             Context
+                                                                                                                                                                6,916 tokens
+     P8-SYNC-7731                                                                                                                                               17% used
+                                                                                                                                                                $0.00 spent
+     ▣  Build · Qwen3 32B (thinking off) · 23.8s
+                                                                                                                                                                LSP
+  ┃                                                                                                                                                             LSPs are disabled
+  ┃  Reply with exactly the text P8-ASYNC-4402 and nothing else.
+  ┃
+
+     P8-ASYNC-4402
+
+     ▣  Build · Qwen3 32B (thinking off) · 1.2s
+
+  ┃
+  ┃  Reply with exactly the text P8-ATTACH-5150 and nothing else.
+  ┃
+
+     P8-ATTACH-5150
+
+     ▣  Build · Qwen3 32B (thinking off) · 970ms
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  ┃
+  ┃                                                                                                                                                             /private/var/folders/lp/
+  ┃                                                                                                                                                             m_0rzyhs19g7l2x5dnql4tjh0000gp/T/
+  ┃  Build · Qwen3 32B (thinking off) Ollama (local)                                                                                                            ocsoma-pe/P8-serve/project:main
+  ╹▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀
+   /private/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P8-serve/project                                           6.9K (17%)  ctrl+p commands    • OpenCode 1.18.8
+
+
+[exit=0 wall=0.0s]
+
+$ sh -c curl -s 'http://127.0.0.1:47181/session/ses_edb9d0cafffef0ck6nAac9dugP/message' | jq -c '.[] | {role: .info.role, text: ([.parts[] | select(.type=="text") | .text] | join(" "))}'
+{"role":"user","text":"Reply with exactly the text P8-SYNC-7731 and nothing else."}
+{"role":"assistant","text":"P8-SYNC-7731"}
+{"role":"user","text":"Reply with exactly the text P8-ASYNC-4402 and nothing else."}
+{"role":"assistant","text":"P8-ASYNC-4402"}
+{"role":"user","text":"Reply with exactly the text P8-ATTACH-5150 and nothing else."}
+{"role":"assistant","text":"P8-ATTACH-5150"}
+
+[exit=0 wall=0.0s]
+
+## A12. SSE event types seen on /event during A4-A11 (count by type)
+$ sh -c grep '^data:' '/Users/techfreakworm/.soma/worktrees/claude-soma/claude-soma-manager/research/opencode-soma/evidence/opencode/P8-serve/sse-event.txt' | sed 's/^data: //' | jq -r .type | sort | uniq -c | sort -rn
+  90 plugin.added
+  29 message.part.delta
+  18 message.updated
+  15 message.part.updated
+  12 session.status
+  10 session.updated
+   6 session.diff
+   4 server.heartbeat
+   4 catalog.updated
+   3 session.idle
+   2 session.created
+   2 reference.updated
+   2 integration.updated
+   1 server.connected
+
+[exit=0 wall=0.0s]
+
+first 5 SSE frames on /event:
+$ sh -c grep '^data:' '/Users/techfreakworm/.soma/worktrees/claude-soma/claude-soma-manager/research/opencode-soma/evidence/opencode/P8-serve/sse-event.txt' | head -5 | cut -c1-400
+data: {"id":"evt_12462efd3001mEF5Lr84AdZ3Ss","type":"server.connected","properties":{}}
+data: {"id":"evt_12462f321002NH8xqRaTxCy8fW","type":"session.created","properties":{"sessionID":"ses_edb9d0cdeffeFu5ekCdfveerPs","info":{"id":"ses_edb9d0cdeffeFu5ekCdfveerPs","slug":"lucky-squid","version":"1.18.8","projectID":"954e73c65684fc97d6fd6e88611f8f36ba60e252","directory":"/private/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P8-serve/project","path":"","title":"p8-http","cos
+data: {"id":"evt_12462f350002YJEvYnPI5Qt9eT","type":"session.created","properties":{"sessionID":"ses_edb9d0cafffef0ck6nAac9dugP","info":{"id":"ses_edb9d0cafffef0ck6nAac9dugP","slug":"misty-cactus","version":"1.18.8","projectID":"954e73c65684fc97d6fd6e88611f8f36ba60e252","directory":"/private/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P8-serve/project","path":"","title":"p8-http-main
+data: {"id":"evt_12462f376001tWWPqvungpxQL4","type":"session.updated","properties":{"sessionID":"ses_edb9d0cafffef0ck6nAac9dugP","info":{"id":"ses_edb9d0cafffef0ck6nAac9dugP","slug":"misty-cactus","projectID":"954e73c65684fc97d6fd6e88611f8f36ba60e252","directory":"/private/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P8-serve/project","path":"","title":"p8-http-main","agent":"build","
+data: {"id":"evt_12462f377001JhmPA0ETn7Tpcy","type":"message.updated","properties":{"sessionID":"ses_edb9d0cafffef0ck6nAac9dugP","info":{"id":"msg_12462f375001mElyJLX0no5Otf","role":"user","sessionID":"ses_edb9d0cafffef0ck6nAac9dugP","time":{"created":1791611827061},"agent":"build","model":{"providerID":"ollama","modelID":"qwen3:32b"}}}}
+
+[exit=0 wall=0.0s]
+
+SSE event types seen on /api/event (v2 stream):
+$ sh -c grep '^data:' '/Users/techfreakworm/.soma/worktrees/claude-soma/claude-soma-manager/research/opencode-soma/evidence/opencode/P8-serve/sse-api-event.txt' | sed 's/^data: //' | jq -r '.type // .payload.type // "?"' | sort | uniq -c | sort -rn | head -40
+   2 session.updated
+   2 session.created
+   1 server.connected
+   1 message.updated
+   1 message.part.updated
+
+[exit=0 wall=0.0s]
+
+## B1. start: OPENCODE_SERVER_PASSWORD=<random, redacted> opencode serve --port 47182
+$ cat /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P8-serve/serve-b.out
+opencode server listening on http://127.0.0.1:47182
+
+[exit=0 wall=0.0s]
+
+without credentials:
+$ curl -s -i http://127.0.0.1:47182/global/health
+HTTP/1.1 401 Unauthorized
+Vary: Origin
+www-authenticate: Basic realm="Secure Area"
+Date: Sat, 10 Oct 2026 05:57:46 GMT
+Content-Length: 0
+
+
+[exit=0 wall=0.0s]
+
+$ curl -s -o /dev/null -w GET /session -> HTTP %{http_code}\n http://127.0.0.1:47182/session
+GET /session -> HTTP 401
+
+[exit=0 wall=0.0s]
+
+$ curl -s -o /dev/null -w GET /doc -> HTTP %{http_code}\n http://127.0.0.1:47182/doc
+GET /doc -> HTTP 401
+
+[exit=0 wall=0.0s]
+
+wrong password:
+$ curl -s -o /dev/null -w HTTP %{http_code}\n -u opencode:wrong-password http://127.0.0.1:47182/session
+HTTP 401
+
+[exit=0 wall=0.0s]
+
+with credentials (curl --netrc-file, password not on the command line):
+$ curl -s -i --netrc-file /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P8-serve/netrc http://127.0.0.1:47182/global/health
+HTTP/1.1 200 OK
+Content-Type: application/json
+Date: Sat, 10 Oct 2026 05:57:46 GMT
+Content-Length: 35
+Vary: Origin
+
+{"healthy":true,"version":"1.18.8"}
+[exit=0 wall=0.0s]
+
+## B2. opencode run --attach against the protected server (password from OPENCODE_SERVER_PASSWORD env)
+$ /Users/techfreakworm/.opencode/bin/opencode run --attach http://127.0.0.1:47182 -m ollama/qwen3:32b Reply with exactly the text P8-AUTH-RUN-88 and nothing else.
+[0m
+> build · qwen3:32b
+[0m
+P8-AUTH-RUN-88
+
+[exit=0 wall=13.9s]
+
+## B3. same without the password -> must fail
+$ /Users/techfreakworm/.opencode/bin/opencode run --attach http://127.0.0.1:47182 -m ollama/qwen3:32b Reply with exactly the text SHOULD-NOT-RUN.
+[91m[1mError: [0mSession not found
+
+[exit=1 wall=0.5s]
+
+## C1. opencode web --port 47183 --hostname 127.0.0.1, password set; PATH shim replaces 'open' so no real browser starts
+$ sh -c sed 's/\x1b\[[0-9;]*m//g' '/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P8-serve/web.out'
+
+  ⠀                                ▄     
+  █▀▀█ █▀▀█ █▀▀█ █▀▀▄ █▀▀▀ █▀▀█ █▀▀█ █▀▀█
+  █  █ █  █ █▀▀▀ █  █ █    █  █ █  █ █▀▀▀
+  ▀▀▀▀ █▀▀▀ ▀▀▀▀ ▀  ▀ ▀▀▀▀ ▀▀▀▀ ▀▀▀▀ ▀▀▀▀
+
+  Web interface:      http://127.0.0.1:47183/
+
+[exit=0 wall=0.0s]
+
+$ cat /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P8-serve/open-shim.log
+open-shim called with: http://127.0.0.1:47183/
+
+[exit=0 wall=0.0s]
+
+GET / without credentials (what a phone browser would see first):
+$ curl -s -i http://127.0.0.1:47183/
+HTTP/1.1 401 Unauthorized
+Vary: Origin
+www-authenticate: Basic realm="Secure Area"
+Date: Sat, 10 Oct 2026 05:58:03 GMT
+Content-Length: 0
+
+
+[exit=0 wall=0.0s]
+
+GET / with credentials:
+$ sh -c wc -c '/Users/techfreakworm/.soma/worktrees/claude-soma/claude-soma-manager/research/opencode-soma/evidence/opencode/P8-serve/web-index.html'; grep -oE '<title>[^<]*</title>|<script[^>]*src="[^"]*"|<link[^>]*href="[^"]*"' '/Users/techfreakworm/.soma/worktrees/claude-soma/claude-soma-manager/research/opencode-soma/evidence/opencode/P8-serve/web-index.html' | head -20
+    2884 /Users/techfreakworm/.soma/worktrees/claude-soma/claude-soma-manager/research/opencode-soma/evidence/opencode/P8-serve/web-index.html
+<title>OpenCode</title>
+<link rel="icon" type="image/png" href="/favicon-96x96-v3.png"
+<link rel="icon" type="image/svg+xml" href="/favicon-v3.svg"
+<link rel="shortcut icon" href="/favicon-v3.ico"
+<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon-v3.png"
+<link rel="manifest" href="/site.webmanifest"
+<script type="module" crossorigin src="/assets/index-PBx0gfQA.js"
+<link rel="stylesheet" crossorigin href="/assets/index-CqBlEoSU.css"
+
+[exit=0 wall=0.0s]
+
+first script asset: /assets/index-PBx0gfQA.js
+$ curl -s -o /dev/null -w GET %{url_effective} -> HTTP %{http_code}, %{size_download} bytes, %{content_type}\n --netrc-file /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P8-serve/netrc http://127.0.0.1:47183/assets/index-PBx0gfQA.js
+GET http://127.0.0.1:47183/assets/index-PBx0gfQA.js -> HTTP 200, 2996997 bytes, text/javascript
+
+[exit=0 wall=0.0s]
+
+## C2. LAN exposure flags (from --help, NOT exercised): --hostname 0.0.0.0, --mdns (defaults hostname to 0.0.0.0, advertises opencode.local), --mdns-domain, --cors
+$ sh -c '/Users/techfreakworm/.opencode/bin/opencode' web --help | grep -E 'hostname|mdns|cors|port'
+opencode web
+
+start opencode server and open web interface
+
+Options:
+  -h, --help         show help                                                             [boolean]
+  -v, --version      show version number                                                   [boolean]
+      --print-logs   print logs to stderr                                                  [boolean]
+      --log-level    log level                  [string] [choices: "DEBUG", "INFO", "WARN", "ERROR"]
+      --pure         run without external plugins                                          [boolean]
+      --port         port to listen on                                         [number] [default: 0]
+      --hostname     hostname to listen on                           [string] [default: "127.0.0.1"]
+      --mdns         enable mDNS service discovery (defaults hostname to 0.0.0.0)
+                                                                          [boolean] [default: false]
+      --mdns-domain  custom domain name for mDNS service (default: opencode.local)
+                                                                [string] [default: "opencode.local"]
+      --cors         additional domains to allow for CORS                      [array] [default: []]
+[exit=1 wall=0.3s]
+
+VERDICT: PASS — serve exposes a full OpenAPI HTTP+SSE API; sync and async prompts, basic-auth (401 without creds), run --attach, TUI attach and the web UI all worked on 127.0.0.1.

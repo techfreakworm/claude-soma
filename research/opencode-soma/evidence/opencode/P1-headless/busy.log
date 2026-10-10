@@ -1,0 +1,135 @@
+# P1-headless/busy.log
+date-utc: 2026-10-10T06:07:33Z
+probe-script: research/opencode-soma/probes/opencode/P1-headless/run.sh
+opencode-version: 1.18.8
+model: ollama/qwen3:32b (thinking off)
+sandbox: $TMPDIR/ocsoma-pe/P1-headless (HOME, XDG_*, TMPDIR all inside it)
+purpose: what a second prompt does while the session is still generating (decides Telegram responsiveness)
+
+session: ses_edb937902ffeMoC64jQzQsx3Zh
+$ python3.12 -I /Users/techfreakworm/.soma/worktrees/claude-soma/claude-soma-manager/research/opencode-soma/probes/opencode/ocdrive.py --base http://127.0.0.1:47111 turn --session ses_edb937902ffeMoC64jQzQsx3Zh --model ollama/qwen3:32b --text Remember this secret token: PEAR-5521. Reply only with the word OK.
+{
+ "session": "ses_edb937902ffeMoC64jQzQsx3Zh",
+ "timeout": false,
+ "seen_busy": true,
+ "wall_s": 1.6,
+ "final_text": "OK",
+ "new_messages": [
+  {
+   "id": "msg_1246c87f9001BZDBK3t7rJhZXG",
+   "role": "user",
+   "agent": "build",
+   "model": "qwen3:32b",
+   "created": 1791612454905,
+   "completed": null,
+   "tokens": null,
+   "finish": null,
+   "error": null,
+   "text": "Remember this secret token: PEAR-5521. Reply only with the word OK.",
+   "tools": []
+  },
+  {
+   "id": "msg_1246c8808001HLsLazP8NfgX1j",
+   "role": "assistant",
+   "agent": "build",
+   "model": "qwen3:32b",
+   "created": 1791612454920,
+   "completed": 1791612456002,
+   "tokens": {
+    "total": 6832,
+    "input": 28,
+    "output": 2,
+    "reasoning": 0,
+    "cache": {
+     "read": 6802,
+     "write": 0
+    }
+   },
+   "finish": "stop",
+   "error": null,
+   "text": "OK",
+   "tools": []
+  }
+ ],
+ "permissions": [],
+ "children": []
+}
+
+[exit=0 wall=1.8s]
+
+## 4a. prompt_async #1 (long) then prompt_async #2 three seconds later
+$ curl -s http://127.0.0.1:47111/session/status
+{"ses_edb937902ffeMoC64jQzQsx3Zh":{"type":"busy"}}
+[exit=0 wall=0.1s]
+
+$ jcurl -o /dev/null -w second prompt_async -> HTTP %{http_code} in %{time_total}s\n -X POST http://127.0.0.1:47111/session/ses_edb937902ffeMoC64jQzQsx3Zh/prompt_async -d {"model":{"providerID":"ollama","modelID":"qwen3:32b"},"parts":[{"type":"text","text":"Reply with exactly SECOND-PROMPT-OK and nothing else."}]}
+second prompt_async -> HTTP 204 in 0.012390s
+
+[exit=0 wall=0.1s]
+
+idle after ~112s
+$ msgs ses_edb937902ffeMoC64jQzQsx3Zh
+{"id":"msg_1246c87f9001BZDBK3t7rJhZXG","role":"user","created":1791612454905,"completed":null,"finish":null,"error":null,"text":"Remember this secret token: PEAR-5521. Reply only with the word OK."}
+{"id":"msg_1246c8808001HLsLazP8NfgX1j","role":"assistant","created":1791612454920,"completed":1791612456002,"finish":"stop","error":null,"text":"OK"}
+{"id":"msg_1246c8e74001FH1mi1XHwwzgc0","role":"user","created":1791612456564,"completed":null,"finish":null,"error":null,"text":"Count from 1 to 200, writing every number as an English word, one per line. Output only the list."}
+{"id":"msg_1246c8e780013Cw6OxM1FP4VPS","role":"assistant","created":1791612456568,"completed":1791612571414,"finish":"stop","error":null,"text":"one  \ntwo  \nthree  \nfour  \nfive  \nsix  \nseven  \neight  \nnine  \nten  \neleven  \ntwelve  \nthirteen  \nfourteen  \nfifteen  \ns"}
+{"id":"msg_1246c9b1b001CrdUX0lQUD5Wj2","role":"user","created":1791612459803,"completed":null,"finish":null,"error":null,"text":"Reply with exactly SECOND-PROMPT-OK and nothing else."}
+{"id":"msg_1246e4f1b001zygfGsjlV9tTGX","role":"assistant","created":1791612571419,"completed":1791612581275,"finish":"stop","error":null,"text":"SECOND-PROMPT-OK"}
+
+[exit=0 wall=0.1s]
+
+## 4b. sync POST /message while busy
+$ jcurl -o /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P1-headless/sync-while-busy.json -w sync /message while busy -> HTTP %{http_code} after %{time_total}s\n -X POST http://127.0.0.1:47111/session/ses_edb937902ffeMoC64jQzQsx3Zh/message -d {"model":{"providerID":"ollama","modelID":"qwen3:32b"},"parts":[{"type":"text","text":"Reply with exactly THIRD-SYNC-OK and nothing else."}]}
+sync /message while busy -> HTTP 200 after 120.271397s
+
+[exit=0 wall=120.4s]
+
+$ sh -c jq -c '{role: .info.role, finish: .info.finish, text: ([.parts[]? | select(.type=="text") | .text] | join(" ") | .[0:200])}' '/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P1-headless/sync-while-busy.json' 2>/dev/null || head -c 600 '/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P1-headless/sync-while-busy.json'
+{"role":"assistant","finish":"stop","text":"THIRD-SYNC-OK"}
+
+[exit=0 wall=0.1s]
+
+$ msgs ses_edb937902ffeMoC64jQzQsx3Zh
+{"id":"msg_1246c87f9001BZDBK3t7rJhZXG","role":"user","created":1791612454905,"completed":null,"finish":null,"error":null,"text":"Remember this secret token: PEAR-5521. Reply only with the word OK."}
+{"id":"msg_1246c8808001HLsLazP8NfgX1j","role":"assistant","created":1791612454920,"completed":1791612456002,"finish":"stop","error":null,"text":"OK"}
+{"id":"msg_1246c8e74001FH1mi1XHwwzgc0","role":"user","created":1791612456564,"completed":null,"finish":null,"error":null,"text":"Count from 1 to 200, writing every number as an English word, one per line. Output only the list."}
+{"id":"msg_1246c8e780013Cw6OxM1FP4VPS","role":"assistant","created":1791612456568,"completed":1791612571414,"finish":"stop","error":null,"text":"one  \ntwo  \nthree  \nfour  \nfive  \nsix  \nseven  \neight  \nnine  \nten  \neleven  \ntwelve  \nthirteen  \nfourteen  \nfifteen  \ns"}
+{"id":"msg_1246c9b1b001CrdUX0lQUD5Wj2","role":"user","created":1791612459803,"completed":null,"finish":null,"error":null,"text":"Reply with exactly SECOND-PROMPT-OK and nothing else."}
+{"id":"msg_1246e4f1b001zygfGsjlV9tTGX","role":"assistant","created":1791612571419,"completed":1791612581275,"finish":"stop","error":null,"text":"SECOND-PROMPT-OK"}
+{"id":"msg_1246e774d0013l4UEZMbt4Uy56","role":"user","created":1791612581709,"completed":null,"finish":null,"error":null,"text":"Count from 1 to 200, writing every number as an English word, one per line. Output only the list."}
+{"id":"msg_1246e7754001Z3G6YyOlYjAe6V","role":"assistant","created":1791612581716,"completed":1791612695114,"finish":"stop","error":null,"text":"one  \ntwo  \nthree  \nfour  \nfive  \nsix  \nseven  \neight  \nnine  \nten  \neleven  \ntwelve  \nthirteen  \nfourteen  \nfifteen  \ns"}
+{"id":"msg_1246e8377001HxDVFcfsnWqpjS","role":"user","created":1791612584823,"completed":null,"finish":null,"error":null,"text":"Reply with exactly THIRD-SYNC-OK and nothing else."}
+{"id":"msg_12470324f001k2HkrAatunEc9j","role":"assistant","created":1791612695119,"completed":1791612705072,"finish":"stop","error":null,"text":"THIRD-SYNC-OK"}
+
+[exit=0 wall=0.0s]
+
+## 4c. v2 API while busy: POST /api/session/{id}/prompt delivery=queue and delivery=steer
+$ jcurl -w \n-> HTTP %{http_code} in %{time_total}s\n -X POST http://127.0.0.1:47111/api/session/ses_edb937902ffeMoC64jQzQsx3Zh/prompt -d {"prompt":{"text":"Reply with exactly V2-QUEUE-OK and nothing else."},"delivery":"queue"}
+{"data":{"admittedSeq":76,"id":"msg_124706cf0001rgbw64yADFLHki","sessionID":"ses_edb937902ffeMoC64jQzQsx3Zh","prompt":{"text":"Reply with exactly V2-QUEUE-OK and nothing else."},"delivery":"queue","timeCreated":1791612710129}}
+-> HTTP 200 in 1.441771s
+
+[exit=0 wall=1.6s]
+
+$ jcurl -w \n-> HTTP %{http_code} in %{time_total}s\n -X POST http://127.0.0.1:47111/api/session/ses_edb937902ffeMoC64jQzQsx3Zh/prompt -d {"prompt":{"text":"Reply with exactly V2-STEER-OK and nothing else."},"delivery":"steer"}
+{"data":{"admittedSeq":78,"id":"msg_124706f3e001HqOVMARRL0LFTW","sessionID":"ses_edb937902ffeMoC64jQzQsx3Zh","prompt":{"text":"Reply with exactly V2-STEER-OK and nothing else."},"delivery":"steer","timeCreated":1791612710719}}
+-> HTTP 200 in 0.175233s
+
+[exit=0 wall=0.4s]
+
+## 4d. a second, independent CLI process on the same busy session (no --attach: writes the same DB directly)
+$ /Users/techfreakworm/.opencode/bin/opencode run -m ollama/qwen3:32b --format json -s ses_edb937902ffeMoC64jQzQsx3Zh Reply with exactly CLI-WHILE-BUSY-OK and nothing else.
+{"type":"step_start","timestamp":1791612838919,"sessionID":"ses_edb937902ffeMoC64jQzQsx3Zh","part":{"id":"prt_1247263fe001zAUEEqAdBjPXea","messageID":"msg_1247081f5001evaECNNCmalpMw","sessionID":"ses_edb937902ffeMoC64jQzQsx3Zh","snapshot":"9b369eb0f7fe159c8c1338e149181f949a4153d2","type":"step-start"}}
+{"type":"text","timestamp":1791612840123,"sessionID":"ses_edb937902ffeMoC64jQzQsx3Zh","part":{"id":"prt_124726405001AFE6W1uJsDVfE3","messageID":"msg_1247081f5001evaECNNCmalpMw","sessionID":"ses_edb937902ffeMoC64jQzQsx3Zh","type":"text","text":"CLI-WHILE-BUSY-OK","time":{"start":1791612838917,"end":1791612840114}}}
+{"type":"step_finish","timestamp":1791612840307,"sessionID":"ses_edb937902ffeMoC64jQzQsx3Zh","part":{"id":"prt_12472696a001QnKNOy7fvCSZip","reason":"stop","snapshot":"9b369eb0f7fe159c8c1338e149181f949a4153d2","messageID":"msg_1247081f5001evaECNNCmalpMw","sessionID":"ses_edb937902ffeMoC64jQzQsx3Zh","type":"step-finish","tokens":{"total":8706,"input":40,"output":10,"reasoning":0,"cache":{"write":0,"read":8656}},"cost":0}}
+{"type":"step_start","timestamp":1791612854048,"sessionID":"ses_edb937902ffeMoC64jQzQsx3Zh","part":{"id":"prt_124729f18001PejsplI5PcXryv","messageID":"msg_124726a2b0016Vr06uhvIjFYaB","sessionID":"ses_edb937902ffeMoC64jQzQsx3Zh","snapshot":"9b369eb0f7fe159c8c1338e149181f949a4153d2","type":"step-start"}}
+{"type":"step_finish","timestamp":1791612854120,"sessionID":"ses_edb937902ffeMoC64jQzQsx3Zh","part":{"id":"prt_124729f65001JEVIdt7lwPyA8m","reason":"stop","snapshot":"9b369eb0f7fe159c8c1338e149181f949a4153d2","messageID":"msg_124726a2b0016Vr06uhvIjFYaB","sessionID":"ses_edb937902ffeMoC64jQzQsx3Zh","type":"step-finish","tokens":{"total":9537,"input":9,"output":1,"reasoning":0,"cache":{"write":0,"read":9527}},"cost":0}}
+probe-engineer note 06:19:54Z: independent CLI pid 82269 (section 4d) still running after ~8 min with the session wedged busy; killing it with SIGKILL so the script can continue (see wedge-snapshot.log).
+
+[exit=137 wall=483.3s]
+
+## 4e. run --attach to the server on the same busy session
+$ /Users/techfreakworm/.opencode/bin/opencode run --attach http://127.0.0.1:47111 -m ollama/qwen3:32b -s ses_edb937902ffeMoC64jQzQsx3Zh Reply with exactly ATTACH-WHILE-BUSY-OK and nothing else.
+probe-engineer note 06:20:56Z: 4e run --attach (pid 17955) admitted its user message (MGC8i3ea) but the server loop is wedged busy since 06:14:14 with no LLM request; killing the client after ~2 min. Section 4f tests whether POST /abort clears the wedge.
+
+[exit=137 wall=61.7s]
+

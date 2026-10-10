@@ -1,0 +1,577 @@
+# P2-hooks/hook-catalog.log
+date-utc: 2026-10-10T05:57:45Z
+probe-script: research/opencode-soma/probes/opencode/P2-hooks/catalog.sh
+opencode-version: 1.18.8
+model: none
+sandbox: $TMPDIR/ocsoma-pe/P2-types (HOME, XDG_*, TMPDIR all inside it)
+purpose: hook and event catalog of 1.18.8 from @opencode-ai/plugin + @opencode-ai/sdk type definitions
+
+## 1. package versions
+$ sh -c jq -r '.name+"@"+.version' '/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P2-types/npm/plugin/package/package.json' '/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P2-types/npm/sdk/package/package.json'
+@opencode-ai/plugin@1.18.8
+@opencode-ai/sdk@1.18.8
+
+[exit=0 wall=0.0s]
+
+## 2. v1 server plugin hooks: interface Hooks (plugin/dist/index.d.ts), verbatim
+$ sh -c awk '/^export interface Hooks \{/,/^\}/' '/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P2-types/npm/plugin/package/dist/index.d.ts'
+export interface Hooks {
+    dispose?: () => Promise<void>;
+    event?: (input: {
+        event: Event;
+    }) => Promise<void>;
+    config?: (input: Config) => Promise<void>;
+    tool?: {
+        [key: string]: ToolDefinition;
+    };
+    auth?: AuthHook;
+    provider?: ProviderHook;
+    /**
+     * Called when a new message is received
+     */
+    "chat.message"?: (input: {
+        sessionID: string;
+        agent?: string;
+        model?: {
+            providerID: string;
+            modelID: string;
+        };
+        messageID?: string;
+        variant?: string;
+    }, output: {
+        message: UserMessage;
+        parts: Part[];
+    }) => Promise<void>;
+    /**
+     * Modify parameters sent to LLM
+     */
+    "chat.params"?: (input: {
+        sessionID: string;
+        agent: string;
+        model: Model;
+        provider: ProviderContext;
+        message: UserMessage;
+    }, output: {
+        temperature: number;
+        topP: number;
+        topK: number;
+        maxOutputTokens: number | undefined;
+        options: Record<string, any>;
+    }) => Promise<void>;
+    "chat.headers"?: (input: {
+        sessionID: string;
+        agent: string;
+        model: Model;
+        provider: ProviderContext;
+        message: UserMessage;
+    }, output: {
+        headers: Record<string, string>;
+    }) => Promise<void>;
+    "permission.ask"?: (input: Permission, output: {
+        status: "ask" | "deny" | "allow";
+    }) => Promise<void>;
+    "command.execute.before"?: (input: {
+        command: string;
+        sessionID: string;
+        arguments: string;
+    }, output: {
+        parts: Part[];
+    }) => Promise<void>;
+    "tool.execute.before"?: (input: {
+        tool: string;
+        sessionID: string;
+        callID: string;
+    }, output: {
+        args: any;
+    }) => Promise<void>;
+    "shell.env"?: (input: {
+        cwd: string;
+        sessionID?: string;
+        callID?: string;
+    }, output: {
+        env: Record<string, string>;
+    }) => Promise<void>;
+    "tool.execute.after"?: (input: {
+        tool: string;
+        sessionID: string;
+        callID: string;
+        args: any;
+    }, output: {
+        title: string;
+        output: string;
+        metadata: any;
+    }) => Promise<void>;
+    "experimental.chat.messages.transform"?: (input: {}, output: {
+        messages: {
+            info: Message;
+            parts: Part[];
+        }[];
+    }) => Promise<void>;
+    "experimental.chat.system.transform"?: (input: {
+        sessionID?: string;
+        model: Model;
+    }, output: {
+        system: string[];
+    }) => Promise<void>;
+    "experimental.provider.small_model"?: (input: {
+        provider: ProviderV2;
+    }, output: {
+        model?: ModelV2;
+    }) => Promise<void>;
+    /**
+     * Called before session compaction starts. Allows plugins to customize
+     * the compaction prompt.
+     *
+     * - `context`: Additional context strings appended to the default prompt
+     * - `prompt`: If set, replaces the default compaction prompt entirely
+     */
+    "experimental.session.compacting"?: (input: {
+        sessionID: string;
+    }, output: {
+        context: string[];
+        prompt?: string;
+    }) => Promise<void>;
+    /**
+     * Called after compaction succeeds and before a synthetic user
+     * auto-continue message is added.
+     *
+     * - `enabled`: Defaults to `true`. Set to `false` to skip the synthetic
+     *   user "continue" turn.
+     */
+    "experimental.compaction.autocontinue"?: (input: {
+        sessionID: string;
+        agent: string;
+        model: Model;
+        provider: ProviderContext;
+        message: UserMessage;
+        overflow: boolean;
+    }, output: {
+        enabled: boolean;
+    }) => Promise<void>;
+    "experimental.text.complete"?: (input: {
+        sessionID: string;
+        messageID: string;
+        partID: string;
+    }, output: {
+        text: string;
+    }) => Promise<void>;
+    /**
+     * Modify tool definitions (description and parameters) sent to LLM
+     */
+    "tool.definition"?: (input: {
+        toolID: string;
+    }, output: {
+        description: string;
+        parameters: any;
+    }) => Promise<void>;
+}
+
+[exit=0 wall=0.0s]
+
+## 2b. hook names only
+$ sh -c awk '/^export interface Hooks \{/,/^\}/' '/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P2-types/npm/plugin/package/dist/index.d.ts' | grep -oE '^    ("[a-z.]+"|[a-z]+)\??:' | tr -d ' "?:'
+dispose
+event
+config
+tool
+auth
+provider
+chat.message
+chat.params
+chat.headers
+permission.ask
+command.execute.before
+tool.execute.before
+shell.env
+tool.execute.after
+experimental.chat.messages.transform
+experimental.chat.system.transform
+experimental.session.compacting
+experimental.compaction.autocontinue
+experimental.text.complete
+tool.definition
+
+[exit=0 wall=0.0s]
+
+## 2c. PluginInput (what a plugin factory receives) and Plugin/PluginModule
+$ sh -c awk '/^export type PluginInput = \{/,/^\};/' '/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P2-types/npm/plugin/package/dist/index.d.ts'; grep -E '^export type (Plugin|PluginModule) ' -A4 '/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P2-types/npm/plugin/package/dist/index.d.ts'
+export type PluginInput = {
+    client: ReturnType<typeof createOpencodeClient>;
+    project: Project;
+    directory: string;
+    worktree: string;
+    experimental_workspace: {
+        register(type: string, adapter: WorkspaceAdapter): void;
+    };
+    serverUrl: URL;
+    $: BunShell;
+};
+export type Plugin = (input: PluginInput, options?: PluginOptions) => Promise<Hooks>;
+export type PluginModule = {
+    id?: string;
+    server: Plugin;
+    tui?: never;
+};
+
+[exit=0 wall=0.0s]
+
+## 2d. custom tool definition (plugin/dist/tool.d.ts)
+$ cat /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P2-types/npm/plugin/package/dist/tool.d.ts
+import { z } from "zod";
+export type ToolContext = {
+    sessionID: string;
+    messageID: string;
+    agent: string;
+    /**
+     * Current project directory for this session.
+     * Prefer this over process.cwd() when resolving relative paths.
+     */
+    directory: string;
+    /**
+     * Project worktree root for this session.
+     * Useful for generating stable relative paths (e.g. path.relative(worktree, absPath)).
+     */
+    worktree: string;
+    abort: AbortSignal;
+    metadata(input: {
+        title?: string;
+        metadata?: {
+            [key: string]: any;
+        };
+    }): void;
+    ask(input: AskInput): Promise<void>;
+};
+type AskInput = {
+    permission: string;
+    patterns: string[];
+    always: string[];
+    metadata: {
+        [key: string]: any;
+    };
+};
+export type ToolAttachment = {
+    type: "file";
+    mime: string;
+    url: string;
+    filename?: string;
+};
+export type ToolResult = string | {
+    title?: string;
+    output: string;
+    metadata?: {
+        [key: string]: any;
+    };
+    attachments?: ToolAttachment[];
+};
+export declare function tool<Args extends z.ZodRawShape>(input: {
+    description: string;
+    args: Args;
+    execute(args: z.infer<z.ZodObject<Args>>, context: ToolContext): Promise<ToolResult>;
+}): {
+    description: string;
+    args: Args;
+    execute(args: z.infer<z.ZodObject<Args>>, context: ToolContext): Promise<ToolResult>;
+};
+export declare namespace tool {
+    var schema: typeof z;
+}
+export type ToolDefinition = ReturnType<typeof tool>;
+export {};
+
+[exit=0 wall=0.0s]
+
+## 3. v2 plugin API (plugin/dist/v2/promise): domains on PluginContext (no tool-execution hooks)
+$ cat /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P2-types/npm/plugin/package/dist/v2/promise/context.d.ts
+import type { PluginOptions } from "../options.js";
+import type { AgentHooks } from "./agent.js";
+import type { AISDKHooks } from "./aisdk.js";
+import type { CatalogHooks } from "./catalog.js";
+import type { CommandHooks } from "./command.js";
+import type { IntegrationHooks } from "./integration.js";
+import type { PluginDomain } from "./plugin.js";
+import type { ReferenceHooks } from "./reference.js";
+import type { SkillHooks } from "./skill.js";
+import type { Reload } from "./registration.js";
+export interface PluginContext {
+    readonly options: PluginOptions;
+    readonly agent: AgentHooks & Reload;
+    readonly aisdk: AISDKHooks;
+    readonly catalog: CatalogHooks & Reload;
+    readonly command: CommandHooks & Reload;
+    readonly integration: IntegrationHooks & Reload;
+    readonly plugin: PluginDomain;
+    readonly reference: ReferenceHooks & Reload;
+    readonly skill: SkillHooks & Reload;
+}
+
+[exit=0 wall=0.0s]
+
+## 4. v1 Event union (sdk/dist/gen/types.gen.d.ts) -> event type strings
+$ python3.12 -I -c 
+import re,sys
+s=open(sys.argv[1]).read()
+names=[x.strip() for x in re.search(r"export type Event = ([^;]+);",s).group(1).split("|")]
+out=[]
+for n in names:
+    i=s.find("export type "+n+" = "); m=re.search(r"type: \"([^\"]+)\"", s[i:i+600])
+    out.append(m.group(1) if m else n)
+print(len(out),"v1 event types:"); print("\n".join(out)) /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P2-types/npm/sdk/package/dist/gen/types.gen.d.ts
+32 v1 event types:
+server.instance.disposed
+installation.updated
+installation.update-available
+lsp.client.diagnostics
+lsp.updated
+message.updated
+message.removed
+message.part.updated
+message.part.removed
+permission.updated
+permission.replied
+session.status
+session.idle
+session.compacted
+file.edited
+todo.updated
+command.executed
+session.created
+session.updated
+session.deleted
+session.diff
+session.error
+file.watcher.updated
+vcs.branch.updated
+tui.prompt.append
+tui.command.execute
+tui.toast.show
+pty.created
+pty.updated
+pty.exited
+pty.deleted
+server.connected
+
+[exit=0 wall=0.0s]
+
+## 5. v2 Event union (sdk/dist/v2/gen/types.gen.d.ts) -> event type strings
+$ python3.12 -I -c 
+import re,sys
+s=open(sys.argv[1]).read()
+names=[x.strip() for x in re.search(r"export type Event = ([^;]+);",s).group(1).split("|")]
+out=[]
+for n in names:
+    i=s.find("export type "+n+" = "); m=re.search(r"type: \"([^\"]+)\"", s[i:i+600])
+    out.append(m.group(1) if m else n)
+print(len(out),"v2 event types:"); print("\n".join(out)) /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P2-types/npm/sdk/package/dist/v2/gen/types.gen.d.ts
+89 v2 event types:
+models-dev.refreshed
+integration.updated
+integration.connection.updated
+catalog.updated
+session.created
+session.updated
+session.deleted
+message.updated
+message.removed
+message.part.updated
+message.part.removed
+session.next.agent.switched
+session.next.model.switched
+session.next.moved
+session.next.prompted
+session.next.prompt.admitted
+session.next.context.updated
+session.next.synthetic
+session.next.shell.started
+session.next.shell.ended
+session.next.step.started
+session.next.step.ended
+session.next.step.failed
+session.next.text.started
+session.next.text.delta
+session.next.text.ended
+session.next.reasoning.started
+session.next.reasoning.delta
+session.next.reasoning.ended
+session.next.tool.input.started
+session.next.tool.input.delta
+session.next.tool.input.ended
+session.next.tool.called
+session.next.tool.progress
+session.next.tool.success
+session.next.tool.failed
+session.next.retried
+session.next.compaction.started
+session.next.compaction.delta
+session.next.compaction.ended
+session.next.revert.staged
+session.next.revert.cleared
+session.next.revert.committed
+message.part.delta
+session.diff
+session.error
+installation.updated
+installation.update-available
+file.edited
+reference.updated
+permission.v2.asked
+permission.v2.replied
+plugin.added
+project.directories.updated
+file.watcher.updated
+pty.created
+pty.updated
+pty.exited
+pty.deleted
+question.v2.asked
+question.v2.replied
+question.v2.rejected
+todo.updated
+lsp.updated
+permission.asked
+permission.replied
+tui.prompt.append
+tui.command.execute
+tui.toast.show
+tui.session.select
+mcp.tools.changed
+mcp.browser.open.failed
+command.executed
+project.updated
+session.status
+session.idle
+question.asked
+question.replied
+question.rejected
+session.compacted
+vcs.branch.updated
+workspace.ready
+workspace.failed
+workspace.status
+worktree.ready
+worktree.failed
+server.connected
+global.disposed
+server.instance.disposed
+
+[exit=0 wall=0.0s]
+
+## 6. types a gate/logger needs: Permission (input of permission.ask), Session (parentID), AssistantMessage
+$ sh -c awk '/^export type Permission = \{/,/^\};/' '/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P2-types/npm/sdk/package/dist/gen/types.gen.d.ts'
+export type Permission = {
+    id: string;
+    type: string;
+    pattern?: string | Array<string>;
+    sessionID: string;
+    messageID: string;
+    callID?: string;
+    title: string;
+    metadata: {
+        [key: string]: unknown;
+    };
+    time: {
+        created: number;
+    };
+};
+
+[exit=0 wall=0.0s]
+
+$ sh -c awk '/^export type Session = \{/,/^\};/' '/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P2-types/npm/sdk/package/dist/gen/types.gen.d.ts'
+export type Session = {
+    id: string;
+    projectID: string;
+    directory: string;
+    parentID?: string;
+    summary?: {
+        additions: number;
+        deletions: number;
+        files: number;
+        diffs?: Array<FileDiff>;
+    };
+    share?: {
+        url: string;
+    };
+    title: string;
+    version: string;
+    time: {
+        created: number;
+        updated: number;
+        compacting?: number;
+    };
+    revert?: {
+        messageID: string;
+        partID?: string;
+        snapshot?: string;
+        diff?: string;
+    };
+};
+
+[exit=0 wall=0.0s]
+
+$ sh -c awk '/^export type AssistantMessage = \{/,/^\};/' '/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P2-types/npm/sdk/package/dist/gen/types.gen.d.ts'
+export type AssistantMessage = {
+    id: string;
+    sessionID: string;
+    role: "assistant";
+    time: {
+        created: number;
+        completed?: number;
+    };
+    error?: ProviderAuthError | UnknownError | MessageOutputLengthError | MessageAbortedError | ApiError;
+    parentID: string;
+    modelID: string;
+    providerID: string;
+    mode: string;
+    path: {
+        cwd: string;
+        root: string;
+    };
+    summary?: boolean;
+    cost: number;
+    tokens: {
+        input: number;
+        output: number;
+        reasoning: number;
+        cache: {
+            read: number;
+            write: number;
+        };
+    };
+    finish?: string;
+};
+
+[exit=0 wall=0.0s]
+
+$ sh -c awk '/^export type ToolPart = \{/,/^\};/' '/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P2-types/npm/sdk/package/dist/gen/types.gen.d.ts'; awk '/^export type ToolStateCompleted = \{/,/^\};/' '/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P2-types/npm/sdk/package/dist/gen/types.gen.d.ts'
+export type ToolPart = {
+    id: string;
+    sessionID: string;
+    messageID: string;
+    type: "tool";
+    callID: string;
+    tool: string;
+    state: ToolState;
+    metadata?: {
+        [key: string]: unknown;
+    };
+};
+export type ToolStateCompleted = {
+    status: "completed";
+    input: {
+        [key: string]: unknown;
+    };
+    output: string;
+    title: string;
+    metadata: {
+        [key: string]: unknown;
+    };
+    time: {
+        start: number;
+        end: number;
+        compacted?: number;
+    };
+    attachments?: Array<FilePart>;
+};
+
+[exit=0 wall=0.0s]
+
+VERDICT: PASS — 1.18.8 exposes 20 v1 Hooks keys (incl. tool.execute.before/after, chat.message, chat.params, permission.ask, shell.env, experimental.chat.system.transform), 32 v1 / 89 v2 event types.

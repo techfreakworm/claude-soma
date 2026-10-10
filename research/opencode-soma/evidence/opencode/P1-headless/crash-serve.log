@@ -1,0 +1,139 @@
+# P1-headless/crash-serve.log
+date-utc: 2026-10-10T06:06:48Z
+probe-script: research/opencode-soma/probes/opencode/P1-headless/run.sh
+opencode-version: 1.18.8
+model: ollama/qwen3:32b (thinking off)
+sandbox: $TMPDIR/ocsoma-pe/P1-headless (HOME, XDG_*, TMPDIR all inside it)
+purpose: kill -9 opencode serve mid-generation, restart, read the session over HTTP, continue it
+
+session: ses_edb942849ffetZ9zysS60pTpsV
+$ python3.12 -I /Users/techfreakworm/.soma/worktrees/claude-soma/claude-soma-manager/research/opencode-soma/probes/opencode/ocdrive.py --base http://127.0.0.1:47111 turn --session ses_edb942849ffetZ9zysS60pTpsV --model ollama/qwen3:32b --text Remember this secret token: MANGO-2290. Reply only with the word OK.
+{
+ "session": "ses_edb942849ffetZ9zysS60pTpsV",
+ "timeout": false,
+ "seen_busy": true,
+ "wall_s": 27.1,
+ "final_text": "OK",
+ "new_messages": [
+  {
+   "id": "msg_1246bd836001SCLWluK3erm5dK",
+   "role": "user",
+   "agent": "build",
+   "model": "qwen3:32b",
+   "created": 1791612409910,
+   "completed": null,
+   "tokens": null,
+   "finish": null,
+   "error": null,
+   "text": "Remember this secret token: MANGO-2290. Reply only with the word OK.",
+   "tools": []
+  },
+  {
+   "id": "msg_1246bd949001slzRq6ULizq7qt",
+   "role": "assistant",
+   "agent": "build",
+   "model": "qwen3:32b",
+   "created": 1791612410185,
+   "completed": 1791612436837,
+   "tokens": {
+    "total": 6832,
+    "input": 2646,
+    "output": 2,
+    "reasoning": 0,
+    "cache": {
+     "read": 4184,
+     "write": 0
+    }
+   },
+   "finish": "stop",
+   "error": null,
+   "text": "OK",
+   "tools": []
+  }
+ ],
+ "permissions": [],
+ "children": []
+}
+
+[exit=0 wall=27.2s]
+
+## long generation via prompt_async, then kill -9 the server after 10s
+$ jcurl -o /dev/null -w prompt_async HTTP %{http_code}\n -X POST http://127.0.0.1:47111/session/ses_edb942849ffetZ9zysS60pTpsV/prompt_async -d {"model":{"providerID":"ollama","modelID":"qwen3:32b"},"parts":[{"type":"text","text":"Count from 1 to 200, writing every number as an English word, one per line. Output only the list."}]}
+prompt_async HTTP 204
+
+[exit=0 wall=0.1s]
+
+$ curl -s http://127.0.0.1:47111/session/status
+{"ses_edb942849ffetZ9zysS60pTpsV":{"type":"busy"}}
+[exit=0 wall=0.2s]
+
+kill -9 serve pid 61103 at 06:07:27; health now: 000
+## restart serve on the same port and read the session back
+$ curl -s http://127.0.0.1:47111/session/ses_edb942849ffetZ9zysS60pTpsV
+{"id":"ses_edb942849ffetZ9zysS60pTpsV","slug":"neon-star","projectID":"00b2b6ddccd78902761613c15de731c8b234dce1","directory":"/private/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P1-headless/project","path":"","summary":{"additions":0,"deletions":0,"files":0},"cost":0,"tokens":{"input":2646,"output":2,"reasoning":0,"cache":{"read":4184,"write":0}},"title":"p1-serve-crash","agent":"build","model":{"id":"qwen3:32b","providerID":"ollama","variant":"default"},"version":"1.18.8","time":{"created":1791612409782,"updated":1791612437236}}
+[exit=0 wall=0.2s]
+
+$ msgs ses_edb942849ffetZ9zysS60pTpsV
+{"id":"msg_1246bd836001SCLWluK3erm5dK","role":"user","created":1791612409910,"completed":null,"finish":null,"error":null,"text":"Remember this secret token: MANGO-2290. Reply only with the word OK."}
+{"id":"msg_1246bd949001slzRq6ULizq7qt","role":"assistant","created":1791612410185,"completed":1791612436837,"finish":"stop","error":null,"text":"OK"}
+{"id":"msg_1246c4287001UgNjkQJ5nyetCQ","role":"user","created":1791612437127,"completed":null,"finish":null,"error":null,"text":"Count from 1 to 200, writing every number as an English word, one per line. Output only the list."}
+{"id":"msg_1246c428c001GadGiPgxHbWmRG","role":"assistant","created":1791612437132,"completed":null,"finish":null,"error":null,"text":""}
+
+[exit=0 wall=0.0s]
+
+$ curl -s http://127.0.0.1:47111/session/status
+{}
+[exit=0 wall=0.0s]
+
+## continue the session over HTTP
+$ python3.12 -I /Users/techfreakworm/.soma/worktrees/claude-soma/claude-soma-manager/research/opencode-soma/probes/opencode/ocdrive.py --base http://127.0.0.1:47111 turn --session ses_edb942849ffetZ9zysS60pTpsV --model ollama/qwen3:32b --text Stop counting. What was the secret token I gave you at the very beginning? Reply with only the token.
+{
+ "session": "ses_edb942849ffetZ9zysS60pTpsV",
+ "timeout": false,
+ "seen_busy": true,
+ "wall_s": 2.6,
+ "final_text": "MANGO-2290",
+ "new_messages": [
+  {
+   "id": "msg_1246c7929001PY7KAY1dCp3KY7",
+   "role": "user",
+   "agent": "build",
+   "model": "qwen3:32b",
+   "created": 1791612451113,
+   "completed": null,
+   "tokens": null,
+   "finish": null,
+   "error": null,
+   "text": "Stop counting. What was the secret token I gave you at the very beginning? Reply with only the token.",
+   "tools": []
+  },
+  {
+   "id": "msg_1246c7a310019i7JB44ViwKjin",
+   "role": "assistant",
+   "agent": "build",
+   "model": "qwen3:32b",
+   "created": 1791612451377,
+   "completed": 1791612453388,
+   "tokens": {
+    "total": 6908,
+    "input": 45,
+    "output": 8,
+    "reasoning": 0,
+    "cache": {
+     "read": 6855,
+     "write": 0
+    }
+   },
+   "finish": "stop",
+   "error": null,
+   "text": "MANGO-2290",
+   "tools": []
+  }
+ ],
+ "permissions": [],
+ "children": []
+}
+
+[exit=0 wall=2.8s]
+
+VERDICT: PASS — after kill -9 of serve mid-generation, a restarted serve returned the session and its history over HTTP and continued it (model recalled MANGO-2290).

@@ -1,0 +1,40 @@
+# P2-hooks/activity.log
+date-utc: 2026-10-10T06:05:36Z
+probe-script: research/opencode-soma/probes/opencode/P2-hooks/analyze.sh (after run.sh)
+opencode-version: 1.18.8
+model: ollama/qwen3:32b
+sandbox: $TMPDIR/ocsoma-pe/P2-hooks (HOME, XDG_*, TMPDIR all inside it)
+purpose: (c) log every tool use (log_activity.sh analog) incl. MCP and subagent tools
+
+## activity.jsonl (evidence/opencode/P2-hooks/activity.jsonl)
+$ cat /Users/techfreakworm/.soma/worktrees/claude-soma/claude-soma-manager/research/opencode-soma/evidence/opencode/P2-hooks/activity.jsonl
+{"ts":"2026-10-10T06:04:50.162Z","tool":"bash","args":"{\"command\":\"touch /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P2-hooks/p2/sentinel-subagent && echo P2-SUB-DONE\",\"workdir\":\"/private/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P2-hooks/project\"}","sessionID":"ses_edb962c65ffetuQnJ7IbAeUPfq","parentSessionID":"ses_edb977777ffeyh3bfUICJssyeP","agent":"general","callID":"call_yoznyu3j","duration_ms":445,"title":"touch /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P2-hooks/p2/sentinel-subagent && echo P2-SUB-DONE","result_head":"P2-SUB-DONE\n","metadata_keys":["output","exit","truncated"]}
+{"ts":"2026-10-10T06:04:51.596Z","tool":"task","args":"{\"prompt\":\"Run exactly this bash command: touch /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P2-hooks/p2/sentinel-subagent && echo P2-SUB-DONE  and report its output.\",\"subagent_type\":\"general\",\"description\":\"Run a bash command with a subagent\"}","sessionID":"ses_edb977777ffeyh3bfUICJssyeP","parentSessionID":null,"agent":"build","callID":"call_3ur7pxhw","duration_ms":13944,"title":"Run a bash command with a subagent","result_head":"<task id=\"ses_edb962c65ffetuQnJ7IbAeUPfq\" state=\"completed\">\n<task_result>\nP2-SUB-DONE\n</task_result>\n</task>","metadata_keys":["parentSessionId","sessionId","model","truncated"]}
+{"ts":"2026-10-10T06:05:11.128Z","tool":"probe-stdio_stdio_echo","args":"{\"text\":\"P2-MCP\"}","sessionID":"ses_edb977777ffeyh3bfUICJssyeP","parentSessionID":null,"agent":"build","callID":"call_daqj0xp8","duration_ms":5,"metadata_keys":[]}
+
+[exit=0 wall=0.0s]
+
+## ground truth: tool calls in the session transcripts (main session via ocdrive + child sessions) vs the activity log
+$ python3.12 -I -c 
+import json,re,sys
+s=open(sys.argv[1]).read()
+calls=set(re.findall(r"\"callID\": \"([^\"]+)\"", s))
+logged={}
+for l in open(sys.argv[2]):
+    if l.strip():
+        d=json.loads(l); logged[d["callID"]]=d
+print("tool calls visible in the main-session driver transcript:", len(calls))
+print("tool calls in activity log:", len(logged))
+print("in transcript but NOT logged:", sorted(calls-set(logged)))
+extra=sorted(set(logged)-calls)
+print("logged but not in the main transcript (subagent-session calls):", [(c, logged[c]["tool"], logged[c]["sessionID"]) for c in extra])
+ /Users/techfreakworm/.soma/worktrees/claude-soma/claude-soma-manager/research/opencode-soma/evidence/opencode/P2-hooks/run.log /Users/techfreakworm/.soma/worktrees/claude-soma/claude-soma-manager/research/opencode-soma/evidence/opencode/P2-hooks/activity.jsonl
+tool calls visible in the main-session driver transcript: 4
+tool calls in activity log: 3
+in transcript but NOT logged: ['call_mvzy3dwx']
+logged but not in the main transcript (subagent-session calls): []
+
+[exit=0 wall=0.1s]
+
+summary: lines=3 mcp=1 subagent-session-tools=1 task=1 with-agent=3
+VERDICT: PASS — tool.execute.before/after logged every tool call (built-in, MCP, task and the subagent's own calls) with args, session, parent session, agent, duration and result head.
