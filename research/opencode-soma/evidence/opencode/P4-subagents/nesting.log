@@ -8,3 +8,206 @@ purpose: can a subagent spawn its own subagent? default config vs subagent_depth
 
 ## b1. default (subagent_depth=1): primary -> nester -> researcher
 $ python3.12 -I /Users/techfreakworm/.soma/worktrees/claude-soma/claude-soma-manager/research/opencode-soma/probes/opencode/ocdrive.py --base http://127.0.0.1:47141 turn --session ses_edb5a9caaffezHRDDvtO3T5yY8 --model ollama/qwen3:32b --perm once --text Use the task tool with subagent_type nester, description nest test, prompt go. Then reply with exactly what it returned.
+{
+ "session": "ses_edb5a9caaffezHRDDvtO3T5yY8",
+ "timeout": false,
+ "seen_busy": true,
+ "wall_s": 46.3,
+ "final_text": "<task id=\"ses_edb5a883affeSkj3q5yccPd4oe\" state=\"completed\">\n<task_result>\nI am unable to proceed further due to the subagent depth restriction. You can adjust the \"subagent_depth\" setting to allow nested subagent calls if needed.\n</task_result>\n</task>",
+ "new_messages": [
+  {
+   "id": "msg_124a563bb001Re415Xmxb0IxCJ",
+   "role": "user",
+   "agent": "build",
+   "model": "qwen3:32b",
+   "created": 1791616181179,
+   "completed": null,
+   "tokens": null,
+   "finish": null,
+   "error": null,
+   "text": "Use the task tool with subagent_type nester, description nest test, prompt go. Then reply with exactly what it returned.",
+   "tools": []
+  },
+  {
+   "id": "msg_124a563c1001Jb1cQNSA7s0WVb",
+   "role": "assistant",
+   "agent": "build",
+   "model": "qwen3:32b",
+   "created": 1791616181185,
+   "completed": 1791616217021,
+   "tokens": {
+    "total": 6917,
+    "input": 31,
+    "output": 41,
+    "reasoning": 0,
+    "cache": {
+     "read": 6845,
+     "write": 0
+    }
+   },
+   "finish": "tool-calls",
+   "error": null,
+   "text": "",
+   "tools": [
+    {
+     "tool": "task",
+     "callID": "call_dip9n6sh",
+     "status": "completed",
+     "input": {
+      "command": "task",
+      "description": "nest test",
+      "prompt": "go",
+      "subagent_type": "nester"
+     },
+     "output_head": "<task id=\"ses_edb5a883affeSkj3q5yccPd4oe\" state=\"completed\">\n<task_result>\nI am unable to proceed further due to the subagent depth restriction. You can adjust the \"subagent_depth\" setting to allow nested subagent calls if needed.\n</task_result>\n</task>",
+     "child_session": "ses_edb5a883affeSkj3q5yccPd4oe",
+     "ms": 30633
+    }
+   ]
+  },
+  {
+   "id": "msg_124a5efbe001YgPpjYqe1o7mOh",
+   "role": "assistant",
+   "agent": "build",
+   "model": "qwen3:32b",
+   "created": 1791616217022,
+   "completed": 1791616227199,
+   "tokens": {
+    "total": 7069,
+    "input": 123,
+    "output": 74,
+    "reasoning": 0,
+    "cache": {
+     "read": 6872,
+     "write": 0
+    }
+   },
+   "finish": "stop",
+   "error": null,
+   "text": "<task id=\"ses_edb5a883affeSkj3q5yccPd4oe\" state=\"completed\">\n<task_result>\nI am unable to proceed further due to the subagent depth restriction. You can adjust the \"subagent_depth\" setting to allow nested subagent calls if needed.\n</task_result>\n</task>",
+   "tools": []
+  }
+ ],
+ "permissions": [],
+ "children": [
+  "ses_edb5a883affeSkj3q5yccPd4oe"
+ ]
+}
+
+[exit=0 wall=46.4s]
+
+$ tree_dump ses_edb5a9caaffezHRDDvtO3T5yY8
+{"session": "ses_edb5a9caaffezHRDDvtO3T5yY8", "parentID": null, "title": "p4-nest-default", "agent": "build", "created": 1791616181077, "updated": 1791616227200}
+   tool {"tool": "task", "status": "completed", "ms": 30633, "child_session": "ses_edb5a883affeSkj3q5yccPd4oe"} {"command": "task", "description": "nest test", "prompt": "go", "subagent_type": "nester"} -> <task id="ses_edb5a883affeSkj3q5yccPd4oe" state="completed"> <task_result> I am unable to proceed further due to the subagent depth restriction. You can adjust 
+   text "<task id=\"ses_edb5a883affeSkj3q5yccPd4oe\" state=\"completed\">\n<task_result>\nI am unable to proceed further due to the subagent depth restriction. You can adjust the \"subagent_depth\" setting to allow ne" completed 1791616227199
+{"session": "ses_edb5a883affeSkj3q5yccPd4oe", "parentID": "ses_edb5a9caaffezHRDDvtO3T5yY8", "title": "nest test (@nester subagent)", "agent": "nester", "created": 1791616186309, "updated": 1791616216944}
+   tool {"tool": "task", "status": "error", "ms": 1, "child_session": null} {"description": "nested research", "prompt": "do research", "subagent_type": "researcher"} -> Subagent depth limit reached (1). Increase "subagent_depth" to allow nested subagents.
+   text "I am unable to proceed further due to the subagent depth restriction. You can adjust the \"subagent_depth\" setting to allow nested subagent calls if needed." completed 1791616216941
+
+[exit=0 wall=0.1s]
+
+## b2. subagent_depth=2 (config), same request
+$ python3.12 -I /Users/techfreakworm/.soma/worktrees/claude-soma/claude-soma-manager/research/opencode-soma/probes/opencode/ocdrive.py --base http://127.0.0.1:47141 turn --session ses_edb59e46dffeeWOKIwo5o7Jxkd --model ollama/qwen3:32b --perm once --text Use the task tool with subagent_type nester, description nest test, prompt go. Then reply with exactly what it returned.
+{
+ "session": "ses_edb59e46dffeeWOKIwo5o7Jxkd",
+ "timeout": false,
+ "seen_busy": true,
+ "wall_s": 15.8,
+ "final_text": "NESTER-GOT: RESEARCHER-DONE",
+ "new_messages": [
+  {
+   "id": "msg_124a61be9001bH1jlPwvlYYUdQ",
+   "role": "user",
+   "agent": "build",
+   "model": "qwen3:32b",
+   "created": 1791616228329,
+   "completed": null,
+   "tokens": null,
+   "finish": null,
+   "error": null,
+   "text": "Use the task tool with subagent_type nester, description nest test, prompt go. Then reply with exactly what it returned.",
+   "tools": []
+  },
+  {
+   "id": "msg_124a61ca50015jIwbWNhO1ZBIS",
+   "role": "assistant",
+   "agent": "build",
+   "model": "qwen3:32b",
+   "created": 1791616228517,
+   "completed": 1791616241686,
+   "tokens": {
+    "total": 6917,
+    "input": 4,
+    "output": 41,
+    "reasoning": 0,
+    "cache": {
+     "read": 6872,
+     "write": 0
+    }
+   },
+   "finish": "tool-calls",
+   "error": null,
+   "text": "",
+   "tools": [
+    {
+     "tool": "task",
+     "callID": "call_mt325vdv",
+     "status": "completed",
+     "input": {
+      "prompt": "go",
+      "subagent_type": "nester",
+      "command": "go",
+      "description": "nest test"
+     },
+     "output_head": "<task id=\"ses_edb59ceebffePvTah6Uzz5Sl7J\" state=\"completed\">\n<task_result>\nNESTER-GOT: RESEARCHER-DONE\n</task_result>\n</task>",
+     "child_session": "ses_edb59ceebffePvTah6Uzz5Sl7J",
+     "ms": 7868
+    }
+   ]
+  },
+  {
+   "id": "msg_124a65017001ZDHgJ0jXApnzv3",
+   "role": "assistant",
+   "agent": "build",
+   "model": "qwen3:32b",
+   "created": 1791616241687,
+   "completed": 1791616243807,
+   "tokens": {
+    "total": 6983,
+    "input": 100,
+    "output": 11,
+    "reasoning": 0,
+    "cache": {
+     "read": 6872,
+     "write": 0
+    }
+   },
+   "finish": "stop",
+   "error": null,
+   "text": "NESTER-GOT: RESEARCHER-DONE",
+   "tools": []
+  }
+ ],
+ "permissions": [],
+ "children": [
+  "ses_edb59ceebffePvTah6Uzz5Sl7J",
+  "ses_edb59be02ffeQizXyr4pFa3BM6"
+ ]
+}
+
+[exit=0 wall=15.8s]
+
+$ tree_dump ses_edb59e46dffeeWOKIwo5o7Jxkd
+{"session": "ses_edb59e46dffeeWOKIwo5o7Jxkd", "parentID": null, "title": "p4-nest-depth2", "agent": "build", "created": 1791616228243, "updated": 1791616243808}
+   tool {"tool": "task", "status": "completed", "ms": 7868, "child_session": "ses_edb59ceebffePvTah6Uzz5Sl7J"} {"prompt": "go", "subagent_type": "nester", "command": "go", "description": "nest test"} -> <task id="ses_edb59ceebffePvTah6Uzz5Sl7J" state="completed"> <task_result> NESTER-GOT: RESEARCHER-DONE </task_result> </task>
+   text "NESTER-GOT: RESEARCHER-DONE" completed 1791616243807
+{"session": "ses_edb59ceebffePvTah6Uzz5Sl7J", "parentID": "ses_edb59e46dffeeWOKIwo5o7Jxkd", "title": "nest test (@nester subagent)", "agent": "nester", "created": 1791616233748, "updated": 1791616241618}
+   tool {"tool": "task", "status": "completed", "ms": 1628, "child_session": "ses_edb59be02ffeQizXyr4pFa3BM6"} {"description": "nested research", "prompt": "do research", "subagent_type": "researcher"} -> <task id="ses_edb59be02ffeQizXyr4pFa3BM6" state="completed"> <task_result> RESEARCHER-DONE </task_result> </task>
+   text "NESTER-GOT: RESEARCHER-DONE" completed 1791616241615
+{"session": "ses_edb59be02ffeQizXyr4pFa3BM6", "parentID": "ses_edb59ceebffePvTah6Uzz5Sl7J", "title": "nested research (@researcher subagent)", "agent": "researcher", "created": 1791616238077, "updated": 1791616239708}
+   text "RESEARCHER-DONE" completed 1791616239704
+
+[exit=0 wall=0.1s]
+
+depth-2 tree: root=ses_edb59e46dffeeWOKIwo5o7Jxkd child=ses_edb59ceebffePvTah6Uzz5Sl7J grandchild=ses_edb59be02ffeQizXyr4pFa3BM6
+VERDICT: PASS — nesting is blocked by default (Subagent depth limit reached (1)) and works with subagent_depth=2 (+ task permission on the subagent): grandchild ses_edb59be02ffeQizXyr4pFa3BM6.

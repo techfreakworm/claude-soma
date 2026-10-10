@@ -1,0 +1,135 @@
+# P4-subagents/parallel.log
+date-utc: 2026-10-10T07:10:44Z
+probe-script: research/opencode-soma/probes/opencode/P4-subagents/run.sh
+opencode-version: 1.18.8
+model: ollama/qwen3:32b (thinking off)
+sandbox: $TMPDIR/ocsoma-pe/P4-subagents (HOME, XDG_*, TMPDIR all inside it)
+purpose: two task calls in one assistant message: concurrent or sequential?
+
+$ python3.12 -I /Users/techfreakworm/.soma/worktrees/claude-soma/claude-soma-manager/research/opencode-soma/probes/opencode/ocdrive.py --base http://127.0.0.1:47141 turn --session ses_edb59a450ffeGT6S399mwSTbpt --model ollama/qwen3:32b --perm once --timeout 400 --text In ONE response, emit TWO task tool calls at the same time (parallel tool calls): first with subagent_type slowpoke, description slow one, prompt 'Run: sleep 15 && echo SLOW-ONE-DONE'; second with subagent_type slowpoke, description slow two, prompt 'Run: sleep 15 && echo SLOW-TWO-DONE'. After both return, reply with both outputs.
+{
+ "session": "ses_edb59a450ffeGT6S399mwSTbpt",
+ "timeout": false,
+ "seen_busy": true,
+ "wall_s": 65.6,
+ "final_text": "Both slow tasks have completed successfully. Outputs:\n- SLOW-ONE-DONE\n- SLOW-TWO-DONE",
+ "new_messages": [
+  {
+   "id": "msg_124a65bfd001Vxo4SUWE7aKgig",
+   "role": "user",
+   "agent": "build",
+   "model": "qwen3:32b",
+   "created": 1791616244733,
+   "completed": null,
+   "tokens": null,
+   "finish": null,
+   "error": null,
+   "text": "In ONE response, emit TWO task tool calls at the same time (parallel tool calls): first with subagent_type slowpoke, description slow one, prompt 'Run: sleep 15 && echo SLOW-ONE-DONE'; second with subagent_type slowpoke, description slow two, prompt 'Run: sleep 15 && echo SLOW-TWO-DONE'. After both return, reply with both outputs.",
+   "tools": []
+  },
+  {
+   "id": "msg_124a65c010011cFWeNoKHe11Bp",
+   "role": "assistant",
+   "agent": "build",
+   "model": "qwen3:32b",
+   "created": 1791616244737,
+   "completed": 1791616307219,
+   "tokens": {
+    "total": 7069,
+    "input": 98,
+    "output": 134,
+    "reasoning": 0,
+    "cache": {
+     "read": 6837,
+     "write": 0
+    }
+   },
+   "finish": "tool-calls",
+   "error": null,
+   "text": "",
+   "tools": [
+    {
+     "tool": "task",
+     "callID": "call_eqhc5zuq",
+     "status": "completed",
+     "input": {
+      "command": "Run: sleep 15 && echo SLOW-ONE-DONE",
+      "description": "slow one",
+      "prompt": "Run: sleep 15 && echo SLOW-ONE-DONE",
+      "subagent_type": "slowpoke"
+     },
+     "output_head": "<task id=\"ses_edb59814affepqlIvECinxeCqc\" state=\"completed\">\n<task_result>\nSLOW-ONE-DONE\n</task_result>\n</task>",
+     "child_session": "ses_edb59814affepqlIvECinxeCqc",
+     "ms": 49779
+    },
+    {
+     "tool": "task",
+     "callID": "call_cis47wtg",
+     "status": "completed",
+     "input": {
+      "subagent_type": "slowpoke",
+      "command": "Run: sleep 15 && echo SLOW-TWO-DONE",
+      "description": "slow two",
+      "prompt": "Run: sleep 15 && echo SLOW-TWO-DONE"
+     },
+     "output_head": "<task id=\"ses_edb59604fffe9DDr0ZQvlqNFk7\" state=\"completed\">\n<task_result>\nSLOW-TWO-DONE\n</task_result>\n</task>",
+     "child_session": "ses_edb59604fffe9DDr0ZQvlqNFk7",
+     "ms": 45085
+    }
+   ]
+  },
+  {
+   "id": "msg_124a75014001vFpPmIBAQAE364",
+   "role": "assistant",
+   "agent": "build",
+   "model": "qwen3:32b",
+   "created": 1791616307220,
+   "completed": 1791616310217,
+   "tokens": {
+    "total": 7229,
+    "input": 273,
+    "output": 25,
+    "reasoning": 0,
+    "cache": {
+     "read": 6931,
+     "write": 0
+    }
+   },
+   "finish": "stop",
+   "error": null,
+   "text": "Both slow tasks have completed successfully. Outputs:\n- SLOW-ONE-DONE\n- SLOW-TWO-DONE",
+   "tools": []
+  }
+ ],
+ "permissions": [],
+ "children": [
+  "ses_edb59814affepqlIvECinxeCqc",
+  "ses_edb59604fffe9DDr0ZQvlqNFk7"
+ ]
+}
+
+[exit=0 wall=65.6s]
+
+$ tree_dump ses_edb59a450ffeGT6S399mwSTbpt
+{"session": "ses_edb59a450ffeGT6S399mwSTbpt", "parentID": null, "title": "p4-parallel", "agent": "build", "created": 1791616244655, "updated": 1791616310219}
+   tool {"tool": "task", "status": "completed", "ms": 49779, "child_session": "ses_edb59814affepqlIvECinxeCqc"} {"command": "Run: sleep 15 && echo SLOW-ONE-DONE", "description": "slow one", "prompt": "Run: sleep 15 && echo SLOW-ONE-DONE", "subagent_type": "slowpoke"} -> <task id="ses_edb59814affepqlIvECinxeCqc" state="completed"> <task_result> SLOW-ONE-DONE </task_result> </task>
+   tool {"tool": "task", "status": "completed", "ms": 45085, "child_session": "ses_edb59604fffe9DDr0ZQvlqNFk7"} {"subagent_type": "slowpoke", "command": "Run: sleep 15 && echo SLOW-TWO-DONE", "description": "slow two", "prompt": "Run: sleep 15 && echo SLOW-TWO-DONE"} -> <task id="ses_edb59604fffe9DDr0ZQvlqNFk7" state="completed"> <task_result> SLOW-TWO-DONE </task_result> </task>
+   text "Both slow tasks have completed successfully. Outputs:\n- SLOW-ONE-DONE\n- SLOW-TWO-DONE" completed 1791616310217
+{"session": "ses_edb59814affepqlIvECinxeCqc", "parentID": "ses_edb59a450ffeGT6S399mwSTbpt", "title": "slow one (@slowpoke subagent)", "agent": "slowpoke", "created": 1791616253621, "updated": 1791616303402}
+   tool {"tool": "bash", "status": "completed", "ms": 9, "child_session": null} {"workdir": "/private/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P4-subagents/project", "command": "sleep 15 && echo SLOW-ONE-DONE"} -> SLOW-ONE-DONE 
+   text "SLOW-ONE-DONE" completed 1791616303400
+{"session": "ses_edb59604fffe9DDr0ZQvlqNFk7", "parentID": "ses_edb59a450ffeGT6S399mwSTbpt", "title": "slow two (@slowpoke subagent)", "agent": "slowpoke", "created": 1791616262064, "updated": 1791616307152}
+   tool {"tool": "bash", "status": "completed", "ms": 4, "child_session": null} {"command": "sleep 15 && echo SLOW-TWO-DONE"} -> SLOW-TWO-DONE 
+   text "SLOW-TWO-DONE" completed 1791616307150
+
+[exit=0 wall=0.1s]
+
+## overlap analysis of the two children (session created/updated, ms)
+$ python3.12 -I - http://127.0.0.1:47141 ses_edb59a450ffeGT6S399mwSTbpt /Users/techfreakworm/.soma/worktrees/claude-soma/claude-soma-manager/research/opencode-soma/probes/opencode
+child slow one (@slowpoke subagent) start 1791616253621 end 1791616303400 dur_s 49.8
+child slow two (@slowpoke subagent) start 1791616262064 end 1791616307150 dur_s 45.1
+OVERLAP | second started 8.4 s after first; first ended 49.8 s after its start
+
+[exit=0 wall=0.1s]
+
+VERDICT: PASS — two task calls from one message ran concurrently (child sessions overlap in time).

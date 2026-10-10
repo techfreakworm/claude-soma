@@ -1,0 +1,295 @@
+# P4-subagents/background.log
+date-utc: 2026-10-10T07:11:50Z
+probe-script: research/opencode-soma/probes/opencode/P4-subagents/run.sh
+opencode-version: 1.18.8
+model: ollama/qwen3:32b (thinking off)
+sandbox: $TMPDIR/ocsoma-pe/P4-subagents (HOME, XDG_*, TMPDIR all inside it)
+purpose: is the task tool blocking? background=true (OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS) and /experimental/session/{id}/background
+
+serve restarted with OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS=true
+## d0. the task tool schema the model gets now (background param present?)
+$ sh -c curl -s 'http://127.0.0.1:47141/experimental/tool?provider=ollama&model=qwen3:32b' | jq -c '.[] | select(.id=="task") | {id, params: (.parameters.properties | keys)}'
+{"id":"task","params":["background","command","description","prompt","subagent_type","task_id"]}
+
+[exit=0 wall=0.1s]
+
+## d1. foreground task (sleep 20): the parent turn is blocked until the child finishes
+$ python3.12 -I /Users/techfreakworm/.soma/worktrees/claude-soma/claude-soma-manager/research/opencode-soma/probes/opencode/ocdrive.py --base http://127.0.0.1:47141 turn --session ses_edb589f71ffe3jUwDwfj28VG4i --model ollama/qwen3:32b --perm once --timeout 300 --text Use the task tool (foreground, no background flag) with subagent_type slowpoke, description fg job, prompt 'Run: sleep 20 && echo FG-JOB-DONE'. Then reply with what it returned.
+{
+ "session": "ses_edb589f71ffe3jUwDwfj28VG4i",
+ "timeout": false,
+ "seen_busy": true,
+ "wall_s": 42.9,
+ "final_text": "FG-JOB-DONE",
+ "new_messages": [
+  {
+   "id": "msg_124a760d5001DLHAJLfPJ4LRxK",
+   "role": "user",
+   "agent": "build",
+   "model": "qwen3:32b",
+   "created": 1791616311509,
+   "completed": null,
+   "tokens": null,
+   "finish": null,
+   "error": null,
+   "text": "Use the task tool (foreground, no background flag) with subagent_type slowpoke, description fg job, prompt 'Run: sleep 20 && echo FG-JOB-DONE'. Then reply with what it returned.",
+   "tools": []
+  },
+  {
+   "id": "msg_124a76175001Q2gOQ2voMy0CPV",
+   "role": "assistant",
+   "agent": "build",
+   "model": "qwen3:32b",
+   "created": 1791616311669,
+   "completed": 1791616352395,
+   "tokens": {
+    "total": 7038,
+    "input": 1544,
+    "output": 53,
+    "reasoning": 0,
+    "cache": {
+     "read": 5441,
+     "write": 0
+    }
+   },
+   "finish": "tool-calls",
+   "error": null,
+   "text": "",
+   "tools": [
+    {
+     "tool": "task",
+     "callID": "call_lmfdm1ow",
+     "status": "completed",
+     "input": {
+      "description": "fg job",
+      "prompt": "Run: sleep 20 && echo FG-JOB-DONE",
+      "subagent_type": "slowpoke",
+      "command": "task"
+     },
+     "output_head": "<task id=\"ses_edb585f7fffen30Qeu26VvpfPP\" state=\"completed\">\n<task_result>\nFG-JOB-DONE\n</task_result>\n</task>",
+     "child_session": "ses_edb585f7fffen30Qeu26VvpfPP",
+     "ms": 24510
+    }
+   ]
+  },
+  {
+   "id": "msg_124a8008d001c4rhpp6jtQx0Wh",
+   "role": "assistant",
+   "agent": "build",
+   "model": "qwen3:32b",
+   "created": 1791616352397,
+   "completed": 1791616354090,
+   "tokens": {
+    "total": 7105,
+    "input": 118,
+    "output": 6,
+    "reasoning": 0,
+    "cache": {
+     "read": 6981,
+     "write": 0
+    }
+   },
+   "finish": "stop",
+   "error": null,
+   "text": "FG-JOB-DONE",
+   "tools": []
+  }
+ ],
+ "permissions": [],
+ "children": [
+  "ses_edb585f7fffen30Qeu26VvpfPP"
+ ]
+}
+
+[exit=0 wall=43.0s]
+
+## d2. background=true task (sleep 25): turn should end at once
+$ python3.12 -I /Users/techfreakworm/.soma/worktrees/claude-soma/claude-soma-manager/research/opencode-soma/probes/opencode/ocdrive.py --base http://127.0.0.1:47141 turn --session ses_edb57f733ffeypPAr3c9d1Buen --model ollama/qwen3:32b --perm once --timeout 300 --text Call the task tool exactly once with background set to true, subagent_type slowpoke, description bg job, prompt 'Run: sleep 25 && echo BG-JOB-DONE'. As soon as it is launched, reply with exactly LAUNCHED and end your turn.
+{
+ "session": "ses_edb57f733ffeypPAr3c9d1Buen",
+ "timeout": false,
+ "seen_busy": true,
+ "wall_s": 13.9,
+ "final_text": "LAUNCHED",
+ "new_messages": [
+  {
+   "id": "msg_124a80912001zFRC9g8oqLYvc5",
+   "role": "user",
+   "agent": "build",
+   "model": "qwen3:32b",
+   "created": 1791616354578,
+   "completed": null,
+   "tokens": null,
+   "finish": null,
+   "error": null,
+   "text": "Call the task tool exactly once with background set to true, subagent_type slowpoke, description bg job, prompt 'Run: sleep 25 && echo BG-JOB-DONE'. As soon as it is launched, reply with exactly LAUNCHED and end your turn.",
+   "tools": []
+  },
+  {
+   "id": "msg_124a80915001AkDWoQToCw7tMa",
+   "role": "assistant",
+   "agent": "build",
+   "model": "qwen3:32b",
+   "created": 1791616354581,
+   "completed": 1791616360528,
+   "tokens": {
+    "total": 7048,
+    "input": 69,
+    "output": 52,
+    "reasoning": 0,
+    "cache": {
+     "read": 6927,
+     "write": 0
+    }
+   },
+   "finish": "tool-calls",
+   "error": null,
+   "text": "",
+   "tools": [
+    {
+     "tool": "task",
+     "callID": "call_ooahrsif",
+     "status": "completed",
+     "input": {
+      "background": true,
+      "description": "bg job",
+      "prompt": "Run: sleep 25 && echo BG-JOB-DONE",
+      "subagent_type": "slowpoke"
+     },
+     "output_head": "<task id=\"ses_edb57e0daffehmAuPUHKiDse3G\" state=\"running\">\n<summary>Background task started</summary>\n<task_result>\nThe task is working in the background. You will be notified automatically when it finishes.\nDO NOT sleep, poll for progress, ask the task for status, or duplicate this task's work \u2014 av",
+     "child_session": "ses_edb57e0daffehmAuPUHKiDse3G",
+     "ms": 5
+    }
+   ]
+  },
+  {
+   "id": "msg_124a82051001G4dPALBOBL8bPf",
+   "role": "assistant",
+   "agent": "build",
+   "model": "qwen3:32b",
+   "created": 1791616360529,
+   "completed": 1791616368387,
+   "tokens": {
+    "total": 7186,
+    "input": 190,
+    "output": 4,
+    "reasoning": 0,
+    "cache": {
+     "read": 6992,
+     "write": 0
+    }
+   },
+   "finish": "stop",
+   "error": null,
+   "text": "LAUNCHED",
+   "tools": []
+  }
+ ],
+ "permissions": [],
+ "children": [
+  "ses_edb57e0daffehmAuPUHKiDse3G"
+ ]
+}
+
+[exit=0 wall=14.0s]
+
+parent turn returned after 14s
+## d3. parent responsiveness while the background child still runs
+$ python3.12 -I /Users/techfreakworm/.soma/worktrees/claude-soma/claude-soma-manager/research/opencode-soma/probes/opencode/ocdrive.py --base http://127.0.0.1:47141 turn --session ses_edb57f733ffeypPAr3c9d1Buen --model ollama/qwen3:32b --perm once --timeout 120 --text Reply with exactly STILL-RESPONSIVE and nothing else.
+{
+ "session": "ses_edb57f733ffeypPAr3c9d1Buen",
+ "timeout": false,
+ "seen_busy": true,
+ "wall_s": 9.9,
+ "final_text": "STILL-RESPONSIVE",
+ "new_messages": [
+  {
+   "id": "msg_124a840a7001S3W9YRd63VGGgY",
+   "role": "user",
+   "agent": "build",
+   "model": "qwen3:32b",
+   "created": 1791616368807,
+   "completed": null,
+   "tokens": null,
+   "finish": null,
+   "error": null,
+   "text": "Reply with exactly STILL-RESPONSIVE and nothing else.",
+   "tools": []
+  },
+  {
+   "id": "msg_124a840ac001o7cLqHH4aMq019",
+   "role": "assistant",
+   "agent": "build",
+   "model": "qwen3:32b",
+   "created": 1791616368812,
+   "completed": 1791616378650,
+   "tokens": {
+    "total": 7214,
+    "input": 224,
+    "output": 7,
+    "reasoning": 0,
+    "cache": {
+     "read": 6983,
+     "write": 0
+    }
+   },
+   "finish": "stop",
+   "error": null,
+   "text": "STILL-RESPONSIVE",
+   "tools": []
+  }
+ ],
+ "permissions": [],
+ "children": [
+  "ses_edb57e0daffehmAuPUHKiDse3G"
+ ]
+}
+
+[exit=0 wall=10.1s]
+
+elapsed since launch: 24s
+## d4. wait for the background result to be injected into the parent (synthetic message + new parent turn)
+injected task-result messages: 1 (after 58s)
+$ sh -c curl -s 'http://127.0.0.1:47141/session/ses_edb57f733ffeypPAr3c9d1Buen/message' | jq -c '.[] | {role: .info.role, created: .info.time.created, text: ([.parts[] | select(.type=="text") | ((if .synthetic then "[synthetic] " else "" end) + .text)] | join(" ") | .[0:220])}'
+{"role":"user","created":1791616354578,"text":"Call the task tool exactly once with background set to true, subagent_type slowpoke, description bg job, prompt 'Run: sleep 25 && echo BG-JOB-DONE'. As soon as it is launched, reply with exactly LAUNCHED and end your tur"}
+{"role":"assistant","created":1791616354581,"text":""}
+{"role":"assistant","created":1791616360529,"text":"LAUNCHED"}
+{"role":"user","created":1791616368807,"text":"Reply with exactly STILL-RESPONSIVE and nothing else."}
+{"role":"assistant","created":1791616368812,"text":"STILL-RESPONSIVE"}
+{"role":"user","created":1791616410753,"text":"[synthetic] <task id=\"ses_edb57e0daffehmAuPUHKiDse3G\" state=\"completed\">\n<summary>Background task completed: bg job</summary>\n<task_result>\nBG-JOB-DONE\n</task_result>\n</task>"}
+{"role":"assistant","created":1791616410756,"text":"BACKGROUND-COMPLETE"}
+
+[exit=0 wall=0.0s]
+
+$ tree_dump ses_edb57f733ffeypPAr3c9d1Buen
+{"session": "ses_edb57f733ffeypPAr3c9d1Buen", "parentID": null, "title": "p4-background", "agent": "build", "created": 1791616354508, "updated": 1791616412088}
+   tool {"tool": "task", "status": "completed", "ms": 5, "child_session": "ses_edb57e0daffehmAuPUHKiDse3G"} {"background": true, "description": "bg job", "prompt": "Run: sleep 25 && echo BG-JOB-DONE", "subagent_type": "slowpoke"} -> <task id="ses_edb57e0daffehmAuPUHKiDse3G" state="running"> <summary>Background task started</summary> <task_result> The task is working in the background. You w
+   text "LAUNCHED" completed 1791616368387
+   text "STILL-RESPONSIVE" completed 1791616378650
+   text "BACKGROUND-COMPLETE" completed 1791616412087
+{"session": "ses_edb57e0daffehmAuPUHKiDse3G", "parentID": "ses_edb57f733ffeypPAr3c9d1Buen", "title": "bg job (@slowpoke subagent)", "agent": "slowpoke", "created": 1791616360229, "updated": 1791616410755}
+   tool {"tool": "bash", "status": "error", "ms": 1, "child_session": null} {"timeout": null, "workdir": null, "command": "sleep 25 && echo BG-JOB-DONE"} -> The bash tool was called with invalid arguments: SchemaError(Expected number | undefined, got null   at ["timeout"]). Please rewrite the input so it satisfies t
+   tool {"tool": "bash", "status": "error", "ms": 4, "child_session": null} {"command": "sleep 25 && echo BG-JOB-DONE", "timeout": 120000, "workdir": null} -> The bash tool was called with invalid arguments: SchemaError(Expected string | undefined, got null   at ["workdir"]). Please rewrite the input so it satisfies t
+   tool {"tool": "bash", "status": "completed", "ms": 3, "child_session": null} {"command": "sleep 25 && echo BG-JOB-DONE", "timeout": 120000, "workdir": ""} -> BG-JOB-DONE 
+   text "BG-JOB-DONE" completed 1791616410751
+
+[exit=0 wall=0.1s]
+
+## d5. POST /experimental/session/{id}/background on a running FOREGROUND task
+$ curl -s -w \n-> HTTP %{http_code}\n -X POST http://127.0.0.1:47141/experimental/session/ses_edb5714e5ffeTyDaZ41x9jj0oj/background
+true
+-> HTTP 200
+
+[exit=0 wall=0.0s]
+
+parent idle 7s after the detach call (child sleeps 30s)
+$ sh -c curl -s 'http://127.0.0.1:47141/session/ses_edb5714e5ffeTyDaZ41x9jj0oj/message' | jq -c '.[] | {role: .info.role, created: .info.time.created, text: ([.parts[] | select(.type=="text") | ((if .synthetic then "[synthetic] " else "" end) + .text)] | join(" ") | .[0:200]), tools: [.parts[] | select(.type=="tool") | {tool, status: .state.status, out: ((.state.output // .state.error // "")|.[0:160])}]}'
+{"role":"user","created":1791616412455,"text":"Use the task tool (foreground) with subagent_type slowpoke, description detach job, prompt 'Run: sleep 30 && echo DETACH-JOB-DONE'. Then reply with what it returned.","tools":[]}
+{"role":"assistant","created":1791616412458,"text":"","tools":[{"tool":"task","status":"completed","out":"<task id=\"ses_edb570082ffeAbZOYb7BuOQumS\" state=\"running\">\n<summary>Background task started</summary>\n<task_result>\nThe task is working in the background. You w"}]}
+{"role":"assistant","created":1791616420856,"text":"The task is running in the foreground. It will execute the command `sleep 30 && echo DETACH-JOB-DONE`. Please wait for it to complete.","tools":[]}
+{"role":"user","created":1791616452953,"text":"[synthetic] <task id=\"ses_edb570082ffeAbZOYb7BuOQumS\" state=\"completed\">\n<summary>Background task completed: detach job</summary>\n<task_result>\nDETACH-JOB-DONE\n</task_result>\n</task>","tools":[]}
+{"role":"assistant","created":1791616452958,"text":"The task has completed successfully and returned: `DETACH-JOB-DONE`.","tools":[]}
+
+[exit=0 wall=0.0s]
+
+VERDICT: PASS — foreground task blocks the caller's turn; background=true (experimental flag) returned in 14s, the parent answered another prompt while the child ran, and the result was injected later as a synthetic <task> message.

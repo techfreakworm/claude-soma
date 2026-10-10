@@ -1,0 +1,114 @@
+# P4-subagents/lead-team.log
+date-utc: 2026-10-10T07:14:27Z
+probe-script: research/opencode-soma/probes/opencode/P4-subagents/run.sh
+opencode-version: 1.18.8
+model: ollama/qwen3:32b (thinking off)
+sandbox: $TMPDIR/ocsoma-pe/P4-subagents (HOME, XDG_*, TMPDIR all inside it)
+purpose: an independent opencode process (own cwd + data dir) whose primary agent uses subagents
+
+lead process pid 30932, sandbox $TMPDIR/ocsoma-pe/P4-lead-b (own HOME/XDG data/config, own git project)
+$ curl -s http://127.0.0.1:47142/path
+{"home":"/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P4-lead-b/home","state":"/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P4-lead-b/xdg/state/opencode","config":"/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P4-lead-b/xdg/config/opencode","worktree":"/private/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P4-lead-b/project","directory":"/private/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P4-lead-b/project"}
+[exit=0 wall=0.2s]
+
+$ sh -c lsof -p $(lsof -t -nP -iTCP:47142 -sTCP:LISTEN) | awk '{print $9}' | grep -E 'opencode.db$|/project$' | sort -u
+/private/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P4-lead-b/project
+/private/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P4-lead-b/xdg/data/opencode/opencode.db
+
+[exit=0 wall=0.3s]
+
+$ python3.12 -I /Users/techfreakworm/.soma/worktrees/claude-soma/claude-soma-manager/research/opencode-soma/probes/opencode/ocdrive.py --base http://127.0.0.1:47142 turn --session ses_edb563956ffeDxcyh7xaQhATO3 --model ollama/qwen3:32b --perm once --text You are a project lead. Delegate to your team: use the task tool with subagent_type general, description team member, prompt 'Reply with exactly TEAM-MEMBER-REPORTING'. Then reply with exactly what your team member returned.
+{
+ "session": "ses_edb563956ffeDxcyh7xaQhATO3",
+ "timeout": false,
+ "seen_busy": true,
+ "wall_s": 53.8,
+ "final_text": "TEAM-MEMBER-REPORTING",
+ "new_messages": [
+  {
+   "id": "msg_124a9c6fa001b2JeJ16LBxB0Od",
+   "role": "user",
+   "agent": "build",
+   "model": "qwen3:32b",
+   "created": 1791616468730,
+   "completed": null,
+   "tokens": null,
+   "finish": null,
+   "error": null,
+   "text": "You are a project lead. Delegate to your team: use the task tool with subagent_type general, description team member, prompt 'Reply with exactly TEAM-MEMBER-REPORTING'. Then reply with exactly what your team member returned.",
+   "tools": []
+  },
+  {
+   "id": "msg_124a9c7b0001kElCkqwgUMbHA4",
+   "role": "assistant",
+   "agent": "build",
+   "model": "qwen3:32b",
+   "created": 1791616468912,
+   "completed": 1791616503843,
+   "tokens": {
+    "total": 6909,
+    "input": 4995,
+    "output": 49,
+    "reasoning": 0,
+    "cache": {
+     "read": 1865,
+     "write": 0
+    }
+   },
+   "finish": "tool-calls",
+   "error": null,
+   "text": "",
+   "tools": [
+    {
+     "tool": "task",
+     "callID": "call_fx3xmbou",
+     "status": "completed",
+     "input": {
+      "command": "user request",
+      "description": "team member",
+      "prompt": "Reply with exactly TEAM-MEMBER-REPORTING",
+      "subagent_type": "general"
+     },
+     "output_head": "<task id=\"ses_edb55cc77ffe02w3BXTnDPc9Ey\" state=\"completed\">\n<task_result>\n TEAM-MEMBER-REPORTING\n</task_result>\n</task>",
+     "child_session": "ses_edb55cc77ffe02w3BXTnDPc9Ey",
+     "ms": 7133
+    }
+   ]
+  },
+  {
+   "id": "msg_124aa5026001M36MwcG13DKPCI",
+   "role": "assistant",
+   "agent": "build",
+   "model": "qwen3:32b",
+   "created": 1791616503846,
+   "completed": 1791616522258,
+   "tokens": {
+    "total": 6968,
+    "input": 2774,
+    "output": 7,
+    "reasoning": 0,
+    "cache": {
+     "read": 4187,
+     "write": 0
+    }
+   },
+   "finish": "stop",
+   "error": null,
+   "text": "TEAM-MEMBER-REPORTING",
+   "tools": []
+  }
+ ],
+ "permissions": [],
+ "children": [
+  "ses_edb55cc77ffe02w3BXTnDPc9Ey"
+ ]
+}
+
+[exit=0 wall=53.8s]
+
+$ sh -c curl -s 'http://127.0.0.1:47142/session/ses_edb563956ffeDxcyh7xaQhATO3/children' | jq -c '.[] | {id, parentID, title, directory}'
+{"id":"ses_edb55cc77ffe02w3BXTnDPc9Ey","parentID":"ses_edb563956ffeDxcyh7xaQhATO3","title":"team member (@general subagent)","directory":"/private/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P4-lead-b/project"}
+
+[exit=0 wall=0.0s]
+
+VERDICT: PASS — an independent opencode serve (own data dir and project) ran a primary that spawned a subagent team member (child session listed on its own API).
