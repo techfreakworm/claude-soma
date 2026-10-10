@@ -1,23 +1,180 @@
 # start-here reproduce
-date-utc: 2026-10-10T07:54:58Z
+date-utc: 2026-10-10T08:08:27Z
 purpose: literal commands from START-HERE.md run verbatim; each prints a key result
 
-$ printf '%s' '{"tool_name":"WebFetch","tool_input":{"url":"http://x"}}' | python3.12 scripts/orchestrator_gate.py
-{"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "deny", "permissionDecisionReason": "WebFetch is slow/multi-step \u2014 dispatch via Agent (model=opus, run_in_background=true) instead."}}
-$ tail -n1 research/opencode-soma/evidence/opencode/P8-serve/serve.log
-VERDICT: PASS — serve exposes a full OpenAPI HTTP+SSE API; sync and async prompts, basic-auth (401 without creds), run --attach, TUI attach and the web UI all worked on 127.0.0.1.
+$ python3.12 -I research/opencode-soma/probes/check_dod.py
+FAIL C1: research/opencode-soma/ARCHITECTURE.md has uncommitted changes (M)
+PASS C2: verdict paragraph ok; 12 rows valid (PARITY 1, DEGRADED 4, NEEDS-BUILD 7, IMPOSSIBLE 0)
+PASS C3: qualifying logs per group P1:8 P2:8 P3:3 P4:6 P5:3 P6:5 P7:1
+PASS C4: 44 neo4j bench row(s) with timings; container cold-start and RSS present
+PASS C5: P0 acceptance command at ROADMAP.md:38
+PASS C6: 12 ranked risks, each with a cheapest early test
+FAIL C7: no committed *.log under evidence/start-here/
+FAIL C8: 2 uncommitted path(s): research/opencode-soma/ARCHITECTURE.md (M), research/opencode-soma/evidence/start-here/reproduce.log (M)
+FAIL C9: research/opencode-soma/evidence/opencode/P2-hooks/activity.log ran at 2026-10-10T08:08:13Z, outside the isolation window [2026-10-10T05:48:44Z, 2026-10-10T07:58:24Z]; research/opencode-soma/evidence/opencode/P2-hooks/events.log ran at 2026-10-10T08:08:12Z, outside the isolation window [2026-10-10T05:48:44Z, 2026-10-10T07:58:24Z]; research/opencode-soma/evidence/opencode/P2-hooks/gate.log ran at 2026-10-10T08:08:13Z, outside the isolation window [2026-10-10T05:48:44Z, 2026-10-10T07:58:24Z]; research/opencode-soma/evidence/opencode/P2-hooks/inject.log ran at 2026-10-10T08:08:12Z, outside the isolation window [2026-10-10T05:48:44Z, 2026-10-10T07:58:24Z]; research/opencode-soma/evidence/opencode/P5-tmux/pane-analysis.log ran at 2026-10-10T08:08:14Z, outside the isolation window [2026-10-10T05:48:44Z, 2026-10-10T07:58:24Z]
+SKIP C10: re-runs only with --rerun (the final gate uses --rerun)
+PASS C11: 228 files scanned, no credential-shaped strings
+GATE: FAIL
 
-$ tail -n1 research/opencode-soma/evidence/opencode/P2-hooks/gate.log
+$ bash research/opencode-soma/probes/opencode/P2-hooks/analyze.sh
+VERDICT: PASS — the spy plugin saw 11 distinct hooks and 14 distinct bus event types in one session (lists above).
+VERDICT: PASS — chat.message injection (the additionalContext analog) re-read the file per prompt and the model quoted the latest value; system.transform also delivered the fresh value (proxy) but qwen3:32b repeated its stale earlier answer for that field.
 VERDICT: PASS — tool.execute.before blocked the primary's bash call before execution (sentinel absent, reason in the tool result) and exempted the subagent via a session.parentID lookup (the hook input itself carries only tool/sessionID/callID).
+VERDICT: PASS — every executed tool call in every session of the tree (built-in, MCP, task, the subagent's own calls) is in the activity log with args, session, parent session, agent, duration and result head; the gate-blocked attempt is on record in the gate's own log (later plugins never see a call an earlier plugin rejects).
 
-$ tail -n1 research/opencode-soma/evidence/opencode/P1-headless/crash-serve.log
-VERDICT: PASS — after kill -9 of serve mid-generation, the restarted serve returned the session and its history over HTTP (status idle, partial reply left incomplete) and continued it (MANGO-2290 recalled).
+$ bash research/opencode-soma/probes/opencode/P5-tmux/analyze.sh
+VERDICT: PARTIAL — every message was delivered intact and every reply reached the screen, but only column-aware parsing finds them all (the sidebar shares rows) and long replies are cut to the visible screen (alt-screen, no tmux scrollback).
 
-$ grep -m1 VERDICT research/opencode-soma/evidence/memory/bench-5000.log
-VERDICT: PASS — 31 backend x query rows at n=5000; all non-naive backends match the oracle on every run
+$ python3.12 research/opencode-soma/probes/memory/gen_memory.py --n-facts 5000 --out "$TMPDIR/sh-mem-5k"
+{
+ "by_scope_parent": 590,
+ "by_type": {
+  "feedback": 64,
+  "project": 3765,
+  "reference": 1140,
+  "user": 31
+ },
+ "by_visibility": {
+  "global": 280,
+  "local": 1230,
+  "parent": 3413,
+  "targeted": 77
+ },
+ "dataset_path": "/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T//sh-mem-5k/dataset-5000.json",
+ "dataset_sha256": "110ebab5ab3717a0f84f6b89c49ecdff36fa2534540d6b188005339e7df52adf",
+ "days_span": 179.9,
+ "entities_in_2plus_leads": 46,
+ "fact_source_kinds": {
+  "file": 285,
+  "session": 2278,
+  "telegram": 734,
+  "tool": 1703
+ },
+ "n_active": 4488,
+ "n_entities": 251,
+ "n_facts": 5000,
+ "n_leads": 12,
+ "n_scopes": 13,
+ "n_sources": 2758,
+ "n_superseded": 512,
+ "planted": {
+  "alias_mentions": 694,
+  "contradictions_resolved": 100,
+  "contradictions_unresolved": 125,
+  "derived": 250,
+  "duplicates": 350,
+  "promoted": 75,
+  "update_chains": 62,
+  "updates": 250
+ },
+ "q5_unresolved_groups": 125,
+ "result_sizes": {
+  "Q1": [
+   86,
+   84,
+   91,
+   52,
+   41,
+   74,
+   11,
+   12,
+   13,
+   11
+  ],
+  "Q3": [
+   10,
+   10,
+   10,
+   10,
+   10,
+   10,
+   10,
+   10,
+   10,
+   10
+  ],
+  "Q4": [
+   44,
+   36,
+   42,
+   19,
+   20,
+   18,
+   4,
+   5,
+   4,
+   6
+  ],
+  "Q5": [
+   125
+  ],
+  "Q6": [
+   285,
+   461,
+   631,
+   184,
+   104,
+   163,
+   742,
+   928,
+   804,
+   1164
+  ],
+  "Q7a": [
+   248,
+   244,
+   241,
+   252,
+   254,
+   258,
+   239,
+   265,
+   247,
+   282
+  ],
+  "Q7b": [
+   258,
+   259,
+   256,
+   261,
+   257,
+   257,
+   253,
+   256,
+   261,
+   258
+  ],
+  "Q8": [
+   1,
+   2,
+   3,
+   2,
+   1,
+   22,
+   26,
+   22,
+   23,
+   25
+  ]
+ },
+ "self_check_problems": [],
+ "source_kinds": {
+  "file": 240,
+  "session": 801,
+  "telegram": 429,
+  "tool": 1288
+ },
+ "truth_path": "/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T//sh-mem-5k/truth-5000.json",
+ "truth_sha256": "ad02781ed9d86926b13e8efcf44d96f5f4790c3df260d9e83d9c7d9e649e4a20"
+}
 
-$ tail -n1 research/opencode-soma/evidence/opencode/P5-tmux/tmux.log
-VERDICT: PARTIAL — send-keys + capture-pane scraping got 5/6 replies vs HTTP 6/6; failure modes per case above.
+$ python3.12 -I research/opencode-soma/probes/opencode/sqlite_mem_bench.py --data "$TMPDIR/sh-mem-5k" --n-facts 5000
+sqlite-only memory bench: n_facts=5000 entities=251
+  build (facts + fact_entity + FTS5, in-memory): 19 ms
+  Q1 entity-recall queries: 10
+  query latency ms: p50=0.603 p95=0.692 max=0.692
+  recall=1.000 precision=1.000 vs the generated oracle
+VERDICT: PASS - SQLite entity recall at n=5000 is exact (recall=1.000 precision=1.000); full multi-backend matrix is in evidence/memory/bench-results.json
 
 $ python3.12 -I research/opencode-soma/probes/opencode/turn_timing.py research/opencode-soma/evidence/opencode
 model                 n wall p50 wall p90 ttfb p50 decode tok/s p50 prefill tok/s p50 prompt tok p50 max prompt

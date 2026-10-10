@@ -1,5 +1,5 @@
 # P5-tmux/pane-analysis.log
-date-utc: 2026-10-10T08:08:14Z
+date-utc: 2026-10-10T08:08:30Z
 probe-script: research/opencode-soma/probes/opencode/P5-tmux/analyze.sh (after run.sh)
 opencode-version: 1.18.8
 model: n/a (no LLM)
@@ -22,6 +22,6 @@ dollar     whole-line=ok  column-aware=ok
 longreply  whole-line=ok  column-aware=ok
 whole-line 5/6, column-aware 6/6
 
-[exit=0 wall=0.0s]
+[exit=0 wall=0.1s]
 
 VERDICT: PARTIAL — every message was delivered intact and every reply reached the screen, but only column-aware parsing finds them all (the sidebar shares rows) and long replies are cut to the visible screen (alt-screen, no tmux scrollback).

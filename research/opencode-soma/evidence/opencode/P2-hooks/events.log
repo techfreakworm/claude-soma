@@ -1,5 +1,5 @@
 # P2-hooks/events.log
-date-utc: 2026-10-10T08:08:12Z
+date-utc: 2026-10-10T08:08:27Z
 probe-script: research/opencode-soma/probes/opencode/P2-hooks/analyze.sh (after run.sh)
 opencode-version: 1.18.8
 model: ollama/qwen3:32b
@@ -79,7 +79,7 @@ $ sh -c for h in tool.execute.before tool.execute.after permission.ask chat.mess
 {"hook":"shell.env","input":"{\"cwd\":\"/private/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P2-hooks/project\",\"sessionID\":\"ses_edb7b3effffejAhCo0vFYAcFq5\",\"callID\":\"call_lggclbdl\"}"}
 {"hook":"shell.env","input":"{\"cwd\":\"/private/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P2-hooks/project\",\"sessionID\":\"ses_edb7e536affeYi9nZHkRfT4HkI\",\"callID\":\"call_a5x0hu7r\"}"}
 
-[exit=0 wall=0.0s]
+[exit=0 wall=0.1s]
 
 ## permission-related bus events (raw)
 $ sh -c jq -c 'select(.kind=="event" and (.type|test("permission")))' '/Users/techfreakworm/.soma/worktrees/claude-soma/claude-soma-manager/research/opencode-soma/evidence/opencode/P2-hooks/spy.jsonl'
