@@ -1,0 +1,19 @@
+# P4-subagents/capabilities.log
+date-utc: 2026-10-10T07:40:04Z
+probe-script: research/opencode-soma/probes/opencode/P4-subagents/capabilities.sh
+opencode-version: 1.18.8
+model: none
+sandbox: $TMPDIR/ocsoma-pe/P4-caps (HOME, XDG_*, TMPDIR all inside it)
+purpose: GET /experimental/capabilities gates background subagents on OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS
+
+## flag off:
+$ sh -c curl -s 'http://127.0.0.1:47148/experimental/capabilities'
+{"backgroundSubagents":false}
+[exit=0 wall=0.2s]
+
+## flag on:
+$ sh -c curl -s 'http://127.0.0.1:47148/experimental/capabilities'
+{"backgroundSubagents":true}
+[exit=0 wall=0.1s]
+
+VERDICT: PASS — GET /experimental/capabilities reports backgroundSubagents=true only with OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS set; the P4 background.log run exercised the resulting task background=true path.
