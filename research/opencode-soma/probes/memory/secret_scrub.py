@@ -24,7 +24,8 @@ PATTERNS = [
 ]
 URL_CRED = re.compile(r"(\b[a-z][a-z0-9+.-]*://[^/\s:@]+:)([^@\s/]+)(@)", re.I)
 PHRASE = re.compile(r"(?i)\b(pass(?:word|code|phrase)?|pwd|secret|api[ _-]?key|token)\b([^\n.]{0,40}?\b(?:is|:|=)\s*)(\S+)")
-OTP = re.compile(r"(?i)\b(one[- ]time|otp|verification|login|security|2fa|mfa)\b([^\n]{0,30}?)\b(\d{4,8})\b")
+OTP = re.compile(r"(?i)\b((?:one[- ]time|otp|verification|login|security|2fa|mfa)(?:\s+(?:login|bank|sms))?\s+(?:code|pin|passcode))\b"
+                 r"([^\n]{0,20}?)\b(\d{4,8})\b")
 WORD = re.compile(r"[A-Za-z0-9_\-+/=]{24,}")
 
 

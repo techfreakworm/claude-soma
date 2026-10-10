@@ -1,0 +1,18 @@
+date_utc: 2026-10-10T07:04:54Z
+command: python3.12 scrub_eval.py
+scrubbed E04: Here is the Stripe test key for the harbor-crm webhook: [REDACTED]. Stripe bills us on the 5th of each month.
+scrubbed E11: The NAS admin password is [REDACTED] keep it somewhere. The NAS IP is 10.0.4.23.
+scrubbed E16: CI is failing because the token expired. New one: [REDACTED]. The CI for ember-voice runs on GitHub Actions.
+scrubbed E20: AWS creds for the export job: [REDACTED] / [REDACTED]. The export job writes to the bucket ledger-exports-eu.
+scrubbed E21: The bank one-time code is [REDACTED], enter it quickly. Also the Acme Bank card renews in March.
+scrubbed R03: My OpenAI key is [REDACTED]
+scrubbed R08: GitHub token for the CI: [REDACTED]
+scrubbed R11: The password for the router admin page is [REDACTED]
+scrubbed R15: My one-time login code is [REDACTED]
+scrubbed R19: Here is my SSH private key: [REDACTED]
+scrubbed R22: Stripe live secret for harbor-crm: [REDACTED]
+scrubbed R25: The ledger database URL is postgres://admin:[REDACTED]@10.0.4.23:5432/ledger
+scrubbed R28: The office Wi-Fi password is [REDACTED]
+planted secrets caught 14/14; texts without secrets left unchanged 107/107
+benchmark corpus (dataset-50000.json, no secrets planted): 0 of 50000 fact sentences altered
+VERDICT: PASS — scrubber removed 14/14 planted secrets, altered 0 of 107 secret-free Track B inputs and 0 of 50000 benchmark corpus sentences (patterns written with knowledge of the planted formats)
