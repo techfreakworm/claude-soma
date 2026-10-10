@@ -1,0 +1,30 @@
+date_utc: 2026-10-10T05:47:24Z
+command: docker pull neo4j:2026.09.0-community
+docker: 29.8.0 client / 29.8.0 server (linux/arm64)
+host: Darwin 25.4.0 arm64
+image_present_before_pull: no (cold pull)
+2026.09.0-community: Pulling from library/neo4j
+4f4fb700ef54: Pulling fs layer
+57541cab1acc: Pulling fs layer
+4995008afe2e: Pulling fs layer
+c7ef46ecf69d: Pulling fs layer
+4f4fb700ef54: Already exists
+c7ef46ecf69d: Download complete
+5460e8a22352: Download complete
+1aaeacf3a645: Download complete
+57541cab1acc: Download complete
+c7ef46ecf69d: Pull complete
+57541cab1acc: Pull complete
+4995008afe2e: Download complete
+4f4fb700ef54: Pull complete
+4995008afe2e: Pull complete
+Digest: sha256:6f3f17e72d69bb6f26b03f6186f5afb15a201f8b460bb69b0cd8030717f9f01a
+Status: Downloaded newer image for neo4j:2026.09.0-community
+docker.io/library/neo4j:2026.09.0-community
+pull_wall_seconds: 12.2
+image_size_bytes: 1122406780
+image_size_mb: 1122.4
+image_id: sha256:6f3f17e72d69bb6f26b03f6186f5afb15a201f8b460bb69b0cd8030717f9f01a
+image_arch: linux/arm64
+docker images: neo4j:2026.09.0-community 1.13GB
+VERDICT: PASS — pulled neo4j:2026.09.0-community in 12.2s; image is 1122 MB unpacked (see image_present_before_pull for cold vs cached)

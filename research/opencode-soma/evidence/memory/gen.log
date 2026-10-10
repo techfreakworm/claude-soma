@@ -1,0 +1,424 @@
+date_utc: 2026-10-10T06:05:43Z
+command: PYTHONHASHSEED=0 python3.12 gen_memory.py --n-facts {600,5000,50000} --seed 7 --out $SCRATCH/data
+python: Python 3.12.10  host: Darwin 25.4.0 arm64
+== n=600
+{
+ "by_scope_parent": 110,
+ "by_type": {
+  "feedback": 10,
+  "project": 415,
+  "reference": 155,
+  "user": 20
+ },
+ "by_visibility": {
+  "global": 54,
+  "local": 136,
+  "parent": 395,
+  "targeted": 15
+ },
+ "dataset_path": "/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T//ocsoma-me/data/dataset-600.json",
+ "dataset_sha256": "870a21b44279d6253c1c1bff74fb25b9e09b412fc58353eaf85d94c51925a28d",
+ "days_span": 179.7,
+ "entities_in_2plus_leads": 42,
+ "fact_source_kinds": {
+  "file": 29,
+  "session": 252,
+  "telegram": 123,
+  "tool": 196
+ },
+ "n_active": 539,
+ "n_entities": 143,
+ "n_facts": 600,
+ "n_leads": 8,
+ "n_scopes": 9,
+ "n_sources": 310,
+ "n_superseded": 61,
+ "planted": {
+  "alias_mentions": 77,
+  "contradictions_resolved": 12,
+  "contradictions_unresolved": 15,
+  "derived": 30,
+  "duplicates": 42,
+  "promoted": 9,
+  "update_chains": 7,
+  "updates": 30
+ },
+ "q5_unresolved_groups": 15,
+ "result_sizes": {
+  "Q1": [
+   5,
+   6,
+   25,
+   7,
+   7,
+   14,
+   5,
+   5,
+   4,
+   2
+  ],
+  "Q3": [
+   10,
+   10,
+   10,
+   10,
+   10,
+   10,
+   10,
+   10
+  ],
+  "Q4": [
+   29,
+   23,
+   22,
+   6,
+   7,
+   15,
+   3,
+   2,
+   2,
+   5
+  ],
+  "Q5": [
+   15
+  ],
+  "Q6": [
+   78,
+   56,
+   46,
+   69,
+   70,
+   83,
+   292,
+   112,
+   170,
+   253
+  ],
+  "Q7a": [
+   48,
+   46,
+   32,
+   47,
+   33,
+   45,
+   61,
+   42
+  ],
+  "Q7b": [
+   49,
+   50,
+   49,
+   50,
+   49,
+   50,
+   51,
+   49
+  ],
+  "Q8": [
+   2,
+   1,
+   2,
+   1,
+   1,
+   1,
+   5,
+   3,
+   4,
+   3
+  ]
+ },
+ "self_check_problems": [],
+ "source_kinds": {
+  "file": 26,
+  "session": 93,
+  "telegram": 55,
+  "tool": 136
+ },
+ "truth_path": "/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T//ocsoma-me/data/truth-600.json",
+ "truth_sha256": "28c10da3809c99a70154ebbcc562a9b7c77f1fe65aef6a2219153c4c1a07fe80"
+}
+== n=5000
+{
+ "by_scope_parent": 590,
+ "by_type": {
+  "feedback": 64,
+  "project": 3765,
+  "reference": 1140,
+  "user": 31
+ },
+ "by_visibility": {
+  "global": 280,
+  "local": 1230,
+  "parent": 3413,
+  "targeted": 77
+ },
+ "dataset_path": "/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T//ocsoma-me/data/dataset-5000.json",
+ "dataset_sha256": "110ebab5ab3717a0f84f6b89c49ecdff36fa2534540d6b188005339e7df52adf",
+ "days_span": 179.9,
+ "entities_in_2plus_leads": 46,
+ "fact_source_kinds": {
+  "file": 285,
+  "session": 2278,
+  "telegram": 734,
+  "tool": 1703
+ },
+ "n_active": 4488,
+ "n_entities": 251,
+ "n_facts": 5000,
+ "n_leads": 12,
+ "n_scopes": 13,
+ "n_sources": 2758,
+ "n_superseded": 512,
+ "planted": {
+  "alias_mentions": 694,
+  "contradictions_resolved": 100,
+  "contradictions_unresolved": 125,
+  "derived": 250,
+  "duplicates": 350,
+  "promoted": 75,
+  "update_chains": 62,
+  "updates": 250
+ },
+ "q5_unresolved_groups": 125,
+ "result_sizes": {
+  "Q1": [
+   86,
+   84,
+   91,
+   52,
+   41,
+   74,
+   11,
+   12,
+   13,
+   11
+  ],
+  "Q3": [
+   10,
+   10,
+   10,
+   10,
+   10,
+   10,
+   10,
+   10,
+   10,
+   10
+  ],
+  "Q4": [
+   44,
+   36,
+   42,
+   19,
+   20,
+   18,
+   4,
+   5,
+   4,
+   6
+  ],
+  "Q5": [
+   125
+  ],
+  "Q6": [
+   285,
+   461,
+   631,
+   184,
+   104,
+   163,
+   742,
+   928,
+   804,
+   1164
+  ],
+  "Q7a": [
+   248,
+   244,
+   241,
+   252,
+   254,
+   258,
+   239,
+   265,
+   247,
+   282
+  ],
+  "Q7b": [
+   258,
+   259,
+   256,
+   261,
+   257,
+   257,
+   253,
+   256,
+   261,
+   258
+  ],
+  "Q8": [
+   1,
+   2,
+   3,
+   2,
+   1,
+   22,
+   26,
+   22,
+   23,
+   25
+  ]
+ },
+ "self_check_problems": [],
+ "source_kinds": {
+  "file": 240,
+  "session": 801,
+  "telegram": 429,
+  "tool": 1288
+ },
+ "truth_path": "/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T//ocsoma-me/data/truth-5000.json",
+ "truth_sha256": "ad02781ed9d86926b13e8efcf44d96f5f4790c3df260d9e83d9c7d9e649e4a20"
+}
+== n=50000
+{
+ "by_scope_parent": 1284,
+ "by_type": {
+  "feedback": 356,
+  "project": 40517,
+  "reference": 9107,
+  "user": 20
+ },
+ "by_visibility": {
+  "global": 922,
+  "local": 11141,
+  "parent": 37869,
+  "targeted": 68
+ },
+ "dataset_path": "/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T//ocsoma-me/data/dataset-50000.json",
+ "dataset_sha256": "752ca976be0c7ca764edef0ddb5c52de57905dce0e5172ec4f46b16ced52d18c",
+ "days_span": 180.0,
+ "entities_in_2plus_leads": 46,
+ "fact_source_kinds": {
+  "file": 2927,
+  "session": 22374,
+  "telegram": 5569,
+  "tool": 19130
+ },
+ "n_active": 44875,
+ "n_entities": 2172,
+ "n_facts": 50000,
+ "n_leads": 125,
+ "n_scopes": 126,
+ "n_sources": 29430,
+ "n_superseded": 5125,
+ "planted": {
+  "alias_mentions": 7301,
+  "contradictions_resolved": 1000,
+  "contradictions_unresolved": 1250,
+  "derived": 2500,
+  "duplicates": 3500,
+  "promoted": 750,
+  "update_chains": 625,
+  "updates": 2500
+ },
+ "q5_unresolved_groups": 1250,
+ "result_sizes": {
+  "Q1": [
+   977,
+   959,
+   1077,
+   885,
+   915,
+   657,
+   13,
+   16,
+   11,
+   16
+  ],
+  "Q3": [
+   10,
+   10,
+   10,
+   10,
+   10,
+   10,
+   10,
+   10,
+   10,
+   10
+  ],
+  "Q4": [
+   48,
+   49,
+   48,
+   11,
+   6,
+   14,
+   4,
+   5,
+   5,
+   5
+  ],
+  "Q5": [
+   1250
+  ],
+  "Q6": [
+   80,
+   0,
+   79,
+   27,
+   66,
+   0,
+   1944,
+   1740,
+   1440,
+   2758
+  ],
+  "Q7a": [
+   244,
+   286,
+   242,
+   333,
+   229,
+   280,
+   284,
+   280,
+   266,
+   238
+  ],
+  "Q7b": [
+   903,
+   905,
+   903,
+   903,
+   903,
+   903,
+   904,
+   903,
+   905,
+   904
+  ],
+  "Q8": [
+   3,
+   1,
+   3,
+   5,
+   1,
+   36,
+   44,
+   69,
+   40,
+   38
+  ]
+ },
+ "self_check_problems": [],
+ "source_kinds": {
+  "file": 2489,
+  "session": 8169,
+  "telegram": 4163,
+  "tool": 14609
+ },
+ "truth_path": "/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T//ocsoma-me/data/truth-50000.json",
+ "truth_sha256": "c1d8228cc38b6caf9b691055f1a8c0bc9314057b5861b2cebbdda198c862b5ca"
+}
+VERDICT: PASS — three seeded corpora generated; the oracle self-check (planted unresolved contradictions == Q5 answer, no dangling refs, timestamps in the 180-day window) passed at every scale

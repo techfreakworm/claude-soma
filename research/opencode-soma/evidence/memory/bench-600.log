@@ -1,0 +1,79 @@
+date_utc: 2026-10-10T06:05:49Z
+command: PYTHONHASHSEED=0 python bench.py --data /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T//ocsoma-me/data --n-facts 600 --runs 30 --backends files,naive,sqlite,neo4j
+python: 3.12.10  sqlite: 3.53.4  ripgrep: ripgrep 15.1.0  neo4j-driver: 6.4.0  image: neo4j:2026.09.0-community
+host: Darwin 25.4.0 arm64
+dataset: n_facts=600 entities=143 sources=310 scopes=9 planted={"alias_mentions": 77, "contradictions_resolved": 12, "contradictions_unresolved": 15, "derived": 30, "duplicates": 42, "promoted": 9, "update_chains": 7, "updates": 30}
+loc: {"files": {"per_query": {"Q1": 8, "Q2": 8, "Q3": 11, "Q4": 11, "Q5": 7, "Q6": 8, "Q7a": 2, "Q7b": 3, "Q8": 16, "W1": 24}, "load_and_helpers": 56}, "sqlite": {"per_query": {"Q1": 3, "Q2": 9, "Q3": 7, "Q4": 8, "Q5": 4, "Q6": 13, "Q7a": 2, "Q7b": 3, "Q8": 6, "W1": 17}, "load_and_helpers": 32}, "neo4j": {"per_query": {"Q1": 3, "Q2": 7, "Q3": 7, "Q4": 7, "Q5": 7, "Q6": 7, "Q7a": 3, "Q7b": 3, "Q8": 5, "W1": 17}, "load_and_helpers": 41}, "naive": {"per_query": {"Q1": 8}, "load_and_helpers": 4}}
+== backend files
+load: {"load_s": 0.073, "disk_kb": 2492, "n_files": 609}
+{"backend": "files", "query": "Q1", "n_facts": 600, "p50_ms": 13.268, "p95_ms": 13.791, "first_ms": 18.164, "correct": 1.0, "runs": 31, "warm_runs": 30, "instances": 10, "connect_ms": 0.004}
+{"backend": "files", "query": "Q2", "n_facts": 600, "p50_ms": 18.992, "p95_ms": 20.299, "first_ms": 17.948, "correct": 1.0, "runs": 31, "warm_runs": 30, "instances": 1, "connect_ms": 0.001}
+{"backend": "files", "query": "Q3", "n_facts": 600, "p50_ms": 12.963, "p95_ms": 14.153, "first_ms": 14.412, "correct": 1.0, "runs": 31, "warm_runs": 30, "instances": 8, "connect_ms": 0.0}
+{"backend": "files", "query": "Q4", "n_facts": 600, "p50_ms": 0.394, "p95_ms": 0.684, "first_ms": 0.853, "correct": 1.0, "runs": 31, "warm_runs": 30, "instances": 10, "connect_ms": 0.001}
+{"backend": "files", "query": "Q5", "n_facts": 600, "p50_ms": 23.709, "p95_ms": 24.854, "first_ms": 21.099, "correct": 1.0, "runs": 31, "warm_runs": 30, "instances": 1, "connect_ms": 0.001}
+{"backend": "files", "query": "Q6", "n_facts": 600, "p50_ms": 20.105, "p95_ms": 21.781, "first_ms": 19.982, "correct": 1.0, "runs": 31, "warm_runs": 30, "instances": 10, "connect_ms": 0.001}
+{"backend": "files", "query": "Q7a", "n_facts": 600, "p50_ms": 10.562, "p95_ms": 12.898, "first_ms": 11.543, "correct": 1.0, "runs": 31, "warm_runs": 30, "instances": 8, "connect_ms": 0.001}
+{"backend": "files", "query": "Q7b", "n_facts": 600, "p50_ms": 11.337, "p95_ms": 12.694, "first_ms": 10.78, "correct": 1.0, "runs": 31, "warm_runs": 30, "instances": 8, "connect_ms": 0.001}
+{"backend": "files", "query": "Q8", "n_facts": 600, "p50_ms": 15.729, "p95_ms": 22.889, "first_ms": 22.706, "correct": 1.0, "runs": 31, "warm_runs": 30, "instances": 10, "connect_ms": 0.0}
+{"backend": "files", "query": "W1", "n_facts": 600, "p50_ms": 10.414, "p95_ms": 25.839, "first_ms": 15.11, "correct": 1.0, "runs": 36, "warm_runs": 35, "instances": 36, "connect_ms": 0.001}
+== backend naive
+load: {"load_s": 0.0, "disk_kb": 0, "n_files": 0, "note": "reuses the files backend tree"}
+{"backend": "naive", "query": "Q1", "n_facts": 600, "p50_ms": 16.395, "p95_ms": 17.124, "first_ms": 16.785, "correct": 0.1935, "runs": 31, "warm_runs": 30, "instances": 10, "connect_ms": 0.009, "mean_precision": 0.8236, "mean_recall": 0.8918}
+== backend sqlite
+load: {"load_s": 0.019, "disk_kb": 504}
+{"backend": "sqlite", "query": "Q1", "n_facts": 600, "p50_ms": 0.012, "p95_ms": 0.029, "first_ms": 0.071, "correct": 1.0, "runs": 31, "warm_runs": 30, "instances": 10, "connect_ms": 0.639}
+{"backend": "sqlite", "query": "Q2", "n_facts": 600, "p50_ms": 0.827, "p95_ms": 0.899, "first_ms": 1.098, "correct": 1.0, "runs": 31, "warm_runs": 30, "instances": 1, "connect_ms": 0.627}
+{"backend": "sqlite", "query": "Q3", "n_facts": 600, "p50_ms": 0.061, "p95_ms": 0.076, "first_ms": 0.201, "correct": 1.0, "runs": 31, "warm_runs": 30, "instances": 8, "connect_ms": 0.856}
+{"backend": "sqlite", "query": "Q4", "n_facts": 600, "p50_ms": 0.05, "p95_ms": 0.087, "first_ms": 0.23, "correct": 1.0, "runs": 31, "warm_runs": 30, "instances": 10, "connect_ms": 0.635}
+{"backend": "sqlite", "query": "Q5", "n_facts": 600, "p50_ms": 0.308, "p95_ms": 0.333, "first_ms": 0.456, "correct": 1.0, "runs": 31, "warm_runs": 30, "instances": 1, "connect_ms": 0.681}
+{"backend": "sqlite", "query": "Q6", "n_facts": 600, "p50_ms": 0.138, "p95_ms": 0.356, "first_ms": 0.349, "correct": 1.0, "runs": 31, "warm_runs": 30, "instances": 10, "connect_ms": 0.63}
+{"backend": "sqlite", "query": "Q7a", "n_facts": 600, "p50_ms": 0.024, "p95_ms": 0.034, "first_ms": 0.1, "correct": 1.0, "runs": 31, "warm_runs": 30, "instances": 8, "connect_ms": 0.663}
+{"backend": "sqlite", "query": "Q7b", "n_facts": 600, "p50_ms": 0.026, "p95_ms": 0.034, "first_ms": 0.085, "correct": 1.0, "runs": 31, "warm_runs": 30, "instances": 8, "connect_ms": 0.572}
+{"backend": "sqlite", "query": "Q8", "n_facts": 600, "p50_ms": 0.027, "p95_ms": 0.04, "first_ms": 0.139, "correct": 1.0, "runs": 31, "warm_runs": 30, "instances": 10, "connect_ms": 0.552}
+{"backend": "sqlite", "query": "W1", "n_facts": 600, "p50_ms": 0.177, "p95_ms": 0.229, "first_ms": 0.035, "correct": 1.0, "runs": 36, "warm_runs": 35, "instances": 36, "connect_ms": 0.543}
+== backend neo4j
+load: {"load_s": 1.803, "disk_kb": 528372, "fresh_start_to_bolt_s": 8.48, "idle_mem_mb_before_load": 882.8, "mem_mb_after_load": 946.5}
+{"backend": "neo4j", "query": "Q1", "n_facts": 600, "p50_ms": 4.124, "p95_ms": 9.352, "first_ms": 141.315, "correct": 1.0, "runs": 31, "warm_runs": 30, "instances": 10, "connect_ms": 43.555}
+{"backend": "neo4j", "query": "Q2", "n_facts": 600, "p50_ms": 6.734, "p95_ms": 9.913, "first_ms": 138.286, "correct": 1.0, "runs": 31, "warm_runs": 30, "instances": 1, "connect_ms": 25.684}
+{"backend": "neo4j", "query": "Q3", "n_facts": 600, "p50_ms": 3.965, "p95_ms": 7.198, "first_ms": 160.561, "correct": 1.0, "runs": 31, "warm_runs": 30, "instances": 8, "connect_ms": 21.405}
+{"backend": "neo4j", "query": "Q4", "n_facts": 600, "p50_ms": 2.644, "p95_ms": 4.145, "first_ms": 147.163, "correct": 1.0, "runs": 31, "warm_runs": 30, "instances": 10, "connect_ms": 20.2}
+{"backend": "neo4j", "query": "Q5", "n_facts": 600, "p50_ms": 5.092, "p95_ms": 11.903, "first_ms": 58.625, "correct": 1.0, "runs": 31, "warm_runs": 30, "instances": 1, "connect_ms": 20.144}
+{"backend": "neo4j", "query": "Q6", "n_facts": 600, "p50_ms": 5.026, "p95_ms": 9.851, "first_ms": 143.222, "correct": 1.0, "runs": 31, "warm_runs": 30, "instances": 10, "connect_ms": 27.397}
+{"backend": "neo4j", "query": "Q7a", "n_facts": 600, "p50_ms": 2.652, "p95_ms": 3.362, "first_ms": 32.173, "correct": 1.0, "runs": 31, "warm_runs": 30, "instances": 8, "connect_ms": 19.54}
+{"backend": "neo4j", "query": "Q7b", "n_facts": 600, "p50_ms": 3.177, "p95_ms": 4.94, "first_ms": 33.514, "correct": 1.0, "runs": 31, "warm_runs": 30, "instances": 8, "connect_ms": 19.472}
+{"backend": "neo4j", "query": "Q8", "n_facts": 600, "p50_ms": 3.273, "p95_ms": 7.784, "first_ms": 98.929, "correct": 1.0, "runs": 31, "warm_runs": 30, "instances": 10, "connect_ms": 20.007}
+{"backend": "neo4j", "query": "W1", "n_facts": 600, "p50_ms": 10.466, "p95_ms": 66.463, "first_ms": 31.273, "correct": 1.0, "runs": 36, "warm_runs": 35, "instances": 36, "connect_ms": 18.271}
+neo4j mem during bench: {"max_mb": 1020.5, "median_mb": 1010.2, "n_samples": 2}
+summary (backend query p50_ms p95_ms first_ms correct):
+  files   Q1       13.268     13.791     18.164 1.0
+  files   Q2       18.992     20.299     17.948 1.0
+  files   Q3       12.963     14.153     14.412 1.0
+  files   Q4        0.394      0.684      0.853 1.0
+  files   Q5       23.709     24.854     21.099 1.0
+  files   Q6       20.105     21.781     19.982 1.0
+  files   Q7a      10.562     12.898     11.543 1.0
+  files   Q7b      11.337     12.694     10.780 1.0
+  files   Q8       15.729     22.889     22.706 1.0
+  files   W1       10.414     25.839     15.110 1.0
+  naive   Q1       16.395     17.124     16.785 0.1935
+  sqlite  Q1        0.012      0.029      0.071 1.0
+  sqlite  Q2        0.827      0.899      1.098 1.0
+  sqlite  Q3        0.061      0.076      0.201 1.0
+  sqlite  Q4        0.050      0.087      0.230 1.0
+  sqlite  Q5        0.308      0.333      0.456 1.0
+  sqlite  Q6        0.138      0.356      0.349 1.0
+  sqlite  Q7a       0.024      0.034      0.100 1.0
+  sqlite  Q7b       0.026      0.034      0.085 1.0
+  sqlite  Q8        0.027      0.040      0.139 1.0
+  sqlite  W1        0.177      0.229      0.035 1.0
+  neo4j   Q1        4.124      9.352    141.315 1.0
+  neo4j   Q2        6.734      9.913    138.286 1.0
+  neo4j   Q3        3.965      7.198    160.561 1.0
+  neo4j   Q4        2.644      4.145    147.163 1.0
+  neo4j   Q5        5.092     11.903     58.625 1.0
+  neo4j   Q6        5.026      9.851    143.222 1.0
+  neo4j   Q7a       2.652      3.362     32.173 1.0
+  neo4j   Q7b       3.177      4.940     33.514 1.0
+  neo4j   Q8        3.273      7.784     98.929 1.0
+  neo4j   W1       10.466     66.463     31.273 1.0
+VERDICT: PASS — 31 backend x query rows at n=600; all non-naive backends match the oracle on every run
