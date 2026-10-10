@@ -1,0 +1,168 @@
+# P9-compat/compat.log
+date-utc: 2026-10-10T07:37:10Z
+probe-script: research/opencode-soma/probes/opencode/P9-compat/run.sh
+opencode-version: 1.18.8
+model: none
+sandbox: $TMPDIR/ocsoma-pe/P9-compat (HOME, XDG_*, TMPDIR all inside it)
+purpose: claude-soma skills/agents/commands loading under opencode 1.18.8 (no LLM)
+
+## (a) opencode debug skill  (3 claude-soma skills with Claude allowed-tools frontmatter in .opencode/skill/)
+$ sh -c cd '/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9-compat/project' && '/Users/techfreakworm/.opencode/bin/opencode' debug skill 2>&1
+[
+  {
+    "name": "customize-opencode",
+    "description": "Use ONLY when the user is editing or creating opencode's own configuration: opencode.json, opencode.jsonc, files under .opencode/, or files under ~/.config/opencode/. Also use when creating or fixing opencode agents, subagents, skills, plugins, MCP servers, or permission rules. Do not use for the user's own application code, or for any project that is not configuring opencode itself.",
+    "location": "<built-in>",
+    "content": "<!--\n  Built-in skill. Name and description are registered in code at\n  packages/core/src/plugin/skill.ts\n  and CUSTOMIZE_OPENCODE_SKILL_DESCRIPTION). The body below becomes the\n  skill's content.\n-->\n\n# Customizing opencode\n\nopencode validates its own config strictly and refuses to start when a field\nis wrong. The shapes below cover the common surface area, but they are a\n**summary, not the source of truth**.\n\n## Full schema reference\n\nThe authoritative list of every config option — with field types, enums,\ndefaults, and descriptions — lives in the published JSON Schema:\n\n**<https://opencode.ai/config.json>**\n\nIf a field is not documented in this skill, or you need to confirm an exact\nshape before writing config, **fetch that URL and read the schema directly**\nrather than guessing. opencode hard-fails on invalid config, so the cost of a\nwrong shape is a broken startup.\n\nIndependently, every `opencode.json` should declare\n`\"$schema\": \"https://opencode.ai/config.json\"` so the user's editor catches\nmistakes as they type.\n\n## Applying changes\n\nConfig is loaded once when opencode starts and is not hot-reloaded. After\nsaving changes to `opencode.json`, an agent file, a skill, a plugin, or any\nother config-time file, **tell the user to quit and restart opencode** for\nthe changes to take effect. The running session will keep using the\nalready-loaded config until then.\n\n## Where files live\n\n| Scope                         | Path                                                                                                                      |\n| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------- |\n| Project config                | `./opencode.json`, `./opencode.jsonc`, or `.opencode/opencode.json` (opencode walks up from the cwd to the worktree root) |\n| Global config                 | `~/.config/opencode/opencode.json` (NOT `~/.opencode/`)                                                                   |\n| Project agents                | `.opencode/agent/<name>.md` or `.opencode/agents/<name>.md`                                                               |\n| Global agents                 | `~/.config/opencode/agent(s)/<name>.md`                                                                                   |\n| Project commands              | `.opencode/command/<name>.md` or `.opencode/commands/<name>.md`                                                           |\n| Global commands               | `~/.config/opencode/command(s)/<name>.md`                                                                                 |\n| Project skills                | `.opencode/skill(s)/<name>/SKILL.md`                                                                                      |\n| Global skills                 | `~/.config/opencode/skill(s)/<name>/SKILL.md`                                                                             |\n| External skills (auto-loaded) | `~/.claude/skills/<name>/SKILL.md`, `~/.agents/skills/<name>/SKILL.md`                                                    |\n\nConfigs from each scope are deep-merged. Project overrides global. Unknown\ntop-level keys in `opencode.json` are rejected with `ConfigInvalidError`.\n\n## opencode.json\n\nEvery field is optional.\n\n```json\n{\n  \"$schema\": \"https://opencode.ai/config.json\",\n  \"username\": \"string\",\n  \"model\": \"provider/model-id\",\n  \"small_model\": \"provider/model-id\",\n  \"default_agent\": \"agent-name\",\n  \"shell\": \"/bin/zsh\",\n  \"logLevel\": \"DEBUG\" | \"INFO\" | \"WARN\" | \"ERROR\",\n  \"share\": \"manual\" | \"auto\" | \"disabled\",\n  \"autoupdate\": true | false | \"notify\",\n  \"snapshot\": true,\n  \"instructions\": [\"AGENTS.md\", \"docs/style.md\"],\n\n  \"skills\": {\n    \"paths\": [\".opencode/skills\", \"/abs/path/to/skills\"],\n    \"urls\": [\"https://example.com/.well-known/skills/\"]\n  },\n\n  \"references\": {\n    \"docs\": {\n      \"path\": \"../docs\",\n      \"description\": \"Use for product behavior and documentation conventions\"\n    },\n    \"sdk\": {\n      \"repository\": \"owner/sdk\",\n      \"branch\": \"main\",\n      \"description\": \"Use for SDK implementation details\",\n      \"hidden\": true\n    }\n  },\n\n  \"agent\": {\n    \"my-agent\": {\n      \"model\": \"anthropic/claude-sonnet-4-6\",\n      \"mode\": \"subagent\",\n      \"description\": \"...\",\n      \"permission\": { \"edit\": \"deny\" }\n    }\n  },\n\n  \"command\": {\n    \"deploy\": { \"description\": \"...\", \"template\": \"...\" }\n  },\n\n  \"provider\": {\n    \"anthropic\": { \"options\": { \"apiKey\": \"...\" } }\n  },\n  \"disabled_providers\": [\"openai\"],\n  \"enabled_providers\": [\"anthropic\"],\n\n  \"mcp\": {\n    \"playwright\": {\n      \"type\": \"local\",\n      \"command\": [\"npx\", \"-y\", \"@playwright/mcp\"],\n      \"enabled\": true,\n      \"environment\": {}\n    },\n    \"remote-thing\": {\n      \"type\": \"remote\",\n      \"url\": \"https://...\",\n      \"headers\": { \"Authorization\": \"Bearer ...\" }\n    }\n  },\n\n  \"plugin\": [\n    \"opencode-gemini-auth\",\n    \"opencode-foo@1.2.3\",\n    \"./local-plugin.ts\",\n    [\"opencode-bar\", { \"option\": \"value\" }]\n  ],\n\n  \"permission\": {\n    \"edit\": \"deny\",\n    \"bash\": { \"git *\": \"allow\", \"*\": \"ask\" }\n  },\n\n  \"formatter\": false,\n  \"lsp\": false,\n\n  \"experimental\": {\n    \"primary_tools\": [\"edit\"],\n    \"mcp_timeout\": 30000\n  },\n\n  \"tool_output\": { \"max_lines\": 200, \"max_bytes\": 8192 },\n\n  \"compaction\": { \"auto\": true, \"tail_turns\": 15 }\n}\n```\n\nShape notes worth being explicit about:\n\n- `model` always carries a provider prefix: `\"anthropic/claude-sonnet-4-6\"`.\n- `skills` is an object with `paths` and/or `urls`, not an array.\n- `references` is an object keyed by alias. Each value is a local path, Git repository, or string shorthand.\n- `agent` is an object keyed by agent name, not an array.\n- `command` is an object keyed by command name, not an array.\n- `plugin` is an array of strings or `[name, options]` tuples, not an object.\n- `mcp[name].command` is an array of strings, never a single string. `type` is required.\n- `permission` is either a string action or an object keyed by tool name.\n\n## Skills\n\nopencode's skill loader scans for `**/SKILL.md` inside skill directories. The\nfile is named `SKILL.md` exactly, and lives in its own folder named after the\nskill:\n\n```\n.opencode/skills/my-skill/SKILL.md\n```\n\nFrontmatter:\n\n```markdown\n---\nname: my-skill\ndescription: One sentence covering what this skill does AND when to trigger it. Front-load the literal keywords or filenames the user is likely to say.\n---\n\n# My Skill\n\n(skill body in markdown: instructions, examples, references)\n```\n\n- `name` is required, lowercase hyphen-separated, up to 64 chars, and matches the folder name.\n- `description` is effectively required: skills without one are filtered out and never surfaced to the model. Cover both _what_ the skill does and _when_ to use it. Write in third person (\"Use when...\", not \"I help with...\"). Front-load concrete trigger keywords and filenames; gate with \"Use ONLY when...\" if the skill should stay quiet on adjacent topics.\n- Optional: `license`, `compatibility`, `metadata` (string-string map).\n\nRegister skills from non-default locations via `skills.paths` (scanned\nrecursively for `**/SKILL.md`) and `skills.urls` (each URL serves a list of\nskills).\n\n## References\n\nReferences make local directories and Git repositories outside the active\nproject available as supporting context. Configure them under `references`,\nkeyed by the alias used in `@` autocomplete:\n\n```json\n{\n  \"references\": {\n    \"docs\": {\n      \"path\": \"../product-docs\",\n      \"description\": \"Use for product behavior and terminology\"\n    },\n    \"effect\": {\n      \"repository\": \"Effect-TS/effect\",\n      \"branch\": \"main\",\n      \"description\": \"Use for Effect implementation details\"\n    }\n  }\n}\n```\n\nLocal `path` values may be relative to the declaring config, absolute, or use\n`~/`. Git `repository` values accept Git URLs, host/path references, and GitHub\n`owner/repo` shorthand; `branch` is optional. Both forms support optional\n`description` and `hidden` fields.\n\n- Only references with a `description` are advertised to agents in system context.\n- `hidden: true` removes a reference from TUI `@` autocomplete only. It remains available to agents and by direct path.\n- Reference directories are automatically allowed through the external-directory boundary; normal read/edit/tool permissions still apply.\n- String shorthand is supported: use `\"docs\": \"../docs\"` for local paths or `\"effect\": \"Effect-TS/effect\"` for Git repositories.\n\n## Agents\n\nTwo ways to define an agent. Use the file form for anything non-trivial.\n\n### Inline (in `opencode.json`)\n\n```json\n{\n  \"agent\": {\n    \"my-reviewer\": {\n      \"description\": \"Reviews PRs for style violations.\",\n      \"mode\": \"subagent\",\n      \"model\": \"anthropic/claude-sonnet-4-6\",\n      \"permission\": { \"edit\": \"deny\", \"bash\": \"ask\" },\n      \"prompt\": \"You are a strict PR reviewer...\"\n    }\n  }\n}\n```\n\n### File\n\n```\n.opencode/agent/my-reviewer.md      OR     .opencode/agents/my-reviewer.md\n```\n\n```markdown\n---\ndescription: Reviews PRs for style violations.\nmode: subagent\nmodel: anthropic/claude-sonnet-4-6\npermission:\n  edit: deny\n  bash: ask\n---\n\nYou are a strict PR reviewer. Focus on...\n```\n\nThe file body becomes the agent's `prompt`. Do not also put `prompt:` in the\nfrontmatter.\n\n`mode` is one of `\"primary\"`, `\"subagent\"`, `\"all\"`.\n\nAllowed top-level frontmatter fields: `name, model, variant, description, mode,\nhidden, color, steps, options, permission, disable, temperature, top_p`. Any\nunknown field is silently routed into `options`.\n\nTo disable a built-in agent: `agent: { build: { disable: true } }`, or in a\nfile, `disable: true` in frontmatter.\n\n`default_agent` must point to a non-hidden, primary-mode agent.\n\n### Built-in agents\n\nopencode ships with `build`, `plan`, `general`, `explore`. Hidden internal agents:\n`compaction`, `title`, `summary`. To override a built-in's fields, define the\nsame key in `agent: { <name>: { ... } }`.\n\n## Commands\n\nopencode's command loader scans for `**/*.md` inside command directories. The\nfile is named after the command, and lives directly inside the `command` folder:\n\n```\n.opencode/command/deploy.md\n```\n\nFrontmatter:\n\n```markdown\n---\ndescription: One sentence describing what the command does.\nagent: build\nmodel: anthropic/claude-sonnet-4-6\n---\n\n(command body in markdown: the prompt opencode runs, with $ARGUMENTS for the user's input)\n```\n\n- `template` is the command body — everything below the frontmatter — and is required: it is the prompt opencode runs when the command is invoked. Do not also put a `template:` key in the frontmatter.\n- `$ARGUMENTS` is replaced with everything the user typed after the command; `$1`, `$2`, … pull individual positional arguments.\n- Optional: `description`, `agent`, `model`, `variant`, `subtask`.\n\n## Plugins\n\n`plugin:` is an array. Each entry is one of:\n\n```json\n\"plugin\": [\n  \"opencode-gemini-auth\",            // npm spec, latest\n  \"opencode-foo@1.2.3\",              // npm spec, pinned\n  \"./local-plugin.ts\",               // file path, relative to the declaring config\n  \"file:///abs/path/plugin.js\",      // file URL\n  [\"opencode-bar\", { \"key\": \"val\" }] // tuple form with options\n]\n```\n\nAuto-discovered plugins (no config entry needed): any `*.ts` or `*.js` file in\n`.opencode/plugin/` or `.opencode/plugins/`.\n\nA plugin module exports `default` (or any named export) of type\n`Plugin = (input: PluginInput, options?) => Promise<Hooks>`. The export is a\nfunction, not a plain object literal, and the function returns an object\n(return `{}` if there is nothing to register).\n\n```ts\nimport type { Plugin } from \"@opencode-ai/plugin\"\n\nexport default (async ({ client, project, directory, $ }) => {\n  return {\n    config: (cfg) => {\n      // cfg is the live merged config; mutate fields here.\n    },\n    \"tool.execute.before\": async (input, output) => {\n      // mutate output.args before the tool runs\n    },\n  }\n}) satisfies Plugin\n```\n\nHook surface (mutate `output` in place; return `void`):\n\n- `event(input)`: every bus event\n- `config(cfg)`: once on init with the merged config\n- `chat.message`, `chat.params`, `chat.headers`\n- `tool.execute.before`, `tool.execute.after`\n- `tool.definition`\n- `command.execute.before`\n- `shell.env`\n- `permission.ask`\n- `experimental.chat.messages.transform`, `experimental.chat.system.transform`,\n  `experimental.session.compacting`, `experimental.compaction.autocontinue`,\n  `experimental.text.complete`\n\nSpecial object-shaped (not callbacks): `tool: { my_tool: { ... } }`,\n`auth: { ... }`, `provider: { ... }`.\n\n## MCP servers\n\n`mcp:` is an object keyed by server name. Each server is discriminated by\n`type`:\n\n```json\n{\n  \"mcp\": {\n    \"playwright\": {\n      \"type\": \"local\",\n      \"command\": [\"npx\", \"-y\", \"@playwright/mcp\"],\n      \"enabled\": true,\n      \"environment\": { \"BROWSER\": \"chromium\" }\n    },\n    \"github\": {\n      \"type\": \"remote\",\n      \"url\": \"https://...\",\n      \"enabled\": true,\n      \"headers\": { \"Authorization\": \"Bearer {env:GITHUB_TOKEN}\" }\n    },\n    \"old-server\": { \"enabled\": false }\n  }\n}\n```\n\n`command` is an array of strings. `environment` sets environment variables for\na local MCP server. `type` is required. Use `enabled: false` to\ndisable a server inherited from a parent config. String values such as header\ntokens support `{env:VAR}` interpolation (and `{file:path}`); the shell-style\n`${VAR}` is not substituted.\n\n## Permissions\n\n```json\n\"permission\": {\n  \"edit\": \"deny\",\n  \"bash\": { \"git *\": \"allow\", \"rm *\": \"deny\", \"*\": \"ask\" },\n  \"external_directory\": { \"~/secrets/**\": \"deny\", \"*\": \"allow\" }\n}\n```\n\nActions: `\"allow\"`, `\"ask\"`, `\"deny\"`.\n\nPer-tool value forms: `\"allow\"` shorthand (treated as `{\"*\": \"allow\"}`), or an\nobject `{ pattern: action }`. Within an object, **insertion order matters**.\nopencode evaluates the LAST matching rule, so put broad rules first and narrow\nrules last.\n\n`permission: \"allow\"` (a string at the top level) is shorthand for \"allow\neverything\" and is rarely what the user wants.\n\nKnown permission keys: `read, edit, glob, grep, list, bash, task,\nexternal_directory, todowrite, question, webfetch, websearch, lsp, doom_loop,\nskill`. Some of these (`todowrite,\nquestion, webfetch, websearch, doom_loop`) only accept a flat\naction, not a per-pattern object.\n\n`external_directory` patterns are filesystem paths (use `~/`, absolute paths,\nor globs like `~/projects/**`).\n\nPer-agent `permission:` overrides top-level `permission:`. Plan Mode lives on\nthe `plan` agent's permission ruleset (`edit: deny *`).\n\n## Escape hatches\n\nWhen a user's config is broken and opencode won't start, these env vars help:\n\n- `OPENCODE_DISABLE_PROJECT_CONFIG=1`: skip the project's local `opencode.json`\n  and start from globals only. Run from the project directory, opencode loads,\n  the user edits the broken file, then they restart without the flag.\n- `OPENCODE_CONFIG=/path/to/file.json`: load an additional explicit config.\n- `OPENCODE_CONFIG_CONTENT='{\"$schema\":\"https://opencode.ai/config.json\"}'`:\n  inject inline JSON as a final local-scope merge.\n- `OPENCODE_DISABLE_DEFAULT_PLUGINS=1`: skip default plugins.\n- `OPENCODE_PURE=1`: skip external plugins entirely.\n- `OPENCODE_DISABLE_EXTERNAL_SKILLS=1`,\n  `OPENCODE_DISABLE_CLAUDE_CODE_SKILLS=1`: skip the external skill scans under\n  `~/.claude/` and `~/.agents/`.\n\n## When proposing edits\n\n- Validate against the schema before writing. If you are unsure of a field's\n  exact shape, or the field is not covered in this skill, fetch\n  `https://opencode.ai/config.json` and read the schema rather than guessing.\n- Preserve `$schema` and any existing fields the user did not ask to change.\n- For agent, command, skill, and plugin definitions, prefer creating new files\n  in the correct location over inlining everything in `opencode.json`.\n- If the user's existing config is malformed, point them at the env-var escape\n  hatches above so they can edit from inside opencode without breaking their\n  session.\n- After saving any config change, remind the user to quit and restart opencode\n  — running sessions keep using the already-loaded config.\n"
+  },
+  {
+    "name": "spawn-project",
+    "description": "Spawn a new persistent project-lead background session for a new app /\nworkstream the user is starting. Use when the user says \"build me X\",\n\"create an app that Y\", \"set up a server that Z\", or similar greenfield\nproject requests. The project-lead runs in its own cwd, has its own\nRemote Control URL, and creates its own agent team appropriate to the type.\n",
+    "location": "/private/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9-compat/project/.opencode/skill/spawn-project/SKILL.md",
+    "content": "\n# spawn-project\n\n## Process\n\n1. Pick a kebab-case name from the user's request (e.g. \"f1-tracker\",\n   \"trip-planner-llm\"). Confirm with the user only if ambiguous.\n\n2. Pick a `type` from the available templates:\n   - `web-scraper` — scraping, data extraction, change detection\n   - `llm-app` — model-powered applications, evaluation, prompt engineering\n   - `server-app` — APIs, backends, ops\n   - `agentic-coding` — multi-step coding with subagents, no persistent team\n   - `custom` — anything else; user-defined teammates\n\n   If unsure, call `mcp__project-orchestrator__list_template_types` and pick\n   the closest match. Ask the user only if multiple types fit equally well.\n\n3. Compose the `brief` — 2-5 paragraphs covering:\n   - What to build (functional scope)\n   - Any specific tech preferences mentioned by the user\n   - Acceptance criteria (what \"done\" looks like)\n   - Coordination notes for teammates\n\n4. Call `mcp__project-orchestrator__spawn_project(name, type, brief)`.\n\n5. Reply to the user with the project name + Remote Control URL:\n\n   > Started `f1-tracker`. Attach in your phone's Claude app or at\n   > <RC URL>. I'll relay messages from here too.\n\n## Constraints\n\n- Max 6 concurrent projects. If the cap is hit, the tool errors — relay the\n  error to the user and offer to kill one of the listed projects.\n- Names must match `^[a-z][a-z0-9-]{0,63}$`. Rewrite \"F1 Tracker!\" → \"f1-tracker\".\n- Permission mode defaults to `acceptEdits`; user can override with phrases\n  like \"with full auto\" → `auto`, \"read-only\" → `default`.\n"
+  },
+  {
+    "name": "list-projects",
+    "description": "List currently active project-leads. Use when the user asks \"what's running?\",\n\"show me my projects\", \"list active agents\", \"status?\", or similar.\n",
+    "location": "/private/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9-compat/project/.opencode/skill/list-projects/SKILL.md",
+    "content": "\n# list-projects\n\n1. Call `mcp__project-orchestrator__list_projects`.\n\n2. Format the response as a short bullet list:\n\n   ```\n   Active project-leads:\n   • f1-tracker (web-scraper, idle 12m) — <RC URL>\n   • trip-planner (llm-app, idle 3m) — <RC URL>\n   ```\n\n3. If the user is on Telegram and the list is long (>5), use compact bullets.\n   If on voice, summarize verbally: \"Three projects: f1-tracker, trip-planner,\n   and reports-api. Want details on any of them?\"\n\n4. If empty, reply: \"No active project-leads right now.\"\n"
+  },
+  {
+    "name": "message-project",
+    "description": "Forward a message from the user to a specific named project-lead and read the\nlead's reply. Use when the user says \"tell <project> to ...\", \"ask <project>\nabout ...\", or \"<project>: ...\".\n",
+    "location": "/private/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9-compat/project/.opencode/skill/message-project/SKILL.md",
+    "content": "\n# message-project\n\nProject-leads are NOT teammates of the channel bot. Each lead is an independent\nclaude process in its OWN tmux server (socket `soma-lead-<name>`, session\n`soma-proj-<name>`, in a sibling cgroup). `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`\nonly lets a lead spawn its own subagents; it does NOT federate the lead into the\nbot's team. So `SendMessage(to: \"soma-proj-<name>\")` always fails with\n\"No agent named ... is currently addressable\", and there is **no push-back\nchannel** from a lead back to the bot. Therefore: deliver by typing into the\nlead's tmux pane, and read the reply by scraping that pane.\n\n> **If you are the channel bot, do NOT run this skill inline.** The reply-poll\n> in step 3 is unbounded (the lead may think for minutes) and would freeze the\n> Telegram channel. Dispatch a background `Agent` (`run_in_background=true`,\n> `model=\"opus\"`) whose prompt is to run this flow and return the lead's reply,\n> ack the user immediately, and relay the reply when the agent completes — see\n> \"Messaging a project-lead\" in `system_prompts/responsive_bot.md`. Run the\n> steps below inline only when you are already a background/non-channel agent\n> (e.g. that dispatched agent, or a project-lead talking to another lead).\n\n## Process\n\n1. **Resolve + validate.** Extract the target project name from the user's\n   message, then call\n   `mcp__project-orchestrator__send_to_project(name, message)`. This DELIVERS\n   NOTHING -- use it only to (a) confirm the project exists (it raises\n   `no project named X` otherwise) and (b) confirm the bare name. From the bare\n   name the tmux coordinates are fixed:\n   - socket:  `soma-lead-<name>`\n   - session: `soma-proj-<name>`\n\n2. **Deliver the message** with two SEPARATE tmux calls -- type the literal\n   text, then submit. Combining the text and Enter into one call is unreliable.\n\n   Shell-safety: the user's text is arbitrary (it may contain `'`, `\"`, `$`,\n   backticks, `#`, newlines). Wrap the whole message in SINGLE quotes and\n   escape any embedded single quote as `'\\''`. This is exactly what\n   `shlex.quote` produces; inside single quotes every other character is\n   literal, so nothing can expand or break out of the argument.\n\n   ```bash\n   # type the message literally (-l = literal text, no key-name interpretation)\n   tmux -L soma-lead-<name> send-keys -t soma-proj-<name> -l '<safely-quoted message>'\n   # submit it as a SEPARATE call\n   tmux -L soma-lead-<name> send-keys -t soma-proj-<name> C-m\n   ```\n\n   Worked example -- message is: `what's the $STATUS of build #3?`\n   ```bash\n   tmux -L soma-lead-f1-tracker send-keys -t soma-proj-f1-tracker -l 'what'\\''s the $STATUS of build #3?'\n   tmux -L soma-lead-f1-tracker send-keys -t soma-proj-f1-tracker C-m\n   ```\n\n   If the text lands in the prompt but doesn't submit, send one more `C-m`\n   after ~1s as a fallback. If the message spans multiple lines, send it as one\n   `-l` call (single quotes preserve the newlines) -- but note each newline is\n   delivered as an Enter, so the lead may treat lines as separate inputs; to\n   keep a multi-line message as one turn, collapse it to a single line first.\n\n3. **Read the reply by scraping the pane** (there is no reply bus). Give the\n   lead a few seconds, then capture its pane; poll up to a few times if it's\n   still thinking:\n\n   ```bash\n   sleep 4\n   tmux -L soma-lead-<name> capture-pane -p -t soma-proj-<name>\n   ```\n\n   `capture-pane -p` returns the visible screen -- the lead's most recent\n   output -- so just read the last lines of it for the response. For more\n   scrollback, add `-S -<N>` (e.g. `-S -80` to start ~80 lines back). If the\n   footer still shows the lead working/thinking, `sleep` again and re-capture.\n   (Deliberately no `| tail`: the bare capture is already the tail, which keeps\n   this skill's only shell dependency the single `tmux -L soma-lead-*` pattern.\n   The pane is a live TUI, so expect box-drawing and a prompt footer around the\n   text.)\n\n4. **Report to the user**: relay the lead's response. If it's still working\n   after a couple of polls, say the message was delivered and the lead is still\n   processing.\n\n## Error handling\n\n- `send_to_project` raises `no project named X`: the project doesn't exist (or\n  already died and was reconciled out). Offer the closest match from\n  `list_projects` and ask the user to confirm.\n- A tmux call prints `can't find session` or `no server running on ...`: the\n  lead's session has died even if the registry still listed it. Tell the user\n  the lead isn't running and offer to respawn it (spawn-project).\n"
+  }
+]
+
+[exit=0 wall=0.6s]
+
+## (a') the raw frontmatter opencode ingested for one of them (allowed-tools present, incl. a Bash(...) and mcp__ entry)
+$ sh -c sed -n '1,12p' '/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9-compat/project/.opencode/skill/message-project/SKILL.md'
+---
+name: message-project
+description: |
+  Forward a message from the user to a specific named project-lead and read the
+  lead's reply. Use when the user says "tell <project> to ...", "ask <project>
+  about ...", or "<project>: ...".
+allowed-tools:
+  - mcp__project-orchestrator__send_to_project
+  - Bash(tmux -L soma-lead-*:*)
+---
+
+# message-project
+
+[exit=0 wall=0.0s]
+
+## (b) opencode agent list  (converted soma-lead agent)
+$ sh -c cd '/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9-compat/project' && '/Users/techfreakworm/.opencode/bin/opencode' agent list 2>&1 | grep -iE 'soma-lead|primary|subagent' | head
+build (primary)
+compaction (primary)
+explore (subagent)
+general (subagent)
+plan (primary)
+summary (primary)
+title (primary)
+soma-lead (primary)
+
+[exit=0 wall=0.5s]
+
+## (b') opencode debug agent soma-lead (resolved config)
+$ sh -c cd '/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9-compat/project' && '/Users/techfreakworm/.opencode/bin/opencode' debug agent soma-lead 2>&1 | head -40
+{
+  "name": "soma-lead",
+  "mode": "primary",
+  "permission": [
+    {
+      "permission": "*",
+      "action": "allow",
+      "pattern": "*"
+    },
+    {
+      "permission": "doom_loop",
+      "action": "ask",
+      "pattern": "*"
+    },
+    {
+      "permission": "external_directory",
+      "pattern": "*",
+      "action": "ask"
+    },
+    {
+      "permission": "external_directory",
+      "pattern": "/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9-compat/xdg/data/opencode/tool-output/*",
+      "action": "allow"
+    },
+    {
+      "permission": "external_directory",
+      "pattern": "/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9-compat/tmp/opencode/*",
+      "action": "allow"
+    },
+    {
+      "permission": "external_directory",
+      "pattern": "/private/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9-compat/project/.opencode/skill/message-project/*",
+      "action": "allow"
+    },
+    {
+      "permission": "external_directory",
+      "pattern": "/private/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9-compat/project/.opencode/skill/spawn-project/*",
+      "action": "allow"
+    },
+    {
+
+[exit=0 wall=0.5s]
+
+## (c) command listed over HTTP (GET /command) from a serve in this project
+$ sh -c jq -c '.[] | {name, description: (.description[0:60]), agent}' '/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9-compat/command.json'
+{"name":"init","description":"guided AGENTS.md setup","agent":null}
+{"name":"review","description":"review changes [commit|branch|pr], defaults to uncommitted","agent":null}
+{"name":"soma-status","description":"Summarize this lead's progress for the orchestrator.","agent":"soma-lead"}
+{"name":"customize-opencode","description":"Use ONLY when the user is editing or creating opencode's own","agent":null}
+{"name":"spawn-project","description":"Spawn a new persistent project-lead background session for a","agent":null}
+{"name":"message-project","description":"Forward a message from the user to a specific named project-","agent":null}
+{"name":"list-projects","description":"List currently active project-leads. Use when the user asks ","agent":null}
+
+[exit=0 wall=0.0s]
+
+$ sh -c jq -r '.[].name' '/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9-compat/skill.json' 2>/dev/null
+customize-opencode
+spawn-project
+message-project
+list-projects
+
+[exit=0 wall=0.0s]
+
+$ sh -c jq -r '.[].name' '/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9-compat/agent.json' 2>/dev/null
+build
+compaction
+explore
+general
+plan
+soma-lead
+summary
+title
+
+[exit=0 wall=0.0s]
+
+summary: claude-soma skills recognized=3 refs, converted agent=1 refs, command=1 refs
+VERDICT: PASS — claude-soma SKILL.md files load under opencode from .opencode/skill/ with their Claude allowed-tools frontmatter intact (debug skill + /skill list them); a project-lead agent converted to opencode frontmatter is accepted (agent list + debug agent); an opencode command is served via /command.
+
+## (d) Claude-format .claude/ dirs — DOCUMENTED (not run here; see note)
+This worktree's harness hook rejects any bash command that touches `.claude/` (it guards the
+worktree's own harness config), so the empirical home-`.claude/skills` test was not run in this
+session. The authoritative answer is in opencode's own built-in "customize-opencode" skill, dumped
+verbatim above by `opencode debug skill` (location <built-in>), which states the file-location
+contract for 1.18.8:
+  - External skills AUTO-LOADED from: `~/.claude/skills/<name>/SKILL.md` and
+    `~/.agents/skills/<name>/SKILL.md` (HOME-level only; a PROJECT-local `.claude/skills` is NOT in
+    the scan list). Toggle with env `OPENCODE_DISABLE_CLAUDE_CODE_SKILLS=1` /
+    `OPENCODE_DISABLE_EXTERNAL_SKILLS=1` (both present in the 1.18.8 binary string table).
+  - There is NO `.claude/agents` entry anywhere in the file-locations table: opencode agents load
+    only from `.opencode/agent(s)/` or `~/.config/opencode/agent(s)/` or the `agent` config key.
+    So a raw Claude-format `.claude/agents/*.md` is NOT read as an opencode agent (matches desk
+    recon) — it must be converted to opencode frontmatter, as demonstrated for soma-lead in (b).
+Implication for a rebuild: claude-soma's skills can be dropped under `~/.claude/skills/` (or copied
+to `.opencode/skill/`, proven in (a)); its `agents/*.md` must be converted (mechanical: rename
+`permissionMode`->drop/`permission`, keep description, set `mode`, prefix `model` with a provider);
+its `skills/*/SKILL.md` load as-is including the Claude `allowed-tools` frontmatter.
+VERDICT: PASS — documented from opencode's own config reference; empirical home-.claude test deferred (harness hook).
