@@ -1,5 +1,5 @@
 # P2-hooks/inject.log
-date-utc: 2026-10-10T06:37:11Z
+date-utc: 2026-10-10T08:08:12Z
 probe-script: research/opencode-soma/probes/opencode/P2-hooks/analyze.sh (after run.sh)
 opencode-version: 1.18.8
 model: ollama/qwen3:32b
@@ -23,7 +23,7 @@ $ sh -c jq -c 'select(.request.n_tools > 0) | {ts, roles: .request.roles, sys_ha
 {"ts":"2026-10-10T06:30:42Z","roles":["system","system","user"],"sys_has_ZULU":true,"sys_has_YANKEE":false,"user_has_ALPHA":true,"user_has_BRAVO":false,"sys_tail":"l>\n</available_skills>\n[notify-inject-system] LATEST-SYS-CODE=ZULU-901","last_user":"lues. Do not call any tools.\n[notify-inject] LATEST-MSG-CODE=ALPHA-111"}
 {"ts":"2026-10-10T06:31:31Z","roles":["system","system","user","assistant","user"],"sys_has_ZULU":false,"sys_has_YANKEE":true,"user_has_ALPHA":false,"user_has_BRAVO":true,"sys_tail":"\n</available_skills>\n[notify-inject-system] LATEST-SYS-CODE=YANKEE-902","last_user":"lues. Do not call any tools.\n[notify-inject] LATEST-MSG-CODE=BRAVO-222"}
 
-[exit=0 wall=0.1s]
+[exit=0 wall=0.0s]
 
 summary: chat.message path model-quoted-latest=1 proxy-fresh=true | system.transform path model-quoted-latest=0 proxy-fresh=true
 VERDICT: PASS — chat.message injection (the additionalContext analog) re-read the file per prompt and the model quoted the latest value; system.transform also delivered the fresh value (proxy) but qwen3:32b repeated its stale earlier answer for that field.
