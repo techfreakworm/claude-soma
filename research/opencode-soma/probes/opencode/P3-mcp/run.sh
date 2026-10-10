@@ -131,3 +131,6 @@ else
   ev_verdict FAIL "a lead agent reached the telegram MCP ($lead_sent messages)."
 fi
 for f in mcp scoping; do ev_redact "$EVD/$f.log"; tail -1 "$EVD/$f.log"; done
+
+# recompute the scoping verdict from artifacts (no new LLM turns)
+bash "$HERE/analyze.sh"

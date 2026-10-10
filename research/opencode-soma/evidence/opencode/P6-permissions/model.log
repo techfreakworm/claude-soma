@@ -1,0 +1,221 @@
+# P6-permissions/model.log
+date-utc: 2026-10-10T06:56:56Z
+probe-script: research/opencode-soma/probes/opencode/P6-permissions/run.sh
+opencode-version: 1.18.8
+model: none
+sandbox: $TMPDIR/ocsoma-pe/P6-permissions (HOME, XDG_*, TMPDIR all inside it)
+purpose: permission model of 1.18.8: rules, per-agent overrides, env, flags
+
+$ cat /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P6-permissions/project/opencode.json
+{ "$schema": "https://opencode.ai/config.json", "permission": { "bash": {"*": "allow", "git push*": "deny", "touch *p6-*": "ask"} } }
+
+[exit=0 wall=0.0s]
+
+## resolved rules for the build agent (config rules are appended after the defaults; last match wins)
+$ /Users/techfreakworm/.opencode/bin/opencode debug agent build
+{
+  "name": "build",
+  "description": "The default agent. Executes tools based on configured permissions.",
+  "options": {},
+  "permission": [
+    {
+      "permission": "*",
+      "action": "allow",
+      "pattern": "*"
+    },
+    {
+      "permission": "doom_loop",
+      "action": "ask",
+      "pattern": "*"
+    },
+    {
+      "permission": "external_directory",
+      "pattern": "*",
+      "action": "ask"
+    },
+    {
+      "permission": "external_directory",
+      "pattern": "/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P6-permissions/xdg/data/opencode/tool-output/*",
+      "action": "allow"
+    },
+    {
+      "permission": "external_directory",
+      "pattern": "/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P6-permissions/tmp/opencode/*",
+      "action": "allow"
+    },
+    {
+      "permission": "question",
+      "action": "deny",
+      "pattern": "*"
+    },
+    {
+      "permission": "plan_enter",
+      "action": "deny",
+      "pattern": "*"
+    },
+    {
+      "permission": "plan_exit",
+      "action": "deny",
+      "pattern": "*"
+    },
+    {
+      "permission": "read",
+      "pattern": "*",
+      "action": "allow"
+    },
+    {
+      "permission": "read",
+      "pattern": "*.env",
+      "action": "ask"
+    },
+    {
+      "permission": "read",
+      "pattern": "*.env.*",
+      "action": "ask"
+    },
+    {
+      "permission": "read",
+      "pattern": "*.env.example",
+      "action": "allow"
+    },
+    {
+      "permission": "question",
+      "action": "allow",
+      "pattern": "*"
+    },
+    {
+      "permission": "plan_enter",
+      "action": "allow",
+      "pattern": "*"
+    },
+    {
+      "permission": "bash",
+      "pattern": "*",
+      "action": "allow"
+    },
+    {
+      "permission": "bash",
+      "pattern": "git push*",
+      "action": "deny"
+    },
+    {
+      "permission": "bash",
+      "pattern": "touch *p6-*",
+      "action": "ask"
+    },
+    {
+      "permission": "external_directory",
+      "pattern": "/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P6-permissions/xdg/data/opencode/tool-output/*",
+      "action": "allow"
+    }
+  ],
+  "mode": "primary",
+  "native": true,
+  "tools": {
+    "invalid": true,
+    "question": true,
+    "bash": true,
+    "read": true,
+    "glob": true,
+    "grep": true,
+    "edit": true,
+    "write": true,
+    "task": true,
+    "webfetch": true,
+    "todowrite": true,
+    "skill": true
+  }
+}
+
+[exit=0 wall=5.7s]
+
+## OPENCODE_PERMISSION env JSON is merged over config.permission
+$ env OPENCODE_PERMISSION={"bash":"deny","webfetch":"deny"} /Users/techfreakworm/.opencode/bin/opencode debug config
+{
+  "$schema": "https://opencode.ai/config.json",
+  "autoupdate": false,
+  "share": "disabled",
+  "enabled_providers": [
+    "ollama"
+  ],
+  "model": "ollama/qwen3:32b",
+  "small_model": "ollama/qwen3:32b",
+  "provider": {
+    "ollama": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "Ollama (local)",
+      "options": {
+        "baseURL": "http://127.0.0.1:47165/v1"
+      },
+      "models": {
+        "qwen3:32b": {
+          "name": "Qwen3 32B (thinking off)",
+          "tool_call": true,
+          "reasoning": false,
+          "options": {
+            "reasoningEffort": "none"
+          },
+          "limit": {
+            "context": 40960,
+            "output": 8192
+          }
+        },
+        "lfm2.5-thinking": {
+          "name": "LFM2.5 1.2B thinking",
+          "tool_call": true,
+          "reasoning": true,
+          "limit": {
+            "context": 128000,
+            "output": 8192
+          }
+        }
+      }
+    }
+  },
+  "permission": {
+    "bash": "deny",
+    "webfetch": "deny"
+  },
+  "agent": {},
+  "mode": {},
+  "plugin": [
+    "file:///private/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P6-permissions/project/.opencode/plugin/p6gate.js",
+    "file:///private/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P6-permissions/project/.opencode/plugin/autoapprove.js"
+  ],
+  "command": {},
+  "plugin_origins": [
+    {
+      "spec": "file:///private/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P6-permissions/project/.opencode/plugin/p6gate.js",
+      "source": "/private/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P6-permissions/project/.opencode",
+      "scope": "local"
+    },
+    {
+      "spec": "file:///private/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P6-permissions/project/.opencode/plugin/autoapprove.js",
+      "source": "/private/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P6-permissions/project/.opencode",
+      "scope": "local"
+    }
+  ],
+  "username": "techfreakworm"
+}
+
+[exit=0 wall=0.8s]
+
+## flags: run/TUI --auto (documented); --yolo and --dangerously-skip-permissions exist as hidden aliases (binary)
+$ sh -c grep -n -- '--auto' '/Users/techfreakworm/.soma/worktrees/claude-soma/claude-soma-manager/research/opencode-soma/evidence/opencode/cli-help.log' | head -5
+61:      --auto          auto-approve permissions that are not explicitly denied (dangerous!)
+121:      --auto          auto-approve permissions that are not explicitly denied (dangerous!)
+233:      --auto         auto-approve permissions that are not explicitly denied (dangerous!)
+
+[exit=0 wall=0.0s]
+
+$ python3.12 -I -c 
+import re
+d=open("/Users/techfreakworm/.opencode/bin/opencode","rb").read()
+for m in sorted(set(re.findall(rb"option\(\"(?:auto|yolo|dangerously-skip-permissions)\",\{[^}]{0,120}\}", d))): print(m.decode())
+option("auto",{type:"boolean",describe:"auto-approve permissions that are not explicitly denied (dangerous!)",default:!1}
+option("dangerously-skip-permissions",{type:"boolean",hidden:!0,default:!1}
+option("yolo",{type:"boolean",hidden:!0,default:!1}
+
+[exit=0 wall=0.2s]
+
+VERDICT: PASS — rules are permission-name -> action|{pattern: action} (allow/ask/deny), global and per agent, env OPENCODE_PERMISSION merges over config, --auto (+hidden --yolo/--dangerously-skip-permissions) approves non-denied asks.

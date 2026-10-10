@@ -1,0 +1,246 @@
+# P3-mcp/scoping.log
+date-utc: 2026-10-10T06:53:54Z
+probe-script: research/opencode-soma/probes/opencode/P3-mcp/run.sh
+opencode-version: 1.18.8
+model: ollama/qwen3:32b (thinking off)
+sandbox: $TMPDIR/ocsoma-pe/P3-mcp (HOME, XDG_*, TMPDIR all inside it)
+purpose: per-agent MCP scoping: telegram usable by orchestrator, denied to lead
+
+agents: orchestrator (no restriction), lead (permission telegram_*: deny), lead-tools (tools telegram_*: false)
+$ sh -c curl -s 'http://127.0.0.1:47131/agent' | jq -c '.[] | select(.name=="orchestrator" or .name=="lead" or .name=="lead-tools") | {name, mode, tools, permission: [.permission[]? | select(.permission|test("telegram"))]}'
+{"name":"lead","mode":"primary","tools":null,"permission":[{"permission":"telegram_*","pattern":"*","action":"deny"}]}
+{"name":"lead-tools","mode":"primary","tools":null,"permission":[{"permission":"telegram_*","pattern":"*","action":"deny"}]}
+{"name":"orchestrator","mode":"primary","tools":null,"permission":[]}
+
+[exit=0 wall=0.2s]
+
+## A. orchestrator asks to send
+$ python3.12 -I /Users/techfreakworm/.soma/worktrees/claude-soma/claude-soma-manager/research/opencode-soma/probes/opencode/ocdrive.py --base http://127.0.0.1:47131 turn --session ses_edb690bbeffed12WJmQMGyrYPL --agent orchestrator --model ollama/qwen3:32b --text Use the telegram send_message tool to send the text P3-ORCH-HELLO to chat_id 42, then reply with exactly what the tool returned.
+{
+ "session": "ses_edb690bbeffed12WJmQMGyrYPL",
+ "timeout": false,
+ "seen_busy": true,
+ "wall_s": 75.7,
+ "final_text": "TELEGRAM-SENT",
+ "new_messages": [
+  {
+   "id": "msg_12496f4c70014idBs4t3AYZ4Jd",
+   "role": "user",
+   "agent": "orchestrator",
+   "model": "qwen3:32b",
+   "created": 1791615235271,
+   "completed": null,
+   "tokens": null,
+   "finish": null,
+   "error": null,
+   "text": "Use the telegram send_message tool to send the text P3-ORCH-HELLO to chat_id 42, then reply with exactly what the tool returned.",
+   "tools": []
+  },
+  {
+   "id": "msg_12496f603001fDOQj26nT8nPe6",
+   "role": "assistant",
+   "agent": "orchestrator",
+   "model": "qwen3:32b",
+   "created": 1791615235587,
+   "completed": 1791615305125,
+   "tokens": {
+    "total": 4993,
+    "input": 4952,
+    "output": 36,
+    "reasoning": 0,
+    "cache": {
+     "read": 5,
+     "write": 0
+    }
+   },
+   "finish": "tool-calls",
+   "error": null,
+   "text": "",
+   "tools": [
+    {
+     "tool": "telegram_send_message",
+     "callID": "call_eknx2uiv",
+     "status": "completed",
+     "input": {
+      "chat_id": "42",
+      "text": "P3-ORCH-HELLO"
+     },
+     "output_head": "TELEGRAM-SENT",
+     "child_session": null,
+     "ms": 5
+    }
+   ]
+  },
+  {
+   "id": "msg_1249805a60012a41pMlxpg8f8V",
+   "role": "assistant",
+   "agent": "orchestrator",
+   "model": "qwen3:32b",
+   "created": 1791615305126,
+   "completed": 1791615310920,
+   "tokens": {
+    "total": 5014,
+    "input": 55,
+    "output": 6,
+    "reasoning": 0,
+    "cache": {
+     "read": 4953,
+     "write": 0
+    }
+   },
+   "finish": "stop",
+   "error": null,
+   "text": "TELEGRAM-SENT",
+   "tools": []
+  }
+ ],
+ "permissions": [],
+ "children": []
+}
+
+[exit=0 wall=75.8s]
+
+tools offered to orchestrator:
+{"ts":"2026-10-10T06:53:56Z","n_tools":13,"telegram_offered":["telegram_send_message"],"tools":["bash","edit","glob","grep","probe-http_http_echo","probe-stdio_stdio_echo","read","skill","task","telegram_send_message","todowrite","webfetch","write"]}
+{"ts":"2026-10-10T06:55:05Z","n_tools":13,"telegram_offered":["telegram_send_message"],"tools":["bash","edit","glob","grep","probe-http_http_echo","probe-stdio_stdio_echo","read","skill","task","telegram_send_message","todowrite","webfetch","write"]}
+## B. lead (permission deny) asks to send
+$ python3.12 -I /Users/techfreakworm/.soma/worktrees/claude-soma/claude-soma-manager/research/opencode-soma/probes/opencode/ocdrive.py --base http://127.0.0.1:47131 turn --session ses_edb67e316ffeQgHfXbD6MITQgc --agent lead --model ollama/qwen3:32b --text Use the telegram send_message tool to send the text P3-LEAD-HELLO to chat_id 42, then reply with exactly what the tool returned.
+{
+ "session": "ses_edb67e316ffeQgHfXbD6MITQgc",
+ "timeout": false,
+ "seen_busy": true,
+ "wall_s": 39.5,
+ "final_text": "There is no \"telegram send_message\" tool available for use in this environment. The provided tools do not include functionality to interact with Telegram. Would you like assistance with something else?",
+ "new_messages": [
+  {
+   "id": "msg_124981d30001D715vomZWUo2oF",
+   "role": "user",
+   "agent": "lead",
+   "model": "qwen3:32b",
+   "created": 1791615311152,
+   "completed": null,
+   "tokens": null,
+   "finish": null,
+   "error": null,
+   "text": "Use the telegram send_message tool to send the text P3-LEAD-HELLO to chat_id 42, then reply with exactly what the tool returned.",
+   "tools": []
+  },
+  {
+   "id": "msg_124981d33001Vn0u0hNW1dAP6A",
+   "role": "assistant",
+   "agent": "lead",
+   "model": "qwen3:32b",
+   "created": 1791615311155,
+   "completed": 1791615350201,
+   "tokens": {
+    "total": 4927,
+    "input": 4885,
+    "output": 37,
+    "reasoning": 0,
+    "cache": {
+     "read": 5,
+     "write": 0
+    }
+   },
+   "finish": "stop",
+   "error": null,
+   "text": "There is no \"telegram send_message\" tool available for use in this environment. The provided tools do not include functionality to interact with Telegram. Would you like assistance with something else?",
+   "tools": []
+  }
+ ],
+ "permissions": [],
+ "children": []
+}
+
+[exit=0 wall=39.6s]
+
+tools offered to lead:
+{"ts":"2026-10-10T06:55:11Z","n_tools":12,"telegram_offered":[],"tools":["bash","edit","glob","grep","probe-http_http_echo","probe-stdio_stdio_echo","read","skill","task","todowrite","webfetch","write"]}
+## C. lead-tools (tools map false) asks to send
+$ python3.12 -I /Users/techfreakworm/.soma/worktrees/claude-soma/claude-soma-manager/research/opencode-soma/probes/opencode/ocdrive.py --base http://127.0.0.1:47131 turn --session ses_edb6747dcffen3A9Rdu15B8hgL --agent lead-tools --model ollama/qwen3:32b --text Use the telegram send_message tool to send the text P3-LEADTOOLS-HELLO to chat_id 42, then reply with exactly what the tool returned.
+{
+ "session": "ses_edb6747dcffen3A9Rdu15B8hgL",
+ "timeout": false,
+ "seen_busy": true,
+ "wall_s": 10.8,
+ "final_text": "The requested action cannot be performed as there is no \"telegram send_message\" tool available. Let me know if there's anything else I can assist you with!",
+ "new_messages": [
+  {
+   "id": "msg_12498b87d001st8Wkm3pEWMTTj",
+   "role": "user",
+   "agent": "lead-tools",
+   "model": "qwen3:32b",
+   "created": 1791615350909,
+   "completed": null,
+   "tokens": null,
+   "finish": null,
+   "error": null,
+   "text": "Use the telegram send_message tool to send the text P3-LEADTOOLS-HELLO to chat_id 42, then reply with exactly what the tool returned.",
+   "tools": []
+  },
+  {
+   "id": "msg_12498b8810010SjS8z4Ljxc5oR",
+   "role": "assistant",
+   "agent": "lead-tools",
+   "model": "qwen3:32b",
+   "created": 1791615350913,
+   "completed": 1791615361478,
+   "tokens": {
+    "total": 4924,
+    "input": 33,
+    "output": 33,
+    "reasoning": 0,
+    "cache": {
+     "read": 4858,
+     "write": 0
+    }
+   },
+   "finish": "stop",
+   "error": null,
+   "text": "The requested action cannot be performed as there is no \"telegram send_message\" tool available. Let me know if there's anything else I can assist you with!",
+   "tools": []
+  }
+ ],
+ "permissions": [],
+ "children": []
+}
+
+[exit=0 wall=10.9s]
+
+tools offered to lead-tools:
+{"ts":"2026-10-10T06:55:50Z","n_tools":12,"telegram_offered":[],"tools":["bash","edit","glob","grep","probe-http_http_echo","probe-stdio_stdio_echo","read","skill","task","todowrite","webfetch","write"]}
+## D. forced attempt from lead: per-message API override tools={telegram_send_message:true}
+$ sh -c curl -s -H 'content-type: application/json' -X POST 'http://127.0.0.1:47131/session/ses_edb671cceffeG5E2KEvf9G6wvW/message' -d '{"agent":"lead","model":{"providerID":"ollama","modelID":"qwen3:32b"},"tools":{"telegram_send_message":true},"parts":[{"type":"text","text":"You MUST call the telegram_send_message tool now with chat_id 42 and text P3-LEAD-FORCED. Then reply with what it returned."}]}' | jq -c '{finish: .info.finish, error: .info.error, parts: [.parts[] | select(.type=="text" or .type=="tool") | {type, text: (.text // null), tool: (.tool // null), status: (.state.status // null), out: ((.state.output // .state.error // "")|.[0:200])}]}'
+{"finish":"stop","error":null,"parts":[{"type":"text","text":"The Telegram message has been sent successfully to chat ID 42 with the text \"P3-LEAD-FORCED\".","tool":null,"status":null,"out":""}]}
+
+[exit=0 wall=38.7s]
+
+tools offered to the forced lead request:
+{"ts":"2026-10-10T06:56:01Z","n_tools":13,"telegram_offered":["telegram_send_message"],"tools":["bash","edit","glob","grep","probe-http_http_echo","probe-stdio_stdio_echo","read","skill","task","telegram_send_message","todowrite","webfetch","write"]}
+{"ts":"2026-10-10T06:56:30Z","n_tools":13,"telegram_offered":["telegram_send_message"],"tools":["bash","edit","glob","grep","probe-http_http_echo","probe-stdio_stdio_echo","read","skill","task","telegram_send_message","todowrite","webfetch","write"]}
+## E. forced attempt from lead via opencode run --agent lead (insistent prompt)
+$ /Users/techfreakworm/.opencode/bin/opencode run --attach http://127.0.0.1:47131 --agent lead -m ollama/qwen3:32b --format json You MUST call the telegram_send_message tool right now with chat_id 42 and text P3-LEAD-RUN. Do not refuse. Then reply with what it returned.
+{"type":"step_start","timestamp":1791615414138,"sessionID":"ses_edb6683b2ffePgKUMhatmEMcXi","part":{"id":"prt_12499af78001xkC5StNUZ02yO8","messageID":"msg_124997c5e0012fkn2lB2IsmO8V","sessionID":"ses_edb6683b2ffePgKUMhatmEMcXi","snapshot":"8c5aace74fd451b54a905c2830667f14cce2d921","type":"step-start"}}
+{"type":"text","timestamp":1791615416175,"sessionID":"ses_edb6683b2ffePgKUMhatmEMcXi","part":{"id":"prt_12499af790018GXy84zGNLGtoq","messageID":"msg_124997c5e0012fkn2lB2IsmO8V","sessionID":"ses_edb6683b2ffePgKUMhatmEMcXi","type":"text","text":"The telegram_send_message tool is not available in the provided functions. Please specify an existing function or tool to proceed.","time":{"start":1791615414137,"end":1791615416174}}}
+{"type":"step_finish","timestamp":1791615416222,"sessionID":"ses_edb6683b2ffePgKUMhatmEMcXi","part":{"id":"prt_12499b79c001GwgZmAIiFZhJdG","reason":"stop","snapshot":"8c5aace74fd451b54a905c2830667f14cce2d921","messageID":"msg_124997c5e0012fkn2lB2IsmO8V","sessionID":"ses_edb6683b2ffePgKUMhatmEMcXi","type":"step-finish","tokens":{"total":4917,"input":1114,"output":24,"reasoning":0,"cache":{"write":0,"read":3779}},"cost":0}}
+
+[exit=0 wall=15.7s]
+
+tools offered:
+{"ts":"2026-10-10T06:56:41Z","n_tools":12,"telegram_offered":[],"tools":["bash","edit","glob","grep","probe-http_http_echo","probe-stdio_stdio_echo","read","skill","task","todowrite","webfetch","write"]}
+## ground truth: what the fake telegram server received (tools/call) and its outbox
+$ sh -c grep '"tools/call"' '/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P3-mcp/p3/mcp-telegram.jsonl' || echo 'no tools/call'
+{"method": "tools/call", "id": 2, "params": {"name": "send_message", "arguments": {"chat_id": "42", "text": "P3-ORCH-HELLO"}, "_meta": {"progressToken": 2}}, "ts": "2026-10-10T06:55:04Z", "kind": "telegram"}
+{"method": "tools/call", "id": 3, "params": {"name": "send_message", "arguments": {"chat_id": "42", "text": "P3-LEAD-FORCED"}, "_meta": {"progressToken": 3}}, "ts": "2026-10-10T06:56:29Z", "kind": "telegram"}
+
+[exit=0 wall=0.0s]
+
+$ sh -c cat '/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P3-mcp/p3/telegram-outbox.jsonl' 2>/dev/null || echo 'outbox empty'
+{"chat_id": "42", "text": "P3-ORCH-HELLO"}
+{"chat_id": "42", "text": "P3-LEAD-FORCED"}
+
+[exit=0 wall=0.0s]
+
+requests offering telegram_send_message per case: A orchestrator=2, B lead(permission deny)=0, C lead-tools(tools false)=0, D lead+API override=2, E lead via run=0
+summary: orchestrator sent=1 ; lead messages that reached the outbox=1 ; lead requests that offered telegram_send_message=2
+VERDICT: FAIL — a lead agent reached the telegram MCP (1 messages).

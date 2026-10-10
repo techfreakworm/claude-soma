@@ -69,3 +69,60 @@ $ /Users/techfreakworm/.opencode/bin/opencode run -m ollama/qwen3:32b --format j
 
 ## streamable-HTTP MCP tool from opencode run
 $ /Users/techfreakworm/.opencode/bin/opencode run -m ollama/qwen3:32b --format json Call the http_echo tool with text P3-HTTP and reply with exactly what it returned.
+{"type":"step_start","timestamp":1791615218113,"sessionID":"ses_edb697f6dffebkw505qLS6s0c8","part":{"id":"prt_12496b1b7001e02C03xNBTiRky","messageID":"msg_124968175001xiJWYn5RTwLLHk","sessionID":"ses_edb697f6dffebkw505qLS6s0c8","snapshot":"8c5aace74fd451b54a905c2830667f14cce2d921","type":"step-start"}}
+{"type":"tool_use","timestamp":1791615218116,"sessionID":"ses_edb697f6dffebkw505qLS6s0c8","part":{"type":"tool","tool":"probe-http_http_echo","callID":"call_5ximwqv9","state":{"status":"completed","input":{"text":"P3-HTTP"},"output":"HTTP-MCP-OK:P3-HTTP","metadata":{"truncated":false},"title":"","time":{"start":1791615218111,"end":1791615218115}},"id":"prt_12496b1b900155QlutxsbHRgXV","sessionID":"ses_edb697f6dffebkw505qLS6s0c8","messageID":"msg_124968175001xiJWYn5RTwLLHk"}}
+{"type":"step_finish","timestamp":1791615218466,"sessionID":"ses_edb697f6dffebkw505qLS6s0c8","part":{"id":"prt_12496b31f001ndZnNxmCMtNsbi","reason":"tool-calls","snapshot":"8c5aace74fd451b54a905c2830667f14cce2d921","messageID":"msg_124968175001xiJWYn5RTwLLHk","sessionID":"ses_edb697f6dffebkw505qLS6s0c8","type":"step-finish","tokens":{"total":6724,"input":30,"output":25,"reasoning":0,"cache":{"write":0,"read":6669}},"cost":0}}
+{"type":"step_start","timestamp":1791615232416,"sessionID":"ses_edb697f6dffebkw505qLS6s0c8","part":{"id":"prt_12496e9980016rdr7UmwcQUoQk","messageID":"msg_12496b354001WgD18ICKTWfNGh","sessionID":"ses_edb697f6dffebkw505qLS6s0c8","snapshot":"8c5aace74fd451b54a905c2830667f14cce2d921","type":"step-start"}}
+{"type":"text","timestamp":1791615233209,"sessionID":"ses_edb697f6dffebkw505qLS6s0c8","part":{"id":"prt_12496e99e001eg6YlbmzQsCvwN","messageID":"msg_12496b354001WgD18ICKTWfNGh","sessionID":"ses_edb697f6dffebkw505qLS6s0c8","type":"text","text":"HTTP-MCP-OK:P3-HTTP","time":{"start":1791615232414,"end":1791615233206}}}
+{"type":"step_finish","timestamp":1791615233270,"sessionID":"ses_edb697f6dffebkw505qLS6s0c8","part":{"id":"prt_12496ecf4001QQ3gWaM5Cj87w8","reason":"stop","snapshot":"8c5aace74fd451b54a905c2830667f14cce2d921","messageID":"msg_12496b354001WgD18ICKTWfNGh","sessionID":"ses_edb697f6dffebkw505qLS6s0c8","type":"step-finish","tokens":{"total":6755,"input":50,"output":10,"reasoning":0,"cache":{"write":0,"read":6695}},"cost":0}}
+
+[exit=0 wall=28.5s]
+
+## what the MCP servers received
+$ cat /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P3-mcp/p3/mcp-stdio.jsonl
+{"method": "server/discover", "id": "server-discover-probe-1", "params": {"_meta": {"io.modelcontextprotocol/protocolVersion": "2026-07-28", "io.modelcontextprotocol/clientInfo": {"name": "opencode", "version": "1.18.8"}, "io.modelcontextprotocol/clientCapabilities": {"roots": {}}}}, "ts": "2026-10-10T06:52:45Z", "kind": "echo-stdio"}
+{"method": "initialize", "id": 0, "params": {"protocolVersion": "2025-11-25", "capabilities": {"roots": {}}, "clientInfo": {"name": "opencode", "version": "1.18.8"}}, "ts": "2026-10-10T06:52:45Z", "kind": "echo-stdio"}
+{"method": "notifications/initialized", "id": null, "params": {}, "ts": "2026-10-10T06:52:45Z", "kind": "echo-stdio"}
+{"method": "tools/list", "id": 1, "params": {}, "ts": "2026-10-10T06:52:45Z", "kind": "echo-stdio"}
+{"method": "server/discover", "id": "server-discover-probe-1", "params": {"_meta": {"io.modelcontextprotocol/protocolVersion": "2026-07-28", "io.modelcontextprotocol/clientInfo": {"name": "opencode", "version": "1.18.8"}, "io.modelcontextprotocol/clientCapabilities": {"roots": {}}}}, "ts": "2026-10-10T06:52:46Z", "kind": "echo-stdio"}
+{"method": "initialize", "id": 0, "params": {"protocolVersion": "2025-11-25", "capabilities": {"roots": {}}, "clientInfo": {"name": "opencode", "version": "1.18.8"}}, "ts": "2026-10-10T06:52:46Z", "kind": "echo-stdio"}
+{"method": "notifications/initialized", "id": null, "params": {}, "ts": "2026-10-10T06:52:46Z", "kind": "echo-stdio"}
+{"method": "tools/list", "id": 1, "params": {}, "ts": "2026-10-10T06:52:46Z", "kind": "echo-stdio"}
+{"method": "server/discover", "id": "server-discover-probe-1", "params": {"_meta": {"io.modelcontextprotocol/protocolVersion": "2026-07-28", "io.modelcontextprotocol/clientInfo": {"name": "opencode", "version": "1.18.8"}, "io.modelcontextprotocol/clientCapabilities": {"roots": {}}}}, "ts": "2026-10-10T06:52:47Z", "kind": "echo-stdio"}
+{"method": "initialize", "id": 0, "params": {"protocolVersion": "2025-11-25", "capabilities": {"roots": {}}, "clientInfo": {"name": "opencode", "version": "1.18.8"}}, "ts": "2026-10-10T06:52:47Z", "kind": "echo-stdio"}
+{"method": "notifications/initialized", "id": null, "params": {}, "ts": "2026-10-10T06:52:47Z", "kind": "echo-stdio"}
+{"method": "tools/list", "id": 1, "params": {}, "ts": "2026-10-10T06:52:47Z", "kind": "echo-stdio"}
+{"method": "tools/call", "id": 2, "params": {"name": "stdio_echo", "arguments": {"text": "P3-STDIO"}, "_meta": {"progressToken": 2}}, "ts": "2026-10-10T06:53:21Z", "kind": "echo-stdio"}
+{"method": "server/discover", "id": "server-discover-probe-1", "params": {"_meta": {"io.modelcontextprotocol/protocolVersion": "2026-07-28", "io.modelcontextprotocol/clientInfo": {"name": "opencode", "version": "1.18.8"}, "io.modelcontextprotocol/clientCapabilities": {"roots": {}}}}, "ts": "2026-10-10T06:53:25Z", "kind": "echo-stdio"}
+{"method": "initialize", "id": 0, "params": {"protocolVersion": "2025-11-25", "capabilities": {"roots": {}}, "clientInfo": {"name": "opencode", "version": "1.18.8"}}, "ts": "2026-10-10T06:53:25Z", "kind": "echo-stdio"}
+{"method": "notifications/initialized", "id": null, "params": {}, "ts": "2026-10-10T06:53:25Z", "kind": "echo-stdio"}
+{"method": "tools/list", "id": 1, "params": {}, "ts": "2026-10-10T06:53:25Z", "kind": "echo-stdio"}
+
+[exit=0 wall=0.0s]
+
+$ cat /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P3-mcp/p3/mcp-http.jsonl
+{"method": "server/discover", "id": "server-discover-probe-1", "params": {"_meta": {"io.modelcontextprotocol/protocolVersion": "2026-07-28", "io.modelcontextprotocol/clientInfo": {"name": "opencode", "version": "1.18.8"}, "io.modelcontextprotocol/clientCapabilities": {"roots": {}}}}, "ts": "2026-10-10T06:52:45Z", "kind": "echo-http"}
+{"method": "initialize", "id": 0, "params": {"protocolVersion": "2025-11-25", "capabilities": {"roots": {}}, "clientInfo": {"name": "opencode", "version": "1.18.8"}}, "ts": "2026-10-10T06:52:45Z", "kind": "echo-http"}
+{"method": "notifications/initialized", "id": null, "params": {}, "ts": "2026-10-10T06:52:45Z", "kind": "echo-http"}
+{"method": "GET-sse-stream", "path": "/mcp", "ts": "2026-10-10T06:52:45Z", "kind": "echo-http"}
+{"method": "tools/list", "id": 1, "params": {}, "ts": "2026-10-10T06:52:45Z", "kind": "echo-http"}
+{"method": "server/discover", "id": "server-discover-probe-1", "params": {"_meta": {"io.modelcontextprotocol/protocolVersion": "2026-07-28", "io.modelcontextprotocol/clientInfo": {"name": "opencode", "version": "1.18.8"}, "io.modelcontextprotocol/clientCapabilities": {"roots": {}}}}, "ts": "2026-10-10T06:52:46Z", "kind": "echo-http"}
+{"method": "initialize", "id": 0, "params": {"protocolVersion": "2025-11-25", "capabilities": {"roots": {}}, "clientInfo": {"name": "opencode", "version": "1.18.8"}}, "ts": "2026-10-10T06:52:46Z", "kind": "echo-http"}
+{"method": "notifications/initialized", "id": null, "params": {}, "ts": "2026-10-10T06:52:46Z", "kind": "echo-http"}
+{"method": "GET-sse-stream", "path": "/mcp", "ts": "2026-10-10T06:52:46Z", "kind": "echo-http"}
+{"method": "tools/list", "id": 1, "params": {}, "ts": "2026-10-10T06:52:46Z", "kind": "echo-http"}
+{"method": "server/discover", "id": "server-discover-probe-1", "params": {"_meta": {"io.modelcontextprotocol/protocolVersion": "2026-07-28", "io.modelcontextprotocol/clientInfo": {"name": "opencode", "version": "1.18.8"}, "io.modelcontextprotocol/clientCapabilities": {"roots": {}}}}, "ts": "2026-10-10T06:52:47Z", "kind": "echo-http"}
+{"method": "initialize", "id": 0, "params": {"protocolVersion": "2025-11-25", "capabilities": {"roots": {}}, "clientInfo": {"name": "opencode", "version": "1.18.8"}}, "ts": "2026-10-10T06:52:47Z", "kind": "echo-http"}
+{"method": "notifications/initialized", "id": null, "params": {}, "ts": "2026-10-10T06:52:47Z", "kind": "echo-http"}
+{"method": "GET-sse-stream", "path": "/mcp", "ts": "2026-10-10T06:52:47Z", "kind": "echo-http"}
+{"method": "tools/list", "id": 1, "params": {}, "ts": "2026-10-10T06:52:47Z", "kind": "echo-http"}
+{"method": "server/discover", "id": "server-discover-probe-1", "params": {"_meta": {"io.modelcontextprotocol/protocolVersion": "2026-07-28", "io.modelcontextprotocol/clientInfo": {"name": "opencode", "version": "1.18.8"}, "io.modelcontextprotocol/clientCapabilities": {"roots": {}}}}, "ts": "2026-10-10T06:53:25Z", "kind": "echo-http"}
+{"method": "initialize", "id": 0, "params": {"protocolVersion": "2025-11-25", "capabilities": {"roots": {}}, "clientInfo": {"name": "opencode", "version": "1.18.8"}}, "ts": "2026-10-10T06:53:25Z", "kind": "echo-http"}
+{"method": "notifications/initialized", "id": null, "params": {}, "ts": "2026-10-10T06:53:25Z", "kind": "echo-http"}
+{"method": "GET-sse-stream", "path": "/mcp", "ts": "2026-10-10T06:53:25Z", "kind": "echo-http"}
+{"method": "tools/list", "id": 1, "params": {}, "ts": "2026-10-10T06:53:25Z", "kind": "echo-http"}
+{"method": "tools/call", "id": 2, "params": {"name": "http_echo", "arguments": {"text": "P3-HTTP"}, "_meta": {"progressToken": 2}}, "ts": "2026-10-10T06:53:38Z", "kind": "echo-http"}
+
+[exit=0 wall=0.0s]
+
+VERDICT: PASS — both the stdio and the streamable-HTTP MCP server were listed by mcp list and called from opencode run (tools/call reached each server).

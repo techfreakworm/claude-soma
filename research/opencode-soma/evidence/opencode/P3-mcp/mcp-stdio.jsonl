@@ -1,0 +1,21 @@
+{"method": "server/discover", "id": "server-discover-probe-1", "params": {"_meta": {"io.modelcontextprotocol/protocolVersion": "2026-07-28", "io.modelcontextprotocol/clientInfo": {"name": "opencode", "version": "1.18.8"}, "io.modelcontextprotocol/clientCapabilities": {"roots": {}}}}, "ts": "2026-10-10T06:52:45Z", "kind": "echo-stdio"}
+{"method": "initialize", "id": 0, "params": {"protocolVersion": "2025-11-25", "capabilities": {"roots": {}}, "clientInfo": {"name": "opencode", "version": "1.18.8"}}, "ts": "2026-10-10T06:52:45Z", "kind": "echo-stdio"}
+{"method": "notifications/initialized", "id": null, "params": {}, "ts": "2026-10-10T06:52:45Z", "kind": "echo-stdio"}
+{"method": "tools/list", "id": 1, "params": {}, "ts": "2026-10-10T06:52:45Z", "kind": "echo-stdio"}
+{"method": "server/discover", "id": "server-discover-probe-1", "params": {"_meta": {"io.modelcontextprotocol/protocolVersion": "2026-07-28", "io.modelcontextprotocol/clientInfo": {"name": "opencode", "version": "1.18.8"}, "io.modelcontextprotocol/clientCapabilities": {"roots": {}}}}, "ts": "2026-10-10T06:52:46Z", "kind": "echo-stdio"}
+{"method": "initialize", "id": 0, "params": {"protocolVersion": "2025-11-25", "capabilities": {"roots": {}}, "clientInfo": {"name": "opencode", "version": "1.18.8"}}, "ts": "2026-10-10T06:52:46Z", "kind": "echo-stdio"}
+{"method": "notifications/initialized", "id": null, "params": {}, "ts": "2026-10-10T06:52:46Z", "kind": "echo-stdio"}
+{"method": "tools/list", "id": 1, "params": {}, "ts": "2026-10-10T06:52:46Z", "kind": "echo-stdio"}
+{"method": "server/discover", "id": "server-discover-probe-1", "params": {"_meta": {"io.modelcontextprotocol/protocolVersion": "2026-07-28", "io.modelcontextprotocol/clientInfo": {"name": "opencode", "version": "1.18.8"}, "io.modelcontextprotocol/clientCapabilities": {"roots": {}}}}, "ts": "2026-10-10T06:52:47Z", "kind": "echo-stdio"}
+{"method": "initialize", "id": 0, "params": {"protocolVersion": "2025-11-25", "capabilities": {"roots": {}}, "clientInfo": {"name": "opencode", "version": "1.18.8"}}, "ts": "2026-10-10T06:52:47Z", "kind": "echo-stdio"}
+{"method": "notifications/initialized", "id": null, "params": {}, "ts": "2026-10-10T06:52:47Z", "kind": "echo-stdio"}
+{"method": "tools/list", "id": 1, "params": {}, "ts": "2026-10-10T06:52:47Z", "kind": "echo-stdio"}
+{"method": "tools/call", "id": 2, "params": {"name": "stdio_echo", "arguments": {"text": "P3-STDIO"}, "_meta": {"progressToken": 2}}, "ts": "2026-10-10T06:53:21Z", "kind": "echo-stdio"}
+{"method": "server/discover", "id": "server-discover-probe-1", "params": {"_meta": {"io.modelcontextprotocol/protocolVersion": "2026-07-28", "io.modelcontextprotocol/clientInfo": {"name": "opencode", "version": "1.18.8"}, "io.modelcontextprotocol/clientCapabilities": {"roots": {}}}}, "ts": "2026-10-10T06:53:25Z", "kind": "echo-stdio"}
+{"method": "initialize", "id": 0, "params": {"protocolVersion": "2025-11-25", "capabilities": {"roots": {}}, "clientInfo": {"name": "opencode", "version": "1.18.8"}}, "ts": "2026-10-10T06:53:25Z", "kind": "echo-stdio"}
+{"method": "notifications/initialized", "id": null, "params": {}, "ts": "2026-10-10T06:53:25Z", "kind": "echo-stdio"}
+{"method": "tools/list", "id": 1, "params": {}, "ts": "2026-10-10T06:53:25Z", "kind": "echo-stdio"}
+{"method": "server/discover", "id": "server-discover-probe-1", "params": {"_meta": {"io.modelcontextprotocol/protocolVersion": "2026-07-28", "io.modelcontextprotocol/clientInfo": {"name": "opencode", "version": "1.18.8"}, "io.modelcontextprotocol/clientCapabilities": {"roots": {}}}}, "ts": "2026-10-10T06:53:55Z", "kind": "echo-stdio"}
+{"method": "initialize", "id": 0, "params": {"protocolVersion": "2025-11-25", "capabilities": {"roots": {}}, "clientInfo": {"name": "opencode", "version": "1.18.8"}}, "ts": "2026-10-10T06:53:55Z", "kind": "echo-stdio"}
+{"method": "notifications/initialized", "id": null, "params": {}, "ts": "2026-10-10T06:53:55Z", "kind": "echo-stdio"}
+{"method": "tools/list", "id": 1, "params": {}, "ts": "2026-10-10T06:53:55Z", "kind": "echo-stdio"}

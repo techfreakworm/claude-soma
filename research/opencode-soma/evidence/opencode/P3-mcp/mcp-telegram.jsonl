@@ -1,0 +1,22 @@
+{"method": "server/discover", "id": "server-discover-probe-1", "params": {"_meta": {"io.modelcontextprotocol/protocolVersion": "2026-07-28", "io.modelcontextprotocol/clientInfo": {"name": "opencode", "version": "1.18.8"}, "io.modelcontextprotocol/clientCapabilities": {"roots": {}}}}, "ts": "2026-10-10T06:52:45Z", "kind": "telegram"}
+{"method": "initialize", "id": 0, "params": {"protocolVersion": "2025-11-25", "capabilities": {"roots": {}}, "clientInfo": {"name": "opencode", "version": "1.18.8"}}, "ts": "2026-10-10T06:52:45Z", "kind": "telegram"}
+{"method": "notifications/initialized", "id": null, "params": {}, "ts": "2026-10-10T06:52:45Z", "kind": "telegram"}
+{"method": "tools/list", "id": 1, "params": {}, "ts": "2026-10-10T06:52:45Z", "kind": "telegram"}
+{"method": "server/discover", "id": "server-discover-probe-1", "params": {"_meta": {"io.modelcontextprotocol/protocolVersion": "2026-07-28", "io.modelcontextprotocol/clientInfo": {"name": "opencode", "version": "1.18.8"}, "io.modelcontextprotocol/clientCapabilities": {"roots": {}}}}, "ts": "2026-10-10T06:52:46Z", "kind": "telegram"}
+{"method": "initialize", "id": 0, "params": {"protocolVersion": "2025-11-25", "capabilities": {"roots": {}}, "clientInfo": {"name": "opencode", "version": "1.18.8"}}, "ts": "2026-10-10T06:52:46Z", "kind": "telegram"}
+{"method": "notifications/initialized", "id": null, "params": {}, "ts": "2026-10-10T06:52:46Z", "kind": "telegram"}
+{"method": "tools/list", "id": 1, "params": {}, "ts": "2026-10-10T06:52:46Z", "kind": "telegram"}
+{"method": "server/discover", "id": "server-discover-probe-1", "params": {"_meta": {"io.modelcontextprotocol/protocolVersion": "2026-07-28", "io.modelcontextprotocol/clientInfo": {"name": "opencode", "version": "1.18.8"}, "io.modelcontextprotocol/clientCapabilities": {"roots": {}}}}, "ts": "2026-10-10T06:52:47Z", "kind": "telegram"}
+{"method": "initialize", "id": 0, "params": {"protocolVersion": "2025-11-25", "capabilities": {"roots": {}}, "clientInfo": {"name": "opencode", "version": "1.18.8"}}, "ts": "2026-10-10T06:52:47Z", "kind": "telegram"}
+{"method": "notifications/initialized", "id": null, "params": {}, "ts": "2026-10-10T06:52:47Z", "kind": "telegram"}
+{"method": "tools/list", "id": 1, "params": {}, "ts": "2026-10-10T06:52:47Z", "kind": "telegram"}
+{"method": "server/discover", "id": "server-discover-probe-1", "params": {"_meta": {"io.modelcontextprotocol/protocolVersion": "2026-07-28", "io.modelcontextprotocol/clientInfo": {"name": "opencode", "version": "1.18.8"}, "io.modelcontextprotocol/clientCapabilities": {"roots": {}}}}, "ts": "2026-10-10T06:53:25Z", "kind": "telegram"}
+{"method": "initialize", "id": 0, "params": {"protocolVersion": "2025-11-25", "capabilities": {"roots": {}}, "clientInfo": {"name": "opencode", "version": "1.18.8"}}, "ts": "2026-10-10T06:53:25Z", "kind": "telegram"}
+{"method": "notifications/initialized", "id": null, "params": {}, "ts": "2026-10-10T06:53:25Z", "kind": "telegram"}
+{"method": "tools/list", "id": 1, "params": {}, "ts": "2026-10-10T06:53:25Z", "kind": "telegram"}
+{"method": "server/discover", "id": "server-discover-probe-1", "params": {"_meta": {"io.modelcontextprotocol/protocolVersion": "2026-07-28", "io.modelcontextprotocol/clientInfo": {"name": "opencode", "version": "1.18.8"}, "io.modelcontextprotocol/clientCapabilities": {"roots": {}}}}, "ts": "2026-10-10T06:53:55Z", "kind": "telegram"}
+{"method": "initialize", "id": 0, "params": {"protocolVersion": "2025-11-25", "capabilities": {"roots": {}}, "clientInfo": {"name": "opencode", "version": "1.18.8"}}, "ts": "2026-10-10T06:53:55Z", "kind": "telegram"}
+{"method": "notifications/initialized", "id": null, "params": {}, "ts": "2026-10-10T06:53:55Z", "kind": "telegram"}
+{"method": "tools/list", "id": 1, "params": {}, "ts": "2026-10-10T06:53:55Z", "kind": "telegram"}
+{"method": "tools/call", "id": 2, "params": {"name": "send_message", "arguments": {"chat_id": "42", "text": "P3-ORCH-HELLO"}, "_meta": {"progressToken": 2}}, "ts": "2026-10-10T06:55:04Z", "kind": "telegram"}
+{"method": "tools/call", "id": 3, "params": {"name": "send_message", "arguments": {"chat_id": "42", "text": "P3-LEAD-FORCED"}, "_meta": {"progressToken": 3}}, "ts": "2026-10-10T06:56:29Z", "kind": "telegram"}

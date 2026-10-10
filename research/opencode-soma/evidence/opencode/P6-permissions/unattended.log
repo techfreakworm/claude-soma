@@ -1,0 +1,50 @@
+# P6-permissions/unattended.log
+date-utc: 2026-10-10T06:57:04Z
+probe-script: research/opencode-soma/probes/opencode/P6-permissions/run.sh
+opencode-version: 1.18.8
+model: ollama/qwen3:32b (thinking off)
+sandbox: $TMPDIR/ocsoma-pe/P6-permissions (HOME, XDG_*, TMPDIR all inside it)
+purpose: what unattended run/serve do when a tool call needs ask
+
+$ cat /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P6-permissions/project/opencode.json
+{ "$schema": "https://opencode.ai/config.json", "permission": { "bash": "ask" } }
+
+[exit=0 wall=0.0s]
+
+## 2a. opencode run, no flags, bash=ask (bounded to 150s)
+$ run_bounded 150 /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P6-permissions/2a.txt /Users/techfreakworm/.opencode/bin/opencode run -m ollama/qwen3:32b Use the bash tool to run exactly: touch /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P6-permissions/project/p6work/p6-run-plain   Then say DONE.
+exited rc=0 after ~48s
+
+[exit=0 wall=48.5s]
+
+$ cat /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P6-permissions/2a.txt
+[0m
+> build · qwen3:32b
+[0m
+[93m[1m! [0mpermission requested: external_directory (/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P6-permissions/project/p6work/*); auto-rejecting
+[0m✗ [0mtouch /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P6-permissions/project/p6work/p6-run-plain failed
+[91m[1mError: [0mThe user rejected permission to use this specific tool call.
+
+[exit=0 wall=0.0s]
+
+file created: no
+## 2b. opencode run --auto
+$ run_bounded 150 /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P6-permissions/2b.txt /Users/techfreakworm/.opencode/bin/opencode run --auto -m ollama/qwen3:32b Use the bash tool to run exactly: touch /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P6-permissions/project/p6work/p6-run-auto   Then say DONE.
+exited rc=0 after ~36s
+
+[exit=0 wall=36.4s]
+
+$ cat /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P6-permissions/2b.txt
+[0m
+> build · qwen3:32b
+[0m
+[0m$ [0mtouch /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P6-permissions/project/p6work/p6-run-auto
+(no output)
+[0m
+DONE
+
+[exit=0 wall=0.0s]
+
+file created: YES
+## 2c. opencode run --yolo (hidden alias)
+$ run_bounded 150 /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P6-permissions/2c.txt /Users/techfreakworm/.opencode/bin/opencode run --yolo -m ollama/qwen3:32b Use the bash tool to run exactly: touch /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P6-permissions/project/p6work/p6-run-yolo   Then say DONE.
