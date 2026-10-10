@@ -247,12 +247,18 @@ def main() -> int:
     ap.add_argument("--model", required=True)
     ap.add_argument("--think", choices=["true", "false", "omit"], default="omit")
     ap.add_argument("--tasks", default="extract,dup,con,rem")
+    ap.add_argument("--cases", default="", help="comma-separated case ids to run (default: all)")
     ap.add_argument("--prescrub", action="store_true",
                     help="run the deterministic secret scrubber on every input before the model sees it")
     a = ap.parse_args()
     think = {"true": True, "false": False, "omit": None}[a.think]
     secrets = C.make_secrets()
-    tag = f"{a.model.replace(':', '_').replace('/', '_')}-think-{a.think}" + ("-prescrub" if a.prescrub else "")
+    tag = f"{a.model.replace(':', '_').replace('/', '_')}-think-{a.think}" + ("-prescrub" if a.prescrub else "") \
+        + ("-subset" if a.cases else "")
+    only = set(a.cases.split(",")) if a.cases else None
+
+    def pick(cases: list[dict]) -> list[dict]:
+        return [c for c in cases if only is None or c["id"] in only]
     scrubbed = {"texts": 0, "redactions": 0}
 
     def pre(text: str) -> str:
@@ -287,7 +293,7 @@ def main() -> int:
         tasks = a.tasks.split(",")
         if "extract" in tasks:
             rows["extract"] = []
-            for c in C.EXTRACTION:
+            for c in pick(C.EXTRACTION):
                 conv = "\n".join(f"{who}: {pre(fill(t, secrets))}" for who, t in c["turns"])
                 o = chat(a.model, P_EXTRACT.format(conv=conv), S_EXTRACT, think)
                 s = score_extraction(c, o, secrets)
@@ -297,7 +303,7 @@ def main() -> int:
                                             "error": o.get("error")}), secrets) + "\n")
         if "dup" in tasks:
             rows["dup"] = []
-            for c in C.DUPLICATES:
+            for c in pick(C.DUPLICATES):
                 cands = "\n".join(f"{k}: {v}" for k, v in c["cands"].items())
                 o = chat(a.model, P_DUP.format(new=c["new"], cands=cands), S_DUP, think)
                 s = score_dup(c, o)
@@ -306,7 +312,7 @@ def main() -> int:
                 jl.write(json.dumps({"task": "dup", "id": c["id"], "score": s, "raw": o.get("raw"), "error": o.get("error")}) + "\n")
         if "con" in tasks:
             rows["con"] = []
-            for c in C.CONTRADICTIONS:
+            for c in pick(C.CONTRADICTIONS):
                 ex = "\n".join(f"{k}: {v}" for k, v in c["existing"].items())
                 o = chat(a.model, P_CON.format(new=c["new"], existing=ex), S_CON, think)
                 s = score_con(c, o)
@@ -315,7 +321,7 @@ def main() -> int:
                 jl.write(json.dumps({"task": "con", "id": c["id"], "score": s, "raw": o.get("raw"), "error": o.get("error")}) + "\n")
         if "rem" in tasks:
             rows["rem"] = []
-            for c in C.REMEMBER:
+            for c in pick(C.REMEMBER):
                 o = chat(a.model, P_REM.format(msg=pre(fill(c["msg"], secrets))), S_REM, think)
                 s = score_rem(c, o, secrets)
                 rows["rem"].append({"id": c["id"], "out": o, "score": s})
@@ -324,6 +330,7 @@ def main() -> int:
                                             "error": o.get("error")}), secrets) + "\n")
 
         summ: dict = {"model": a.model, "think": a.think, "ollama": ver, "prescrub": a.prescrub,
+                      "cases_filter": sorted(only) if only else "all",
                       "prescrub_counts": scrubbed if a.prescrub else None}
         danger = {}
         if "extract" in rows:
@@ -335,7 +342,7 @@ def main() -> int:
             summ["extract"] = {"cases": len(r), "planted_facts": planted, "tp": tp, "fp": fp, "precision": p, "recall": rc,
                                "forbidden_stored": sum(x["score"]["forbidden"] for x in r),
                                "secret_leaks": sum(x["score"]["leaks"] for x in r),
-                               "secret_cases": sum(1 for c in C.EXTRACTION if c.get("secrets")),
+                               "secret_cases": sum(1 for c in pick(C.EXTRACTION) if c.get("secrets")),
                                "invalid_json": sum(1 for x in r if not x["score"]["valid"]), **lat(r)}
             danger["extract_secret_leaks"] = summ["extract"]["secret_leaks"]
             danger["extract_forbidden_stored"] = summ["extract"]["forbidden_stored"]
@@ -357,7 +364,7 @@ def main() -> int:
             p, rc = pr(tp, fp, fn)
             summ["con"] = {"cases": len(r), "case_accuracy": round(sum(x["score"]["correct"] for x in r) / len(r), 3),
                            "precision": p, "recall": rc, "false_supersedes": fp, "missed_supersedes": fn,
-                           "keep_decisions_total": sum(len(c["existing"]) - len(c["supersede"]) for c in C.CONTRADICTIONS),
+                           "keep_decisions_total": sum(len(c["existing"]) - len(c["supersede"]) for c in pick(C.CONTRADICTIONS)),
                            "invalid_json": sum(1 for x in r if not x["score"]["valid"]), **lat(r)}
             danger["con_false_supersedes"] = fp
         if "rem" in rows:
