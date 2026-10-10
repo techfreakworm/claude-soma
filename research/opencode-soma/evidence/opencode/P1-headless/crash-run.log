@@ -1,0 +1,48 @@
+# P1-headless/crash-run.log
+date-utc: 2026-10-10T06:37:36Z
+probe-script: research/opencode-soma/probes/opencode/P1-headless/crash-run.sh
+opencode-version: 1.18.8
+model: ollama/qwen3:32b (thinking off)
+sandbox: $TMPDIR/ocsoma-pe/P1-crashrun (HOME, XDG_*, TMPDIR all inside it)
+purpose: kill -9 an opencode run mid-generation, then continue the same session id
+
+$ cat /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P1-crashrun/plant.json
+{"type":"step_start","timestamp":1791614298788,"sessionID":"ses_edb77f504ffeG9ImknVrad67K4","part":{"id":"prt_12488aaa1001bbr4LuESkDhNXs","messageID":"msg_124880c7700126iOnrr0NYUteS","sessionID":"ses_edb77f504ffeG9ImknVrad67K4","snapshot":"185d885e450a4fdea95ca09d89713e35033dd064","type":"step-start"}}
+{"type":"text","timestamp":1791614298874,"sessionID":"ses_edb77f504ffeG9ImknVrad67K4","part":{"id":"prt_12488aaa30018BYULQOVtmJXfb","messageID":"msg_124880c7700126iOnrr0NYUteS","sessionID":"ses_edb77f504ffeG9ImknVrad67K4","type":"text","text":"OK","time":{"start":1791614298787,"end":1791614298871}}}
+{"type":"step_finish","timestamp":1791614298924,"sessionID":"ses_edb77f504ffeG9ImknVrad67K4","part":{"id":"prt_12488ab29001e7p0SQileZdqah","reason":"stop","snapshot":"185d885e450a4fdea95ca09d89713e35033dd064","messageID":"msg_124880c7700126iOnrr0NYUteS","sessionID":"ses_edb77f504ffeG9ImknVrad67K4","type":"step-finish","tokens":{"total":6541,"input":4674,"output":2,"reasoning":0,"cache":{"write":0,"read":1865}},"cost":0}}
+
+[exit=0 wall=0.0s]
+
+session under test: ses_edb77f504ffeG9ImknVrad67K4 (KIWI-4417 planted)
+## long generation on ses_edb77f504ffeG9ImknVrad67K4, kill -9 after 10s
+process 348 alive before kill: yes
+kill -9 348 sent at 06:38:29
+$ cat /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P1-crashrun/crash-run.json
+{"type":"step_start","timestamp":1791614305165,"sessionID":"ses_edb77f504ffeG9ImknVrad67K4","part":{"id":"prt_12488c38a001NsE5DRhVwLR228","messageID":"msg_12488af42001YuV7bbXx3ZpHk1","sessionID":"ses_edb77f504ffeG9ImknVrad67K4","snapshot":"185d885e450a4fdea95ca09d89713e35033dd064","type":"step-start"}}
+
+[exit=0 wall=0.0s]
+
+## proxy: the in-flight LLM request was cut (client_disconnected=true)
+$ sh -c tail -1 '/Users/techfreakworm/.soma/worktrees/claude-soma/claude-soma-manager/research/opencode-soma/evidence/opencode/P1-headless/proxy-crashrun.jsonl' | jq -c '{ts, model: .request.model, last_user: .request.last_user[0:60], client_disconnected, wall_s, completion_tokens: .response.usage.completion_tokens}'
+{"ts":"2026-10-10T06:38:20Z","model":"qwen3:32b","last_user":"\"Count from 1 to 120, writing every number as an English wor","client_disconnected":true,"wall_s":8.52,"completion_tokens":null}
+
+[exit=0 wall=0.0s]
+
+## export after the crash (the partial assistant message is persisted incomplete)
+$ sh -c jq -c '.messages[] | {role: .info.role, finish: .info.finish, completed: .info.time.completed, error: (.info.error.name // null), text: ([.parts[] | select(.type=="text") | .text] | join(" ") | .[0:100])}' '/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P1-crashrun/export-after-crash.json'
+{"role":"user","finish":null,"completed":null,"error":null,"text":"\"Remember this secret token: KIWI-4417. Reply only with the word OK.\""}
+{"role":"assistant","finish":"stop","completed":1791614298967,"error":null,"text":"OK"}
+{"role":"user","finish":null,"completed":null,"error":null,"text":"\"Count from 1 to 120, writing every number as an English word, one per line. Output only the list.\""}
+{"role":"assistant","finish":null,"completed":null,"error":null,"text":""}
+
+[exit=0 wall=0.0s]
+
+## continue the same session id after the crash
+$ cat /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P1-crashrun/after.json
+{"type":"step_start","timestamp":1791614316278,"sessionID":"ses_edb77f504ffeG9ImknVrad67K4","part":{"id":"prt_12488eef1001DibG5JNCnJyFYT","messageID":"msg_12488e2d7001VKDD54kAU0p5oB","sessionID":"ses_edb77f504ffeG9ImknVrad67K4","snapshot":"185d885e450a4fdea95ca09d89713e35033dd064","type":"step-start"}}
+{"type":"text","timestamp":1791614316870,"sessionID":"ses_edb77f504ffeG9ImknVrad67K4","part":{"id":"prt_12488eef40011vQFp8MVx9Ic9T","messageID":"msg_12488e2d7001VKDD54kAU0p5oB","sessionID":"ses_edb77f504ffeG9ImknVrad67K4","type":"text","text":"KIWI-4417","time":{"start":1791614316276,"end":1791614316867}}}
+{"type":"step_finish","timestamp":1791614316927,"sessionID":"ses_edb77f504ffeG9ImknVrad67K4","part":{"id":"prt_12488f17c0017B6LqqFRtA40vW","reason":"stop","snapshot":"185d885e450a4fdea95ca09d89713e35033dd064","messageID":"msg_12488e2d7001VKDD54kAU0p5oB","sessionID":"ses_edb77f504ffeG9ImknVrad67K4","type":"step-finish","tokens":{"total":6619,"input":46,"output":8,"reasoning":0,"cache":{"write":0,"read":6565}},"cost":0}}
+
+[exit=0 wall=0.0s]
+
+VERDICT: PASS — after kill -9 mid-generation (in-flight request cut: 1) the history survived on disk and -s <same id> continued it; the model recalled KIWI-4417.

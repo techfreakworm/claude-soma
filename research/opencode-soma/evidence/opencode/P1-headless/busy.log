@@ -1,0 +1,523 @@
+# P1-headless/busy.log
+date-utc: 2026-10-10T06:39:41Z
+probe-script: research/opencode-soma/probes/opencode/P1-headless/busy.sh
+opencode-version: 1.18.8
+model: ollama/qwen3:32b (thinking off)
+sandbox: $TMPDIR/ocsoma-pe/P1-busy (HOME, XDG_*, TMPDIR all inside it)
+purpose: second prompt while a session is busy: queue / block / abort / attach / v2 / second process
+
+session: ses_edb760cb2ffeZDKACHt0Nbdmbv
+$ python3.12 -I /Users/techfreakworm/.soma/worktrees/claude-soma/claude-soma-manager/research/opencode-soma/probes/opencode/ocdrive.py --base http://127.0.0.1:47114 turn --session ses_edb760cb2ffeZDKACHt0Nbdmbv --model ollama/qwen3:32b --text Remember this secret token: PEAR-5521. Reply only with the word OK.
+{
+ "session": "ses_edb760cb2ffeZDKACHt0Nbdmbv",
+ "timeout": false,
+ "seen_busy": true,
+ "wall_s": 45.5,
+ "final_text": "OK",
+ "new_messages": [
+  {
+   "id": "msg_12489f3f2001bdHvJ3qZkoU4P2",
+   "role": "user",
+   "agent": "build",
+   "model": "qwen3:32b",
+   "created": 1791614383090,
+   "completed": null,
+   "tokens": null,
+   "finish": null,
+   "error": null,
+   "text": "Remember this secret token: PEAR-5521. Reply only with the word OK.",
+   "tools": []
+  },
+  {
+   "id": "msg_12489f58d001kcy0PiNIZLFvUw",
+   "role": "assistant",
+   "agent": "build",
+   "model": "qwen3:32b",
+   "created": 1791614383501,
+   "completed": 1791614428419,
+   "tokens": {
+    "total": 6835,
+    "input": 4968,
+    "output": 2,
+    "reasoning": 0,
+    "cache": {
+     "read": 1865,
+     "write": 0
+    }
+   },
+   "finish": "stop",
+   "error": null,
+   "text": "OK",
+   "tools": []
+  }
+ ],
+ "permissions": [],
+ "children": []
+}
+
+[exit=0 wall=45.7s]
+
+## 4a. prompt_async #1 (long), then prompt_async #2 three seconds later
+$ curl -s http://127.0.0.1:47114/session/status
+{"ses_edb760cb2ffeZDKACHt0Nbdmbv":{"type":"busy"}}
+[exit=0 wall=0.0s]
+
+$ jcurl -o /dev/null -w second prompt_async -> HTTP %{http_code} in %{time_total}s\n -X POST http://127.0.0.1:47114/session/ses_edb760cb2ffeZDKACHt0Nbdmbv/prompt_async -d {"model":{"providerID":"ollama","modelID":"qwen3:32b"},"parts":[{"type":"text","text":"Reply with exactly SECOND-PROMPT-OK and nothing else."}]}
+second prompt_async -> HTTP 204 in 0.005705s
+
+[exit=0 wall=0.0s]
+
+final status: "idle"
+$ msgs ses_edb760cb2ffeZDKACHt0Nbdmbv
+{"id":"qZkoU4P2","role":"user","created":1791614383090,"completed":null,"finish":null,"error":null,"text":"Remember this secret token: PEAR-5521. Reply only with the word OK."}
+{"id":"NIZLFvUw","role":"assistant","created":1791614383501,"completed":1791614428419,"finish":"stop","error":null,"text":"OK"}
+{"id":"55Ka4LMS","role":"user","created":1791614428704,"completed":null,"finish":null,"error":null,"text":"Count from 1 to 120, writing every number as an English word, one per line. Output only the list."}
+{"id":"giKRx86T","role":"assistant","created":1791614428708,"completed":1791614480591,"finish":"stop","error":null,"text":"one  \ntwo  \nthree  \nfour  \nfive  \nsix  \nseven  \neight  \nnine  \nten  \neleven  \ntwelve  \nthirteen  \nfourteen  \nfifteen  \ns"}
+{"id":"2IXbQ0xf","role":"user","created":1791614431841,"completed":null,"finish":null,"error":null,"text":"Reply with exactly SECOND-PROMPT-OK and nothing else."}
+{"id":"XwWMesHo","role":"assistant","created":1791614480598,"completed":1791614489179,"finish":"stop","error":null,"text":"SECOND-PROMPT-OK"}
+
+[exit=0 wall=0.0s]
+
+## 4b. sync POST /message while busy
+$ jcurl -o /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P1-busy/sync.json -w sync /message while busy -> HTTP %{http_code} after %{time_total}s\n -X POST http://127.0.0.1:47114/session/ses_edb760cb2ffeZDKACHt0Nbdmbv/message -d {"model":{"providerID":"ollama","modelID":"qwen3:32b"},"parts":[{"type":"text","text":"Reply with exactly THIRD-SYNC-OK and nothing else."}]}
+sync /message while busy -> HTTP 200 after 57.163091s
+
+[exit=0 wall=57.4s]
+
+$ sh -c jq -c '{role: .info.role, finish: .info.finish, text: ([.parts[]? | select(.type=="text") | .text] | join(" "))}' '/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P1-busy/sync.json'
+{"role":"assistant","finish":"stop","text":"THIRD-SYNC-OK"}
+
+[exit=0 wall=0.0s]
+
+final status: "idle"
+## 4c. abort while busy (Telegram /stop analog): POST /session/{id}/abort
+$ curl -s http://127.0.0.1:47114/session/status
+{"ses_edb760cb2ffeZDKACHt0Nbdmbv":{"type":"busy"}}
+[exit=0 wall=0.0s]
+
+$ jcurl -w \n-> HTTP %{http_code} in %{time_total}s\n -X POST http://127.0.0.1:47114/session/ses_edb760cb2ffeZDKACHt0Nbdmbv/abort
+true
+-> HTTP 200 in 0.054247s
+
+[exit=0 wall=0.1s]
+
+status right after abort: "idle" (within 0.2s)
+$ sh -c curl -s 'http://127.0.0.1:47114/session/ses_edb760cb2ffeZDKACHt0Nbdmbv/message' | jq -c '.[-1] | {role: .info.role, finish: .info.finish, error: (.info.error.name // null), completed: .info.time.completed, text_len: ([.parts[] | select(.type=="text") | .text] | join("") | length)}'
+{"role":"assistant","finish":null,"error":"MessageAbortedError","completed":1791614556480,"text_len":95}
+
+[exit=0 wall=0.0s]
+
+$ python3.12 -I /Users/techfreakworm/.soma/worktrees/claude-soma/claude-soma-manager/research/opencode-soma/probes/opencode/ocdrive.py --base http://127.0.0.1:47114 turn --session ses_edb760cb2ffeZDKACHt0Nbdmbv --model ollama/qwen3:32b --text What was the secret token I gave you at the very beginning? Reply with only the token.
+{
+ "session": "ses_edb760cb2ffeZDKACHt0Nbdmbv",
+ "timeout": false,
+ "seen_busy": true,
+ "wall_s": 5.7,
+ "final_text": "PEAR-5521",
+ "new_messages": [
+  {
+   "id": "msg_1248c9a39001lLZQEtSkvaCzaI",
+   "role": "user",
+   "agent": "build",
+   "model": "qwen3:32b",
+   "created": 1791614556729,
+   "completed": null,
+   "tokens": null,
+   "finish": null,
+   "error": null,
+   "text": "What was the secret token I gave you at the very beginning? Reply with only the token.",
+   "tools": []
+  },
+  {
+   "id": "msg_1248c9a3d001DSw7eIiYpcuyh1",
+   "role": "assistant",
+   "agent": "build",
+   "model": "qwen3:32b",
+   "created": 1791614556733,
+   "completed": 1791614562150,
+   "tokens": {
+    "total": 7794,
+    "input": 70,
+    "output": 7,
+    "reasoning": 0,
+    "cache": {
+     "read": 7717,
+     "write": 0
+    }
+   },
+   "finish": "stop",
+   "error": null,
+   "text": "PEAR-5521",
+   "tools": []
+  }
+ ],
+ "permissions": [],
+ "children": []
+}
+
+[exit=0 wall=5.7s]
+
+## 4d. opencode run --attach on the same busy session
+$ run_bounded 400 /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P1-busy/attach.txt /Users/techfreakworm/.opencode/bin/opencode run --attach http://127.0.0.1:47114 -m ollama/qwen3:32b -s ses_edb760cb2ffeZDKACHt0Nbdmbv Reply with exactly ATTACH-WHILE-BUSY-OK and nothing else.
+exited rc=0 after ~56s
+
+[exit=0 wall=56.6s]
+
+$ cat /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P1-busy/attach.txt
+one  
+two  
+three  
+four  
+five  
+six  
+seven  
+eight  
+nine  
+ten  
+eleven  
+twelve  
+thirteen  
+fourteen  
+fifteen  
+sixteen  
+seventeen  
+eighteen  
+nineteen  
+twenty  
+twenty-one  
+twenty-two  
+twenty-three  
+twenty-four  
+twenty-five  
+twenty-six  
+twenty-seven  
+twenty-eight  
+twenty-nine  
+thirty  
+thirty-one  
+thirty-two  
+thirty-three  
+thirty-four  
+thirty-five  
+thirty-six  
+thirty-seven  
+thirty-eight  
+thirty-nine  
+forty  
+forty-one  
+forty-two  
+forty-three  
+forty-four  
+forty-five  
+forty-six  
+forty-seven  
+forty-eight  
+forty-nine  
+fifty  
+fifty-one  
+fifty-two  
+fifty-three  
+fifty-four  
+fifty-five  
+fifty-six  
+fifty-seven  
+fifty-eight  
+fifty-nine  
+sixty  
+sixty-one  
+sixty-two  
+sixty-three  
+sixty-four  
+sixty-five  
+sixty-six  
+sixty-seven  
+sixty-eight  
+sixty-nine  
+seventy  
+seventy-one  
+seventy-two  
+seventy-three  
+seventy-four  
+seventy-five  
+seventy-six  
+seventy-seven  
+seventy-eight  
+seventy-nine  
+eighty  
+eighty-one  
+eighty-two  
+eighty-three  
+eighty-four  
+eighty-five  
+eighty-six  
+eighty-seven  
+eighty-eight  
+eighty-nine  
+ninety  
+ninety-one  
+ninety-two  
+ninety-three  
+ninety-four  
+ninety-five  
+ninety-six  
+ninety-seven  
+ninety-eight  
+ninety-nine  
+one hundred
+[0m
+> build · qwen3:32b
+[0m
+ATTACH-WHILE-BUSY-OK
+
+[exit=0 wall=0.0s]
+
+final status: "idle"
+$ msgs ses_edb760cb2ffeZDKACHt0Nbdmbv
+{"id":"qZkoU4P2","role":"user","created":1791614383090,"completed":null,"finish":null,"error":null,"text":"Remember this secret token: PEAR-5521. Reply only with the word OK."}
+{"id":"NIZLFvUw","role":"assistant","created":1791614383501,"completed":1791614428419,"finish":"stop","error":null,"text":"OK"}
+{"id":"55Ka4LMS","role":"user","created":1791614428704,"completed":null,"finish":null,"error":null,"text":"Count from 1 to 120, writing every number as an English word, one per line. Output only the list."}
+{"id":"giKRx86T","role":"assistant","created":1791614428708,"completed":1791614480591,"finish":"stop","error":null,"text":"one  \ntwo  \nthree  \nfour  \nfive  \nsix  \nseven  \neight  \nnine  \nten  \neleven  \ntwelve  \nthirteen  \nfourteen  \nfifteen  \ns"}
+{"id":"2IXbQ0xf","role":"user","created":1791614431841,"completed":null,"finish":null,"error":null,"text":"Reply with exactly SECOND-PROMPT-OK and nothing else."}
+{"id":"XwWMesHo","role":"assistant","created":1791614480598,"completed":1791614489179,"finish":"stop","error":null,"text":"SECOND-PROMPT-OK"}
+{"id":"WunaB9dn","role":"user","created":1791614489665,"completed":null,"finish":null,"error":null,"text":"Count from 1 to 120, writing every number as an English word, one per line. Output only the list."}
+{"id":"UQKBhBna","role":"assistant","created":1791614489668,"completed":1791614542236,"finish":"stop","error":null,"text":"one  \ntwo  \nthree  \nfour  \nfive  \nsix  \nseven  \neight  \nnine  \nten  \neleven  \ntwelve  \nthirteen  \nfourteen  \nfifteen  \ns"}
+{"id":"UMmP2BIH","role":"user","created":1791614492716,"completed":null,"finish":null,"error":null,"text":"Reply with exactly THIRD-SYNC-OK and nothing else."}
+{"id":"kSsI9mwd","role":"assistant","created":1791614542243,"completed":1791614549870,"finish":"stop","error":null,"text":"THIRD-SYNC-OK"}
+{"id":"0ixxHyBv","role":"user","created":1791614550268,"completed":null,"finish":null,"error":null,"text":"Count from 1 to 120, writing every number as an English word, one per line. Output only the list."}
+{"id":"34AmPz0O","role":"assistant","created":1791614550271,"completed":1791614556480,"finish":null,"error":"MessageAbortedError","text":"one  \ntwo  \nthree  \nfour  \nfive  \nsix  \nseven  \neight  \nnine  \nten  \neleven  \ntwelve  \nthirteen"}
+{"id":"SkvaCzaI","role":"user","created":1791614556729,"completed":null,"finish":null,"error":null,"text":"What was the secret token I gave you at the very beginning? Reply with only the token."}
+{"id":"iYpcuyh1","role":"assistant","created":1791614556733,"completed":1791614562150,"finish":"stop","error":null,"text":"PEAR-5521"}
+{"id":"LT7PU917","role":"user","created":1791614562437,"completed":null,"finish":null,"error":null,"text":"Count from 1 to 120, writing every number as an English word, one per line. Output only the list."}
+{"id":"wIqlHpMO","role":"assistant","created":1791614562440,"completed":1791614613226,"finish":"stop","error":null,"text":"one  \ntwo  \nthree  \nfour  \nfive  \nsix  \nseven  \neight  \nnine  \nten  \neleven  \ntwelve  \nthirteen  \nfourteen  \nfifteen  \ns"}
+{"id":"3Jy8XtJX","role":"user","created":1791614566124,"completed":null,"finish":null,"error":null,"text":"\"Reply with exactly ATTACH-WHILE-BUSY-OK and nothing else.\""}
+{"id":"gQxztjyq","role":"assistant","created":1791614613228,"completed":1791614621167,"finish":"stop","error":null,"text":"ATTACH-WHILE-BUSY-OK"}
+
+[exit=0 wall=0.0s]
+
+## 4e. v2 API while busy (separate session): POST /api/session/{id}/prompt delivery=queue and steer
+$ jcurl -w \n-> HTTP %{http_code} in %{time_total}s\n -X POST http://127.0.0.1:47114/api/session/ses_edb726353ffe9c7gqozvsBZLp0/prompt -d {"prompt":{"text":"Reply with exactly V2-QUEUE-OK and nothing else."},"delivery":"queue"}
+{"data":{"admittedSeq":8,"id":"msg_1248da9e3001UUVm6TVIoQIoFQ","sessionID":"ses_edb726353ffe9c7gqozvsBZLp0","prompt":{"text":"Reply with exactly V2-QUEUE-OK and nothing else."},"delivery":"queue","timeCreated":1791614626275}}
+-> HTTP 200 in 0.326555s
+
+[exit=0 wall=0.4s]
+
+$ jcurl -w \n-> HTTP %{http_code} in %{time_total}s\n -X POST http://127.0.0.1:47114/api/session/ses_edb726353ffe9c7gqozvsBZLp0/prompt -d {"prompt":{"text":"Reply with exactly V2-STEER-OK and nothing else."},"delivery":"steer"}
+{"data":{"admittedSeq":10,"id":"msg_1248daa71001B7H7JFGvaG6i2L","sessionID":"ses_edb726353ffe9c7gqozvsBZLp0","prompt":{"text":"Reply with exactly V2-STEER-OK and nothing else."},"delivery":"steer","timeCreated":1791614626417}}
+-> HTTP 200 in 0.038548s
+
+[exit=0 wall=0.1s]
+
+final v1 status: "idle"
+v1 message list (GET /session/{id}/message):
+$ msgs ses_edb726353ffe9c7gqozvsBZLp0
+{"id":"cLkHALqn","role":"user","created":1791614622925,"completed":null,"finish":null,"error":null,"text":"Count from 1 to 120, writing every number as an English word, one per line. Output only the list."}
+{"id":"mb5hPZB5","role":"assistant","created":1791614623143,"completed":1791614642011,"finish":"stop","error":null,"text":"{\"name\": \"bash\", \"arguments\": {\"command\": \"seq 1 120 | tr '[:digit:]' 'a-z' | awk '{print tolower($0)}' | xargs -I{} sh "}
+
+[exit=0 wall=0.3s]
+
+v2 message list (GET /api/session/{id}/message):
+$ sh -c curl -s 'http://127.0.0.1:47114/api/session/ses_edb726353ffe9c7gqozvsBZLp0/message' | jq -c '.data[] | {type, created: .time.created, completed: .time.completed, text: ([.content[]? | select(.type=="text") | .text] | join(" ") | .[0:80])}'
+{"type":"user","created":1791614626417,"completed":null,"text":""}
+{"type":"assistant","created":1791614661590,"completed":1791614662281,"text":"V2-QUEUE-OK"}
+{"type":"user","created":1791614626275,"completed":null,"text":""}
+
+[exit=0 wall=0.1s]
+
+LLM requests while the long generation was running (proxy):
+$ sh -c jq -c '{ts, last_user: .request.last_user[0:50], wall_s, text: .response.text[0:30]}' '/Users/techfreakworm/.soma/worktrees/claude-soma/claude-soma-manager/research/opencode-soma/evidence/opencode/P1-headless/proxy-busy.jsonl' | tail -5
+{"ts":"2026-10-10T06:42:36Z","last_user":"What was the secret token I gave you at the very b","wall_s":5.26,"text":"PEAR-5521"}
+{"ts":"2026-10-10T06:42:42Z","last_user":"Count from 1 to 120, writing every number as an En","wall_s":50.63,"text":"one  \ntwo  \nthree  \nfour  \nfiv"}
+{"ts":"2026-10-10T06:43:33Z","last_user":"\"Reply with exactly ATTACH-WHILE-BUSY-OK and nothi","wall_s":7.79,"text":"ATTACH-WHILE-BUSY-OK"}
+{"ts":"2026-10-10T06:43:44Z","last_user":"Count from 1 to 120, writing every number as an En","wall_s":17.85,"text":"{\"name\": \"bash\", \"arguments\": "}
+{"ts":"2026-10-10T06:43:46Z","last_user":"Reply with exactly V2-QUEUE-OK and nothing else.","wall_s":35.63,"text":"V2-QUEUE-OK"}
+
+[exit=0 wall=0.1s]
+
+## 4f. an independent opencode process (no --attach) on a busy session owned by serve (bounded 180s)
+$ python3.12 -I /Users/techfreakworm/.soma/worktrees/claude-soma/claude-soma-manager/research/opencode-soma/probes/opencode/ocdrive.py --base http://127.0.0.1:47114 turn --session ses_edb71c6a6ffeRetu6ATmyRkrRg --model ollama/qwen3:32b --text Remember this secret token: PLUM-7310. Reply only with the word OK.
+{
+ "session": "ses_edb71c6a6ffeRetu6ATmyRkrRg",
+ "timeout": false,
+ "seen_busy": true,
+ "wall_s": 5.8,
+ "final_text": "OK",
+ "new_messages": [
+  {
+   "id": "msg_1248e3a15001V1CPSMbxrqHPDr",
+   "role": "user",
+   "agent": "build",
+   "model": "qwen3:32b",
+   "created": 1791614663189,
+   "completed": null,
+   "tokens": null,
+   "finish": null,
+   "error": null,
+   "text": "Remember this secret token: PLUM-7310. Reply only with the word OK.",
+   "tools": []
+  },
+  {
+   "id": "msg_1248e3a23001IQlYaDXNEBGnX1",
+   "role": "assistant",
+   "agent": "build",
+   "model": "qwen3:32b",
+   "created": 1791614663203,
+   "completed": 1791614668661,
+   "tokens": {
+    "total": 6835,
+    "input": 33,
+    "output": 2,
+    "reasoning": 0,
+    "cache": {
+     "read": 6800,
+     "write": 0
+    }
+   },
+   "finish": "stop",
+   "error": null,
+   "text": "OK",
+   "tools": []
+  }
+ ],
+ "permissions": [],
+ "children": []
+}
+
+[exit=0 wall=5.9s]
+
+$ run_bounded 180 /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P1-busy/cli.txt /Users/techfreakworm/.opencode/bin/opencode run -m ollama/qwen3:32b --format json -s ses_edb71c6a6ffeRetu6ATmyRkrRg Reply with exactly CLI-WHILE-BUSY-OK and nothing else.
+STILL RUNNING after 180s -> SIGKILL (hung)
+
+[exit=124 wall=182.7s]
+
+$ sh -c cut -c1-300 '/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P1-busy/cli.txt'
+{"type":"step_start","timestamp":1791614734360,"sessionID":"ses_edb71c6a6ffeRetu6ATmyRkrRg","part":{"id":"prt_1248f5012001MNWw3GFNPwamMg","messageID":"msg_1248e645c001OKSToUdmLtXuSO","sessionID":"ses_edb71c6a6ffeRetu6ATmyRkrRg","snapshot":"e1c4cdb849f5986925429b346e97af8555ec1bd6","type":"step-start
+{"type":"text","timestamp":1791614735080,"sessionID":"ses_edb71c6a6ffeRetu6ATmyRkrRg","part":{"id":"prt_1248f50160015x63FuE1a2bfJR","messageID":"msg_1248e645c001OKSToUdmLtXuSO","sessionID":"ses_edb71c6a6ffeRetu6ATmyRkrRg","type":"text","text":"CLI-WHILE-BUSY-OK","time":{"start":1791614734358,"end":1
+{"type":"step_finish","timestamp":1791614735145,"sessionID":"ses_edb71c6a6ffeRetu6ATmyRkrRg","part":{"id":"prt_1248f5326001LSo7gwVsroSqUC","reason":"stop","snapshot":"e1c4cdb849f5986925429b346e97af8555ec1bd6","messageID":"msg_1248e645c001OKSToUdmLtXuSO","sessionID":"ses_edb71c6a6ffeRetu6ATmyRkrRg","
+{"type":"step_start","timestamp":1791614746837,"sessionID":"ses_edb71c6a6ffeRetu6ATmyRkrRg","part":{"id":"prt_1248f80d2001w0pHVeW2bxR3B1","messageID":"msg_1248f536e001jMu6ShDxyCh86i","sessionID":"ses_edb71c6a6ffeRetu6ATmyRkrRg","snapshot":"e1c4cdb849f5986925429b346e97af8555ec1bd6","type":"step-start
+{"type":"step_finish","timestamp":1791614746914,"sessionID":"ses_edb71c6a6ffeRetu6ATmyRkrRg","part":{"id":"prt_1248f811e0013kbre5kPxQs3je","reason":"stop","snapshot":"e1c4cdb849f5986925429b346e97af8555ec1bd6","messageID":"msg_1248f536e001jMu6ShDxyCh86i","sessionID":"ses_edb71c6a6ffeRetu6ATmyRkrRg","
+{"type":"step_start","timestamp":1791614758298,"sessionID":"ses_edb71c6a6ffeRetu6ATmyRkrRg","part":{"id":"prt_1248fad96001C9jPyR2PNNsrG1","messageID":"msg_1248f816c001MuPeT13VFbs5ky","sessionID":"ses_edb71c6a6ffeRetu6ATmyRkrRg","snapshot":"e1c4cdb849f5986925429b346e97af8555ec1bd6","type":"step-start
+{"type":"text","timestamp":1791614759873,"sessionID":"ses_edb71c6a6ffeRetu6ATmyRkrRg","part":{"id":"prt_1248fad98001g5jBZiMIqfUMDY","messageID":"msg_1248f816c001MuPeT13VFbs5ky","sessionID":"ses_edb71c6a6ffeRetu6ATmyRkrRg","type":"text","text":"\n</think>\n\nCLI-WHILE-BUSY-OK","time":{"start":1791614
+{"type":"step_finish","timestamp":1791614759959,"sessionID":"ses_edb71c6a6ffeRetu6ATmyRkrRg","part":{"id":"prt_1248fb413001dy853bjbNm0cNr","reason":"stop","snapshot":"e1c4cdb849f5986925429b346e97af8555ec1bd6","messageID":"msg_1248f816c001MuPeT13VFbs5ky","sessionID":"ses_edb71c6a6ffeRetu6ATmyRkrRg","
+{"type":"step_start","timestamp":1791614770066,"sessionID":"ses_edb71c6a6ffeRetu6ATmyRkrRg","part":{"id":"prt_1248fdb8f001dAP163jc4jl2Tj","messageID":"msg_1248fb472001m3bt4X84cP0qTV","sessionID":"ses_edb71c6a6ffeRetu6ATmyRkrRg","snapshot":"e1c4cdb849f5986925429b346e97af8555ec1bd6","type":"step-start
+{"type":"step_finish","timestamp":1791614770128,"sessionID":"ses_edb71c6a6ffeRetu6ATmyRkrRg","part":{"id":"prt_1248fdbce001HTt2djbyTF6mUy","reason":"stop","snapshot":"e1c4cdb849f5986925429b346e97af8555ec1bd6","messageID":"msg_1248fb472001m3bt4X84cP0qTV","sessionID":"ses_edb71c6a6ffeRetu6ATmyRkrRg","
+{"type":"step_start","timestamp":1791614774258,"sessionID":"ses_edb71c6a6ffeRetu6ATmyRkrRg","part":{"id":"prt_1248febef0017ffr2LnZCo9D40","messageID":"msg_1248fdc1b001NpjHUOolpaC8FM","sessionID":"ses_edb71c6a6ffeRetu6ATmyRkrRg","snapshot":"e1c4cdb849f5986925429b346e97af8555ec1bd6","type":"step-start
+{"type":"text","timestamp":1791614775583,"sessionID":"ses_edb71c6a6ffeRetu6ATmyRkrRg","part":{"id":"prt_1248febf1001WcGl21YZXBxtm3","messageID":"msg_1248fdc1b001NpjHUOolpaC8FM","sessionID":"ses_edb71c6a6ffeRetu6ATmyRkrRg","type":"text","text":"</think>\n\nCLI-WHILE-BUSY-OK","time":{"start":179161477
+{"type":"step_finish","timestamp":1791614775653,"sessionID":"ses_edb71c6a6ffeRetu6ATmyRkrRg","part":{"id":"prt_1248ff161001DInHtid9mEN8b7","reason":"stop","snapshot":"e1c4cdb849f5986925429b346e97af8555ec1bd6","messageID":"msg_1248fdc1b001NpjHUOolpaC8FM","sessionID":"ses_edb71c6a6ffeRetu6ATmyRkrRg","
+{"type":"step_start","timestamp":1791614780595,"sessionID":"ses_edb71c6a6ffeRetu6ATmyRkrRg","part":{"id":"prt_1249004b0001E0OPu7B6wcQMjn","messageID":"msg_1248ff1a10015fdjcUqMuI83OR","sessionID":"ses_edb71c6a6ffeRetu6ATmyRkrRg","snapshot":"e1c4cdb849f5986925429b346e97af8555ec1bd6","type":"step-start
+{"type":"step_finish","timestamp":1791614780650,"sessionID":"ses_edb71c6a6ffeRetu6ATmyRkrRg","part":{"id":"prt_1249004e8001l8CMjxVBgs844t","reason":"stop","snapshot":"e1c4cdb849f5986925429b346e97af8555ec1bd6","messageID":"msg_1248ff1a10015fdjcUqMuI83OR","sessionID":"ses_edb71c6a6ffeRetu6ATmyRkrRg","
+{"type":"step_start","timestamp":1791614815417,"sessionID":"ses_edb71c6a6ffeRetu6ATmyRkrRg","part":{"id":"prt_124908cb4001WReELxlqm4v6md","messageID":"msg_12490051f001uv2g5S4vdvl7IL","sessionID":"ses_edb71c6a6ffeRetu6ATmyRkrRg","snapshot":"e1c4cdb849f5986925429b346e97af8555ec1bd6","type":"step-start
+{"type":"text","timestamp":1791614817089,"sessionID":"ses_edb71c6a6ffeRetu6ATmyRkrRg","part":{"id":"prt_124908cb8001jYjqMH3w9JFSfE","messageID":"msg_12490051f001uv2g5S4vdvl7IL","sessionID":"ses_edb71c6a6ffeRetu6ATmyRkrRg","type":"text","text":"</think>\n\nCLI-WHILE-BUSY-OK","time":{"start":179161481
+{"type":"step_finish","timestamp":1791614817212,"sessionID":"ses_edb71c6a6ffeRetu6ATmyRkrRg","part":{"id":"prt_1249093b4001Vu5ktgQ7X5OYmd","reason":"stop","snapshot":"e1c4cdb849f5986925429b346e97af8555ec1bd6","messageID":"msg_12490051f001uv2g5S4vdvl7IL","sessionID":"ses_edb71c6a6ffeRetu6ATmyRkrRg","
+{"type":"step_start","timestamp":1791614826217,"sessionID":"ses_edb71c6a6ffeRetu6ATmyRkrRg","part":{"id":"prt_12490b6e3001fxIIDLk9wYUCBR","messageID":"msg_12490944f001nMnhQmzn7lOuDc","sessionID":"ses_edb71c6a6ffeRetu6ATmyRkrRg","snapshot":"e1c4cdb849f5986925429b346e97af8555ec1bd6","type":"step-start
+{"type":"step_finish","timestamp":1791614826308,"sessionID":"ses_edb71c6a6ffeRetu6ATmyRkrRg","part":{"id":"prt_12490b73f0017dt3sO1d2upCfA","reason":"stop","snapshot":"e1c4cdb849f5986925429b346e97af8555ec1bd6","messageID":"msg_12490944f001nMnhQmzn7lOuDc","sessionID":"ses_edb71c6a6ffeRetu6ATmyRkrRg","
+{"type":"step_start","timestamp":1791614832860,"sessionID":"ses_edb71c6a6ffeRetu6ATmyRkrRg","part":{"id":"prt_12490d0cb001laYfzsyMdVcpOp","messageID":"msg_12490b7c7001sH2yCGzPrXrmbX","sessionID":"ses_edb71c6a6ffeRetu6ATmyRkrRg","snapshot":"e1c4cdb849f5986925429b346e97af8555ec1bd6","type":"step-start
+{"type":"step_finish","timestamp":1791614832977,"sessionID":"ses_edb71c6a6ffeRetu6ATmyRkrRg","part":{"id":"prt_12490d14a001aBV1DnQX8QC9kv","reason":"stop","snapshot":"e1c4cdb849f5986925429b346e97af8555ec1bd6","messageID":"msg_12490b7c7001sH2yCGzPrXrmbX","sessionID":"ses_edb71c6a6ffeRetu6ATmyRkrRg","
+{"type":"step_start","timestamp":1791614837781,"sessionID":"ses_edb71c6a6ffeRetu6ATmyRkrRg","part":{"id":"prt_12490e4120019pnIo6UauJ91ga","messageID":"msg_12490d1da001Q5fn00UkQsj4iP","sessionID":"ses_edb71c6a6ffeRetu6ATmyRkrRg","snapshot":"e1c4cdb849f5986925429b346e97af8555ec1bd6","type":"step-start
+{"type":"step_finish","timestamp":1791614837889,"sessionID":"ses_edb71c6a6ffeRetu6ATmyRkrRg","part":{"id":"prt_12490e47c001cy09W8PlGRFpzI","reason":"stop","snapshot":"e1c4cdb849f5986925429b346e97af8555ec1bd6","messageID":"msg_12490d1da001Q5fn00UkQsj4iP","sessionID":"ses_edb71c6a6ffeRetu6ATmyRkrRg","
+{"type":"step_start","timestamp":1791614842005,"sessionID":"ses_edb71c6a6ffeRetu6ATmyRkrRg","part":{"id":"prt_12490f492001B26fRXouUMVfly","messageID":"msg_12490e506001h6A7zkVkXZs9Th","sessionID":"ses_edb71c6a6ffeRetu6ATmyRkrRg","snapshot":"e1c4cdb849f5986925429b346e97af8555ec1bd6","type":"step-start
+{"type":"step_finish","timestamp":1791614842098,"sessionID":"ses_edb71c6a6ffeRetu6ATmyRkrRg","part":{"id":"prt_12490f4ef001THAFWtsosjrVbY","reason":"stop","snapshot":"e1c4cdb849f5986925429b346e97af8555ec1bd6","messageID":"msg_12490e506001h6A7zkVkXZs9Th","sessionID":"ses_edb71c6a6ffeRetu6ATmyRkrRg","
+{"type":"step_start","timestamp":1791614845512,"sessionID":"ses_edb71c6a6ffeRetu6ATmyRkrRg","part":{"id":"prt_124910243001JbByYh9anm3Th3","messageID":"msg_12490f551001CVxDkIG6HUECti","sessionID":"ses_edb71c6a6ffeRetu6ATmyRkrRg","snapshot":"e1c4cdb849f5986925429b346e97af8555ec1bd6","type":"step-start
+{"type":"step_finish","timestamp":1791614845597,"sessionID":"ses_edb71c6a6ffeRetu6ATmyRkrRg","part":{"id":"prt_124910299001QYwUTm4qgHeHOx","reason":"stop","snapshot":"e1c4cdb849f5986925429b346e97af8555ec1bd6","messageID":"msg_12490f551001CVxDkIG6HUECti","sessionID":"ses_edb71c6a6ffeRetu6ATmyRkrRg","
+{"type":"step_start","timestamp":1791614850676,"sessionID":"ses_edb71c6a6ffeRetu6ATmyRkrRg","part":{"id":"prt_124911670001fxlxdcxt0vXgha","messageID":"msg_1249102ef001qzd9srubjIPhjQ","sessionID":"ses_edb71c6a6ffeRetu6ATmyRkrRg","snapshot":"e1c4cdb849f5986925429b346e97af8555ec1bd6","type":"step-start
+{"type":"step_finish","timestamp":1791614850769,"sessionID":"ses_edb71c6a6ffeRetu6ATmyRkrRg","part":{"id":"prt_1249116cb001Pn9bEBiOjf4sGS","reason":"stop","snapshot":"e1c4cdb849f5986925429b346e97af8555ec1bd6","messageID":"msg_1249102ef001qzd9srubjIPhjQ","sessionID":"ses_edb71c6a6ffeRetu6ATmyRkrRg","
+
+[exit=0 wall=0.1s]
+
+server status for the session after the long generation should have ended: "idle"
+$ msgs ses_edb71c6a6ffeRetu6ATmyRkrRg
+{"id":"bxrqHPDr","role":"user","created":1791614663189,"completed":null,"finish":null,"error":null,"text":"Remember this secret token: PLUM-7310. Reply only with the word OK."}
+{"id":"XNEBGnX1","role":"assistant","created":1791614663203,"completed":1791614668661,"finish":"stop","error":null,"text":"OK"}
+{"id":"vZo1MvPB","role":"user","created":1791614669011,"completed":null,"finish":null,"error":null,"text":"Count from 1 to 120, writing every number as an English word, one per line. Output only the list."}
+{"id":"bkoi8Thk","role":"assistant","created":1791614669017,"completed":1791614729236,"finish":"stop","error":null,"text":"one\ntwo\nthree\nfour\nfive\nsix\nseven\neight\nnine\nten\neleven\ntwelve\nthirteen\nfourteen\nfifteen\nsixteen\nseventeen\neighteen\nnine"}
+{"id":"i4aIRjye","role":"user","created":1791614673539,"completed":null,"finish":null,"error":null,"text":"\"Reply with exactly CLI-WHILE-BUSY-OK and nothing else.\""}
+{"id":"dmLtXuSO","role":"assistant","created":1791614674012,"completed":1791614735212,"finish":"stop","error":null,"text":"CLI-WHILE-BUSY-OK"}
+{"id":"7H1Mphf9","role":"assistant","created":1791614729239,"completed":1791614740735,"finish":"stop","error":null,"text":"CLI-WHILE-BUSY-OK"}
+{"id":"DxyCh86i","role":"assistant","created":1791614735214,"completed":1791614746985,"finish":"stop","error":null,"text":""}
+{"id":"e9apNucf","role":"assistant","created":1791614740737,"completed":1791614753032,"finish":"unknown","error":null,"text":"\n\nCLI-WHILE-BUSY-OK\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"}
+{"id":"3VFbs5ky","role":"assistant","created":1791614746988,"completed":1791614760047,"finish":"stop","error":null,"text":"\n</think>\n\nCLI-WHILE-BUSY-OK"}
+{"id":"sFHSnbB3","role":"assistant","created":1791614753035,"completed":1791614764830,"finish":"unknown","error":null,"text":"\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"}
+{"id":"84cP0qTV","role":"assistant","created":1791614760050,"completed":1791614770199,"finish":"stop","error":null,"text":""}
+{"id":"8KWNvgeZ","role":"assistant","created":1791614764834,"completed":1791614770866,"finish":"stop","error":null,"text":""}
+{"id":"olpaC8FM","role":"assistant","created":1791614770203,"completed":1791614775710,"finish":"stop","error":null,"text":"</think>\n\nCLI-WHILE-BUSY-OK"}
+{"id":"7Gf55XMY","role":"assistant","created":1791614770867,"completed":1791614776270,"finish":"stop","error":null,"text":"\n"}
+{"id":"qMuI83OR","role":"assistant","created":1791614775713,"completed":1791614780701,"finish":"stop","error":null,"text":""}
+{"id":"3jCYbJR6","role":"assistant","created":1791614776273,"completed":1791614809574,"finish":"stop","error":null,"text":"Okay, let's tackle this step by step. First, I need to understand what the user is asking for. They want me to reply exa"}
+{"id":"4vdvl7IL","role":"assistant","created":1791614780703,"completed":1791614817350,"finish":"stop","error":null,"text":"</think>\n\nCLI-WHILE-BUSY-OK"}
+{"id":"zSK9g9o7","role":"assistant","created":1791614809582,"completed":1791614819636,"finish":"stop","error":null,"text":""}
+{"id":"zn7lOuDc","role":"assistant","created":1791614817359,"completed":1791614826434,"finish":"stop","error":null,"text":""}
+{"id":"utTg6kea","role":"assistant","created":1791614819638,"completed":1791614826621,"finish":"stop","error":null,"text":""}
+{"id":"zPrXrmbX","role":"assistant","created":1791614826439,"completed":1791614833107,"finish":"stop","error":null,"text":""}
+{"id":"TzKf3d2C","role":"assistant","created":1791614826626,"completed":1791614833294,"finish":"stop","error":null,"text":""}
+{"id":"UkQsj4iP","role":"assistant","created":1791614833114,"completed":1791614838006,"finish":"stop","error":null,"text":""}
+{"id":"4ADvL2HL","role":"assistant","created":1791614833299,"completed":1791614838300,"finish":"stop","error":null,"text":""}
+{"id":"VkXZs9Th","role":"assistant","created":1791614838022,"completed":1791614842188,"finish":"stop","error":null,"text":""}
+{"id":"tTicFyhV","role":"assistant","created":1791614838307,"completed":1791614842340,"finish":"stop","error":null,"text":""}
+{"id":"G6HUECti","role":"assistant","created":1791614842193,"completed":1791614845675,"finish":"stop","error":null,"text":""}
+{"id":"mMfm2W5W","role":"assistant","created":1791614842343,"completed":1791614845795,"finish":"stop","error":null,"text":""}
+{"id":"ubjIPhjQ","role":"assistant","created":1791614845679,"completed":1791614850874,"finish":"stop","error":null,"text":""}
+{"id":"8bFJpD6s","role":"assistant","created":1791614845798,"completed":1791614851049,"finish":"stop","error":null,"text":""}
+{"id":"H82XOKki","role":"assistant","created":1791614850879,"completed":null,"finish":null,"error":null,"text":""}
+{"id":"rjcK6cpu","role":"assistant","created":1791614851053,"completed":1791614855845,"finish":"stop","error":null,"text":""}
+
+[exit=0 wall=0.1s]
+
+## 4f-recovery: POST /abort, then a fresh prompt
+$ jcurl -w \n-> HTTP %{http_code}\n -X POST http://127.0.0.1:47114/session/ses_edb71c6a6ffeRetu6ATmyRkrRg/abort
+true
+-> HTTP 200
+
+[exit=0 wall=0.1s]
+
+status after abort: "idle"
+$ python3.12 -I /Users/techfreakworm/.soma/worktrees/claude-soma/claude-soma-manager/research/opencode-soma/probes/opencode/ocdrive.py --base http://127.0.0.1:47114 turn --session ses_edb71c6a6ffeRetu6ATmyRkrRg --model ollama/qwen3:32b --timeout 240 --text What was the secret token I gave you at the very beginning? Reply with only the token.
+{
+ "session": "ses_edb71c6a6ffeRetu6ATmyRkrRg",
+ "timeout": false,
+ "seen_busy": true,
+ "wall_s": 8.3,
+ "final_text": "PLUM-7310",
+ "new_messages": [
+  {
+   "id": "msg_124912d3d001WSTZ5zjbubMD2v",
+   "role": "user",
+   "agent": "build",
+   "model": "qwen3:32b",
+   "created": 1791614856509,
+   "completed": null,
+   "tokens": null,
+   "finish": null,
+   "error": null,
+   "text": "What was the secret token I gave you at the very beginning? Reply with only the token.",
+   "tools": []
+  },
+  {
+   "id": "msg_124912d44001a36GAB1yAwMIbL",
+   "role": "assistant",
+   "agent": "build",
+   "model": "qwen3:32b",
+   "created": 1791614856516,
+   "completed": 1791614864581,
+   "tokens": {
+    "total": 7667,
+    "input": 330,
+    "output": 8,
+    "reasoning": 0,
+    "cache": {
+     "read": 7329,
+     "write": 0
+    }
+   },
+   "finish": "stop",
+   "error": null,
+   "text": "PLUM-7310",
+   "tools": []
+  }
+ ],
+ "permissions": [],
+ "children": []
+}
+
+[exit=0 wall=8.5s]
+
+summary: queued-second-prompt=2 sync-while-busy=4 abort-idle=1 recall-after-abort=1 attach-queued=1
+VERDICT: PASS — on one serve, a busy session accepts prompt_async at once and queues it, sync /message blocks until its turn, run --attach queues, and abort returns it to idle; second writers (v2 loop, independent CLI) are hazards shown in 4e/4f.

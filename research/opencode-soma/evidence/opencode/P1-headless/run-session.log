@@ -32,3 +32,51 @@ $ cat /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P1-session/t3.j
 [exit=0 wall=0.0s]
 
 ## -s <session 1>: resumes session 1 explicitly
+$ cat /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P1-session/t4.json
+{"type":"step_start","timestamp":1791614248491,"sessionID":"ses_edb794972ffe0lsuDEKj0407bc","part":{"id":"prt_12487e627001DZVbVx39lIFssw","messageID":"msg_12487d59d001MKCIrTGdfnFU1N","sessionID":"ses_edb794972ffe0lsuDEKj0407bc","snapshot":"6288cd1451eae733291e7bcefa061aea563cbb96","type":"step-start"}}
+{"type":"text","timestamp":1791614249153,"sessionID":"ses_edb794972ffe0lsuDEKj0407bc","part":{"id":"prt_12487e62a001LIfyZP0zHgL8td","messageID":"msg_12487d59d001MKCIrTGdfnFU1N","sessionID":"ses_edb794972ffe0lsuDEKj0407bc","type":"text","text":"KIWI-4417","time":{"start":1791614248490,"end":1791614249148}}}
+{"type":"step_finish","timestamp":1791614249223,"sessionID":"ses_edb794972ffe0lsuDEKj0407bc","part":{"id":"prt_12487e903001wGXoUyYCd9PPHn","reason":"stop","snapshot":"6288cd1451eae733291e7bcefa061aea563cbb96","messageID":"msg_12487d59d001MKCIrTGdfnFU1N","sessionID":"ses_edb794972ffe0lsuDEKj0407bc","type":"step-finish","tokens":{"total":6568,"input":59,"output":8,"reasoning":0,"cache":{"write":0,"read":6501}},"cost":0}}
+
+[exit=0 wall=0.0s]
+
+## --continue again: session 1 is now the most recently updated one
+$ cat /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P1-session/t5.json
+{"type":"step_start","timestamp":1791614253879,"sessionID":"ses_edb794972ffe0lsuDEKj0407bc","part":{"id":"prt_12487fb29001NOcsFiQncLFzWD","messageID":"msg_12487eee1001S261qyJbGm9Ut1","sessionID":"ses_edb794972ffe0lsuDEKj0407bc","snapshot":"6288cd1451eae733291e7bcefa061aea563cbb96","type":"step-start"}}
+{"type":"text","timestamp":1791614254564,"sessionID":"ses_edb794972ffe0lsuDEKj0407bc","part":{"id":"prt_12487fb31001ZdwdQRIBZkwFkn","messageID":"msg_12487eee1001S261qyJbGm9Ut1","sessionID":"ses_edb794972ffe0lsuDEKj0407bc","type":"text","text":"KIWI-4417","time":{"start":1791614253873,"end":1791614254556}}}
+{"type":"step_finish","timestamp":1791614254670,"sessionID":"ses_edb794972ffe0lsuDEKj0407bc","part":{"id":"prt_12487fe4a001vC3F1aXpuXdbTU","reason":"stop","snapshot":"6288cd1451eae733291e7bcefa061aea563cbb96","messageID":"msg_12487eee1001S261qyJbGm9Ut1","sessionID":"ses_edb794972ffe0lsuDEKj0407bc","type":"step-finish","tokens":{"total":6599,"input":44,"output":8,"reasoning":0,"cache":{"write":0,"read":6547}},"cost":0}}
+
+[exit=0 wall=0.0s]
+
+## session list
+$ /Users/techfreakworm/.opencode/bin/opencode session list --format json
+[
+  {
+    "id": "ses_edb794972ffe0lsuDEKj0407bc",
+    "title": "Secret token reminder",
+    "updated": 1791614254764,
+    "created": 1791614170766,
+    "projectId": "03558d4ecf379d4862f41ec81d0bd0c786e378f3",
+    "directory": "/private/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P1-session/project"
+  },
+  {
+    "id": "ses_edb7877f3ffeQqh3mZ97E2sLKa",
+    "title": "LIME-0082 token acknowledgment",
+    "updated": 1791614242562,
+    "created": 1791614224396,
+    "projectId": "03558d4ecf379d4862f41ec81d0bd0c786e378f3",
+    "directory": "/private/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P1-session/project"
+  }
+]
+
+[exit=0 wall=0.9s]
+
+## note: run wraps a single-argument prompt in literal double quotes (see last_user in the proxy log)
+$ sh -c jq -r 'select(.request.n_tools > 0) | .request.last_user[0:80]' '/Users/techfreakworm/.soma/worktrees/claude-soma/claude-soma-manager/research/opencode-soma/evidence/opencode/P1-headless/proxy-session.jsonl' | head -3
+"Remember this secret token: KIWI-4417. Reply only with the word OK."
+"Remember this second secret token: LIME-0082. Reply only with the word OK."
+"What was the secret token I gave you earlier? Reply with only the token."
+
+[exit=0 wall=0.0s]
+
+checks: --continue#1 session=ses_edb7877f3ffeQqh3mZ97E2sLKa (want ses_edb7877f3ffeQqh3mZ97E2sLKa) recall=1 ; -s session=ses_edb794972ffe0lsuDEKj0407bc (want ses_edb794972ffe0lsuDEKj0407bc) recall=1 ; --continue#2 session=ses_edb794972ffe0lsuDEKj0407bc (want ses_edb794972ffe0lsuDEKj0407bc) recall=1
+VERDICT: PASS — run --format json emits JSON events carrying a stable sessionID; --continue resumes the most recently updated session and -s <id> a chosen one, and the model recalls the planted tokens.

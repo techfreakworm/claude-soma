@@ -1,0 +1,64 @@
+# P5-tmux/tmux.log
+date-utc: 2026-10-10T06:47:51Z
+probe-script: research/opencode-soma/probes/opencode/P5-tmux/run.sh
+opencode-version: 1.18.8
+model: ollama/qwen3:32b (thinking off)
+sandbox: $TMPDIR/ocsoma-pe/P5-tmux (HOME, XDG_*, TMPDIR all inside it)
+purpose: tmux send-keys -l + Enter into the opencode TUI, scrape capture-pane -p; success rate and failure modes; HTTP comparison
+
+TUI: tmux -L ocsoma-pe-tui new-session -d -s tui -x 200 -y 50 "opencode --port 47151 --hostname 127.0.0.1 -m ollama/qwen3:32b"
+## pane right after start
+$ cat /Users/techfreakworm/.soma/worktrees/claude-soma/claude-soma-manager/research/opencode-soma/evidence/opencode/P5-tmux/pane-start.txt
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                                                                                                                  ▄
+                                                                                 █▀▀█ █▀▀█ █▀▀█ █▀▀▄ █▀▀▀ █▀▀█ █▀▀█ █▀▀█
+                                                                                 █  █ █  █ █▀▀▀ █  █ █    █  █ █  █ █▀▀▀
+                                                                                 ▀▀▀▀ █▀▀▀ ▀▀▀▀ ▀▀▀▀ ▀▀▀▀ ▀▀▀▀ ▀▀▀▀ ▀▀▀▀
+
+
+                                                               ┃
+                                                               ┃  Ask anything... "Fix a TODO in the codebase"
+                                                               ┃
+                                                               ┃  Build · Qwen3 32B (thinking off) Ollama (local)
+                                                               ╹▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀
+                                                               tab agents  ctrl+p commands
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  /private/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P5-tmux/project:main                                                                                                       1.18.8
+
+
+[exit=0 wall=0.1s]
+
