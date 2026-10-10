@@ -13,7 +13,7 @@ PROXY_LOG="$EVD/proxy-$P1_PART.jsonl"; : > "$PROXY_LOG"
 proxy_start "$P1_PROXY" "$PROXY_LOG" || exit 1
 BASE="http://127.0.0.1:$P1_SERVE"
 DRIVE="python3.12 -I $OCSOMA_PROBES/ocdrive.py --base $BASE"
-LONG='Count from 1 to 200, writing every number as an English word, one per line. Output only the list.'
+LONG='Count from 1 to 120, writing every number as an English word, one per line. Output only the list.'
 jcurl() { curl -s -H 'content-type: application/json' "$@"; }
 msgs() { curl -s "$BASE/session/$1/message" | jq -c '.[] | {id: .info.id[-8:], role: .info.role, created: .info.time.created, completed: .info.time.completed, finish: .info.finish, error: (.info.error.name // null), text: ([.parts[] | select(.type=="text") | .text] | join(" ") | .[0:120])}'; }
 start_serve() { "$OC" serve --port "$P1_SERVE" --hostname 127.0.0.1 >> "$SANDBOX/serve.out" 2>&1 & SPID=$!; for i in $(seq 1 100); do curl -s -o /dev/null "$BASE/global/health" && return 0; sleep 0.2; done; return 1; }

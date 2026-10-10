@@ -20,7 +20,7 @@ TM="tmux -L ocsoma-pe-tui"
 BASE="http://127.0.0.1:$TUI_PORT"
 
 $TM kill-server 2>/dev/null
-$TM new-session -d -s tui -x 200 -y 50 "$OC --port $TUI_PORT --hostname 127.0.0.1 -m $MODEL"
+$TM new-session -d -s tui -x 200 -y 50 -c "$PROJ" "$OC --port $TUI_PORT --hostname 127.0.0.1 -m $MODEL"
 for i in $(seq 1 100); do curl -s -o /dev/null "$BASE/global/health" && break; sleep 0.2; done
 sleep 3
 $TM capture-pane -p -t tui > "$EVD/pane-start.txt"
@@ -59,16 +59,35 @@ while IFS='|' read -r cid token msg; do
     sleep 0.5
   done
   t1=$(python3.12 -I -c 'import time;print(time.time())')
+  sleep 1
+  # what the TUI's own server received for this case: number of user messages and exact-text match
+  TSID=$(curl -s "$BASE/session" | jq -r 'sort_by(.time.updated) | last | .id')
+  t0ms=$(python3.12 -I -c "print(int($t0*1000)-500)")
+  recv=$(curl -s "$BASE/session/$TSID/message" | jq -c --argjson t0 "$t0ms" '[.[] | select(.info.role=="user" and .info.time.created >= $t0) | ([.parts[] | select(.type=="text" and ((.synthetic // false)|not)) | .text] | join(""))]')
+  n_user=$(printf '%s' "$recv" | jq 'length')
+  exact=$(printf '%s' "$recv" | jq --arg s "$text" 'map(. == $s) | any')
   printf '%s\n' "$pane" > "$EVD/pane-$cid.txt"
   $TM capture-pane -p -t tui -S -2000 > "$EVD/pane-$cid-scrollback.txt"
-  ev "### case $cid: status=$status wall=$(python3.12 -I -c "print(round($t1-$t0,1))")s (turn-footer first seen at poll ${first_footer:-never})"
+  ev "### case $cid: status=$status wall=$(python3.12 -I -c "print(round($t1-$t0,1))")s (turn-footer first seen at poll ${first_footer:-never}); server received $n_user user message(s), exact text match=$exact"
+  ev "received: $(printf '%s' "$recv" | head -c 400)"
   ev_run cat "$EVD/pane-$cid.txt"
-  printf '{"case":"%s","token":"%s","status":"%s","wall_s":%s}\n' "$cid" "$token" "$status" "$(python3.12 -I -c "print(round($t1-$t0,1))")" >> "$results"
+  printf '{"case":"%s","token":"%s","status":"%s","wall_s":%s,"user_msgs":%s,"exact":%s}\n' "$cid" "$token" "$status" "$(python3.12 -I -c "print(round($t1-$t0,1))")" "${n_user:-null}" "${exact:-null}" >> "$results"
   sleep 2
 done < "$SANDBOX/cases.txt"
 
 ev "## scrollback check: tmux history (-S -2000) of the alt-screen TUI for the long reply"
-ev_run sh -c "wc -l '$EVD/pane-longreply.txt' '$EVD/pane-longreply-scrollback.txt'; grep -cE '^ *(one|two|three|sixty|seventy)\b' '$EVD/pane-longreply-scrollback.txt' || true"
+ev_run python3.12 -I - "$EVD/pane-longreply.txt" "$EVD/pane-longreply-scrollback.txt" <<'PY'
+import re, sys
+ones = "one two three four five six seven eight nine".split()
+teens = "ten eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen nineteen".split()
+tens = "twenty thirty forty fifty sixty seventy".split()
+words = ones + teens + [t if not o else f"{t}[- ]{o}" for t in tens for o in [""] + ones][: 70 - 19]
+for path in sys.argv[1:]:
+    txt = open(path, encoding="utf-8", errors="replace").read().lower()
+    lines = [re.sub(r"^[\s\u2502\u2503|]*", "", l).strip(" .") for l in txt.splitlines()]
+    seen = sum(1 for w in words if any(re.fullmatch(w, l) for l in lines))
+    print(f"{path.rsplit('/',1)[-1]}: {len(txt.splitlines())} lines captured, {seen}/70 number lines visible")
+PY
 ev "## what the TUI's server actually received and answered (GET /session/{id}/message on the TUI's own --port)"
 TSID=$(curl -s "$BASE/session" | jq -r 'sort_by(.time.updated) | last | .id')
 ev "TUI session: $TSID"

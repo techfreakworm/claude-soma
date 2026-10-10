@@ -100,20 +100,39 @@ fi
 ev_open P2-hooks/activity.log "(c) log every tool use (log_activity.sh analog) incl. MCP and subagent tools" "$MODEL"
 ev "## activity.jsonl (evidence/opencode/P2-hooks/activity.jsonl)"
 ev_run cat "$EVD/activity.jsonl"
-ev "## ground truth: every tool part in every session of the tree (sessions-dump.json, read over HTTP) vs the activity log"
+ev "## ground truth: every tool part in every session of the tree (sessions-dump.json, read over HTTP) vs activity.jsonl and gate.jsonl"
 ev_run python3.12 -I -c '
 import json,sys
 dump=json.load(open(sys.argv[1]))
 truth={t["callID"]:(sid,t["tool"],t["status"]) for sid,msgs in dump.items() for m in msgs for t in m["tools"]}
-start,end={},{}
+act={}
 for l in open(sys.argv[2]):
     if l.strip():
-        d=json.loads(l); (start if d.get("phase")=="start" else end)[d["callID"]]=d
+        d=json.loads(l); act.setdefault(d["callID"],set()).add(d.get("phase","end"))
+gate={json.loads(l)["callID"]:json.loads(l)["decision"] for l in open(sys.argv[3]) if l.strip()}
 print("tool calls in all session transcripts:", len(truth))
 for c,(sid,tool,st) in sorted(truth.items(), key=lambda x:x[1]):
-    print(" ", c, tool, "status="+str(st), "session="+sid[-8:], "| logged start:", c in start, "end:", c in end)
-print("calls in transcripts with NO activity line at all:", sorted(set(truth)-set(start)-set(end)))
-' "$EVD/sessions-dump.json" "$EVD/activity.jsonl"
+    print(" ", c, tool, "status="+str(st), "session="+sid[-8:], "| activity:", sorted(act.get(c,[])), "| gate:", gate.get(c))
+print("calls in NO log at all:", sorted(c for c in truth if c not in act and c not in gate))
+print("executed calls (not gate-denied) without an activity end line:", sorted(c for c in truth if gate.get(c)!="deny" and "end" not in act.get(c,set())))
+' "$EVD/sessions-dump.json" "$EVD/activity.jsonl" "$EVD/gate.jsonl"
+ev "## hook order across plugin files, per call (timestamps of gate / activity start / spy tool.execute.before)"
+ev_run python3.12 -I -c '
+import json,sys
+g={json.loads(l)["callID"]:json.loads(l)["ts"] for l in open(sys.argv[1]) if l.strip()}
+a={}
+for l in open(sys.argv[2]):
+    d=json.loads(l)
+    if d.get("phase")=="start": a[d["callID"]]=d["ts"]
+s={}
+for l in open(sys.argv[3]):
+    d=json.loads(l)
+    if d.get("kind")=="hook" and d.get("hook")=="tool.execute.before": s[json.loads(d["input"])["callID"]]=d["ts"]
+for c in sorted(set(g)|set(a)|set(s)):
+    order=sorted([(t,n) for n,t in (("gate",g.get(c)),("activity",a.get(c)),("spy",s.get(c))) if t])
+    print(c, " -> ".join(n for _,n in order), "| missing:", [n for n,t in (("gate",g.get(c)),("activity",a.get(c)),("spy",s.get(c))) if not t])
+print("plugin files: activity.js gate.js inject.js spy.js (alphabetical); a throwing hook stops the hooks of plugins after it for that call")
+' "$EVD/gate.jsonl" "$EVD/activity.jsonl" "$EVD/spy.jsonl"
 has_mcp=$(jq -c 'select(.phase=="end" and (.tool|test("stdio_echo")))' "$EVD/activity.jsonl" | wc -l | tr -d ' ')
 has_sub=$(jq -c 'select(.phase=="end" and .parentSessionID != null)' "$EVD/activity.jsonl" | wc -l | tr -d ' ')
 has_task=$(jq -c 'select(.phase=="end" and .tool=="task")' "$EVD/activity.jsonl" | wc -l | tr -d ' ')
@@ -122,12 +141,12 @@ missing=$(python3.12 -I -c '
 import json,sys
 dump=json.load(open(sys.argv[1]))
 truth={t["callID"] for msgs in dump.values() for m in msgs for t in m["tools"]}
-seen={json.loads(l)["callID"] for l in open(sys.argv[2]) if l.strip()}
-print(len(truth-seen))' "$EVD/sessions-dump.json" "$EVD/activity.jsonl")
+seen={json.loads(l)["callID"] for l in open(sys.argv[2]) if l.strip()} | {json.loads(l)["callID"] for l in open(sys.argv[3]) if l.strip()}
+print(len(truth-seen))' "$EVD/sessions-dump.json" "$EVD/activity.jsonl" "$EVD/gate.jsonl")
 n_all=$(wc -l < "$EVD/activity.jsonl" | tr -d ' ')
 ev "summary: lines=$n_all missing-from-log=$missing mcp=$has_mcp subagent-session-tools=$has_sub task=$has_task with-agent=$has_agent"
 if [ "$missing" = 0 ] && [ "$has_mcp" -ge 1 ] && [ "$has_sub" -ge 1 ] && [ "$has_task" -ge 1 ]; then
-  ev_verdict PASS "every tool call in every session of the tree is in the log (built-in, MCP, task, the subagent's own calls, and gate-blocked attempts as start-only lines) with args, session, parent session, agent, duration and result head."
+  ev_verdict PASS "every executed tool call in every session of the tree (built-in, MCP, task, the subagent's own calls) is in the activity log with args, session, parent session, agent, duration and result head; the gate-blocked attempt is on record in the gate's own log (later plugins never see a call an earlier plugin rejects)."
 else
   ev_verdict PARTIAL "activity logged ($n_all lines) but coverage incomplete (mcp=$has_mcp subagent=$has_sub task=$has_task)."
 fi

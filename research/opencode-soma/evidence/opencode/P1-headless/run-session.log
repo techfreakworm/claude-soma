@@ -1,64 +1,34 @@
 # P1-headless/run-session.log
-date-utc: 2026-10-10T06:05:31Z
-probe-script: research/opencode-soma/probes/opencode/P1-headless/run.sh
+date-utc: 2026-10-10T06:36:08Z
+probe-script: research/opencode-soma/probes/opencode/P1-headless/session.sh
 opencode-version: 1.18.8
 model: ollama/qwen3:32b (thinking off)
-sandbox: $TMPDIR/ocsoma-pe/P1-headless (HOME, XDG_*, TMPDIR all inside it)
-purpose: opencode run --format json; session ids stable and reusable via -s and --continue
+sandbox: $TMPDIR/ocsoma-pe/P1-session (HOME, XDG_*, TMPDIR all inside it)
+purpose: opencode run --format json; session ids stable and reusable via --continue and -s
 
-$ /Users/techfreakworm/.opencode/bin/opencode run -m ollama/qwen3:32b --format json Remember this secret token: KIWI-4417. Reply only with the word OK.
-{"type":"step_start","timestamp":1791612377794,"sessionID":"ses_edb955651ffenUuJGqE3AS8ZhQ","part":{"id":"prt_1246b5aba001BU2eYh4Pxtazgm","messageID":"msg_1246aaa76001nqrHv83ci5XGi8","sessionID":"ses_edb955651ffenUuJGqE3AS8ZhQ","snapshot":"9b369eb0f7fe159c8c1338e149181f949a4153d2","type":"step-start"}}
-{"type":"text","timestamp":1791612377910,"sessionID":"ses_edb955651ffenUuJGqE3AS8ZhQ","part":{"id":"prt_1246b5abf001QsRKha0M2yJJTa","messageID":"msg_1246aaa76001nqrHv83ci5XGi8","sessionID":"ses_edb955651ffenUuJGqE3AS8ZhQ","type":"text","text":"OK","time":{"start":1791612377791,"end":1791612377905}}}
-{"type":"step_finish","timestamp":1791612378043,"sessionID":"ses_edb955651ffenUuJGqE3AS8ZhQ","part":{"id":"prt_1246b5bb5001Mm09qseHGK0QXy","reason":"stop","snapshot":"9b369eb0f7fe159c8c1338e149181f949a4153d2","messageID":"msg_1246aaa76001nqrHv83ci5XGi8","sessionID":"ses_edb955651ffenUuJGqE3AS8ZhQ","type":"step-finish","tokens":{"total":6538,"input":4672,"output":2,"reasoning":0,"cache":{"write":0,"read":1864}},"cost":0}}
-
-[exit=0 wall=46.4s]
-
-(second plant, separate session; output in sandbox t1.json)
-$ cat /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P1-headless/t1.json
-{"type":"step_start","timestamp":1791612382757,"sessionID":"ses_edb949f7cffeBWqcHieX8ufIVz","part":{"id":"prt_1246b6e1f001WmiKLuaUdCWBBb","messageID":"msg_1246b61dd001X6kzqNQb1156in","sessionID":"ses_edb949f7cffeBWqcHieX8ufIVz","snapshot":"9b369eb0f7fe159c8c1338e149181f949a4153d2","type":"step-start"}}
-{"type":"text","timestamp":1791612382868,"sessionID":"ses_edb949f7cffeBWqcHieX8ufIVz","part":{"id":"prt_1246b6e22001LKcSHehJnr9h0P","messageID":"msg_1246b61dd001X6kzqNQb1156in","sessionID":"ses_edb949f7cffeBWqcHieX8ufIVz","type":"text","text":"OK","time":{"start":1791612382754,"end":1791612382863}}}
-{"type":"step_finish","timestamp":1791612383013,"sessionID":"ses_edb949f7cffeBWqcHieX8ufIVz","part":{"id":"prt_1246b6f1d001HjXaJ5htQSn36v","reason":"stop","snapshot":"9b369eb0f7fe159c8c1338e149181f949a4153d2","messageID":"msg_1246b61dd001X6kzqNQb1156in","sessionID":"ses_edb949f7cffeBWqcHieX8ufIVz","type":"step-finish","tokens":{"total":6538,"input":32,"output":2,"reasoning":0,"cache":{"write":0,"read":6504}},"cost":0}}
+## plant token KIWI-4417 in session 1
+$ cat /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P1-session/t1.json
+{"type":"step_start","timestamp":1791614223037,"sessionID":"ses_edb794972ffe0lsuDEKj0407bc","part":{"id":"prt_1248782b7001VkR1JMYPutctHg","messageID":"msg_12486b91d001EMQqykKTwyB1oX","sessionID":"ses_edb794972ffe0lsuDEKj0407bc","snapshot":"6288cd1451eae733291e7bcefa061aea563cbb96","type":"step-start"}}
+{"type":"text","timestamp":1791614223116,"sessionID":"ses_edb794972ffe0lsuDEKj0407bc","part":{"id":"prt_1248782bb001ECOy3WmrvPxknq","messageID":"msg_12486b91d001EMQqykKTwyB1oX","sessionID":"ses_edb794972ffe0lsuDEKj0407bc","type":"text","text":"OK","time":{"start":1791614223035,"end":1791614223114}}}
+{"type":"step_finish","timestamp":1791614223182,"sessionID":"ses_edb794972ffe0lsuDEKj0407bc","part":{"id":"prt_124878349001uRQAfG5s2mxf4v","reason":"stop","snapshot":"6288cd1451eae733291e7bcefa061aea563cbb96","messageID":"msg_12486b91d001EMQqykKTwyB1oX","sessionID":"ses_edb794972ffe0lsuDEKj0407bc","type":"step-finish","tokens":{"total":6535,"input":6528,"output":2,"reasoning":0,"cache":{"write":0,"read":5}},"cost":0}}
 
 [exit=0 wall=0.0s]
 
-session 1 (KIWI) = ses_edb955651ffenUuJGqE3AS8ZhQ ; session 2 (LIME) = ses_edb949f7cffeBWqcHieX8ufIVz
-## recall with -s <session 1>
-$ /Users/techfreakworm/.opencode/bin/opencode run -m ollama/qwen3:32b --format json -s ses_edb955651ffenUuJGqE3AS8ZhQ What was the secret token I gave you earlier? Reply with only the token.
-{"type":"step_start","timestamp":1791612385911,"sessionID":"ses_edb955651ffenUuJGqE3AS8ZhQ","part":{"id":"prt_1246b7a730012WRZOFPrS1iQmV","messageID":"msg_1246b7525001AdrzWjtdEoypu1","sessionID":"ses_edb955651ffenUuJGqE3AS8ZhQ","snapshot":"9b369eb0f7fe159c8c1338e149181f949a4153d2","type":"step-start"}}
-{"type":"text","timestamp":1791612386688,"sessionID":"ses_edb955651ffenUuJGqE3AS8ZhQ","part":{"id":"prt_1246b7a76001pR2jViaJl6EmHl","messageID":"msg_1246b7525001AdrzWjtdEoypu1","sessionID":"ses_edb955651ffenUuJGqE3AS8ZhQ","type":"text","text":"KIWI-4417","time":{"start":1791612385910,"end":1791612386684}}}
-{"type":"step_finish","timestamp":1791612386781,"sessionID":"ses_edb955651ffenUuJGqE3AS8ZhQ","part":{"id":"prt_1246b7dd90015HPO9DgGg4vBjx","reason":"stop","snapshot":"9b369eb0f7fe159c8c1338e149181f949a4153d2","messageID":"msg_1246b7525001AdrzWjtdEoypu1","sessionID":"ses_edb955651ffenUuJGqE3AS8ZhQ","type":"step-finish","tokens":{"total":6571,"input":59,"output":8,"reasoning":0,"cache":{"write":0,"read":6504}},"cost":0}}
+## plant token LIME-0082 in session 2 (a new run = a new session)
+$ cat /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P1-session/t2.json
+{"type":"step_start","timestamp":1791614230841,"sessionID":"ses_edb7877f3ffeQqh3mZ97E2sLKa","part":{"id":"prt_12487a134001Bt4FpzrzC5RTYv","messageID":"msg_124878967001xyeIUzOMOA6ZvX","sessionID":"ses_edb7877f3ffeQqh3mZ97E2sLKa","snapshot":"6288cd1451eae733291e7bcefa061aea563cbb96","type":"step-start"}}
+{"type":"text","timestamp":1791614230934,"sessionID":"ses_edb7877f3ffeQqh3mZ97E2sLKa","part":{"id":"prt_12487a137001gTOVMNvu65WJEc","messageID":"msg_124878967001xyeIUzOMOA6ZvX","sessionID":"ses_edb7877f3ffeQqh3mZ97E2sLKa","type":"text","text":"OK","time":{"start":1791614230839,"end":1791614230931}}}
+{"type":"step_finish","timestamp":1791614231015,"sessionID":"ses_edb7877f3ffeQqh3mZ97E2sLKa","part":{"id":"prt_12487a1e2001ezkXcJPB7OXrAE","reason":"stop","snapshot":"6288cd1451eae733291e7bcefa061aea563cbb96","messageID":"msg_124878967001xyeIUzOMOA6ZvX","sessionID":"ses_edb7877f3ffeQqh3mZ97E2sLKa","type":"step-finish","tokens":{"total":6535,"input":32,"output":2,"reasoning":0,"cache":{"write":0,"read":6501}},"cost":0}}
 
-[exit=0 wall=3.6s]
+[exit=0 wall=0.1s]
 
-## recall with --continue (continues the most recent session = session 2)
-$ /Users/techfreakworm/.opencode/bin/opencode run -m ollama/qwen3:32b --format json --continue What was the secret token I gave you earlier? Reply with only the token.
-{"type":"step_start","timestamp":1791612390349,"sessionID":"ses_edb955651ffenUuJGqE3AS8ZhQ","part":{"id":"prt_1246b8bc7001YYTQ150yJwqbxK","messageID":"msg_1246b85cb0016WYCT5IKF09Vxc","sessionID":"ses_edb955651ffenUuJGqE3AS8ZhQ","snapshot":"9b369eb0f7fe159c8c1338e149181f949a4153d2","type":"step-start"}}
-{"type":"text","timestamp":1791612391006,"sessionID":"ses_edb955651ffenUuJGqE3AS8ZhQ","part":{"id":"prt_1246b8bca001e1lTfe41WuZM69","messageID":"msg_1246b85cb0016WYCT5IKF09Vxc","sessionID":"ses_edb955651ffenUuJGqE3AS8ZhQ","type":"text","text":"KIWI-4417","time":{"start":1791612390346,"end":1791612391001}}}
-{"type":"step_finish","timestamp":1791612391096,"sessionID":"ses_edb955651ffenUuJGqE3AS8ZhQ","part":{"id":"prt_1246b8eb5001sYRFCTypFWgscQ","reason":"stop","snapshot":"9b369eb0f7fe159c8c1338e149181f949a4153d2","messageID":"msg_1246b85cb0016WYCT5IKF09Vxc","sessionID":"ses_edb955651ffenUuJGqE3AS8ZhQ","type":"step-finish","tokens":{"total":6604,"input":46,"output":8,"reasoning":0,"cache":{"write":0,"read":6550}},"cost":0}}
+session 1 (KIWI) = ses_edb794972ffe0lsuDEKj0407bc ; session 2 (LIME) = ses_edb7877f3ffeQqh3mZ97E2sLKa
+## --continue: resumes the most recently updated session (session 2 at this point)
+$ cat /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P1-session/t3.json
+{"type":"step_start","timestamp":1791614241376,"sessionID":"ses_edb7877f3ffeQqh3mZ97E2sLKa","part":{"id":"prt_12487ca4d0011tQkZ0hvkde60j","messageID":"msg_12487a92e001M3C5fYoOyapkle","sessionID":"ses_edb7877f3ffeQqh3mZ97E2sLKa","snapshot":"6288cd1451eae733291e7bcefa061aea563cbb96","type":"step-start"}}
+{"type":"text","timestamp":1791614242133,"sessionID":"ses_edb7877f3ffeQqh3mZ97E2sLKa","part":{"id":"prt_12487ca54001WiEaAVsSsPOw1k","messageID":"msg_12487a92e001M3C5fYoOyapkle","sessionID":"ses_edb7877f3ffeQqh3mZ97E2sLKa","type":"text","text":"LIME-0082","time":{"start":1791614241364,"end":1791614242127}}}
+{"type":"step_finish","timestamp":1791614242319,"sessionID":"ses_edb7877f3ffeQqh3mZ97E2sLKa","part":{"id":"prt_12487ce03001Zqfo3iupHOhsGI","reason":"stop","snapshot":"6288cd1451eae733291e7bcefa061aea563cbb96","messageID":"msg_12487a92e001M3C5fYoOyapkle","sessionID":"ses_edb7877f3ffeQqh3mZ97E2sLKa","type":"step-finish","tokens":{"total":6568,"input":40,"output":8,"reasoning":0,"cache":{"write":0,"read":6520}},"cost":0}}
 
-[exit=0 wall=4.3s]
+[exit=0 wall=0.0s]
 
-## session list
-$ /Users/techfreakworm/.opencode/bin/opencode session list --format json
-[
-  {
-    "id": "ses_edb955651ffenUuJGqE3AS8ZhQ",
-    "title": "Secret token storage: KIWI-4417",
-    "updated": 1791612391199,
-    "created": 1791612332462,
-    "projectId": "00b2b6ddccd78902761613c15de731c8b234dce1",
-    "directory": "/private/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P1-headless/project"
-  },
-  {
-    "id": "ses_edb949f7cffeBWqcHieX8ufIVz",
-    "title": "Secret token LIME-0082 reminder",
-    "updated": 1791612383102,
-    "created": 1791612379268,
-    "projectId": "00b2b6ddccd78902761613c15de731c8b234dce1",
-    "directory": "/private/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P1-headless/project"
-  }
-]
-
-[exit=0 wall=0.9s]
-
-VERDICT: FAIL — recall kiwi=2 lime=0 s1_events=9.
+## -s <session 1>: resumes session 1 explicitly

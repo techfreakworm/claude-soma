@@ -1,5 +1,5 @@
 # P2-hooks/activity.log
-date-utc: 2026-10-10T06:05:36Z
+date-utc: 2026-10-10T06:37:13Z
 probe-script: research/opencode-soma/probes/opencode/P2-hooks/analyze.sh (after run.sh)
 opencode-version: 1.18.8
 model: ollama/qwen3:32b
@@ -8,33 +8,69 @@ purpose: (c) log every tool use (log_activity.sh analog) incl. MCP and subagent 
 
 ## activity.jsonl (evidence/opencode/P2-hooks/activity.jsonl)
 $ cat /Users/techfreakworm/.soma/worktrees/claude-soma/claude-soma-manager/research/opencode-soma/evidence/opencode/P2-hooks/activity.jsonl
-{"ts":"2026-10-10T06:04:50.162Z","tool":"bash","args":"{\"command\":\"touch /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P2-hooks/p2/sentinel-subagent && echo P2-SUB-DONE\",\"workdir\":\"/private/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P2-hooks/project\"}","sessionID":"ses_edb962c65ffetuQnJ7IbAeUPfq","parentSessionID":"ses_edb977777ffeyh3bfUICJssyeP","agent":"general","callID":"call_yoznyu3j","duration_ms":445,"title":"touch /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P2-hooks/p2/sentinel-subagent && echo P2-SUB-DONE","result_head":"P2-SUB-DONE\n","metadata_keys":["output","exit","truncated"]}
-{"ts":"2026-10-10T06:04:51.596Z","tool":"task","args":"{\"prompt\":\"Run exactly this bash command: touch /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P2-hooks/p2/sentinel-subagent && echo P2-SUB-DONE  and report its output.\",\"subagent_type\":\"general\",\"description\":\"Run a bash command with a subagent\"}","sessionID":"ses_edb977777ffeyh3bfUICJssyeP","parentSessionID":null,"agent":"build","callID":"call_3ur7pxhw","duration_ms":13944,"title":"Run a bash command with a subagent","result_head":"<task id=\"ses_edb962c65ffetuQnJ7IbAeUPfq\" state=\"completed\">\n<task_result>\nP2-SUB-DONE\n</task_result>\n</task>","metadata_keys":["parentSessionId","sessionId","model","truncated"]}
-{"ts":"2026-10-10T06:05:11.128Z","tool":"probe-stdio_stdio_echo","args":"{\"text\":\"P2-MCP\"}","sessionID":"ses_edb977777ffeyh3bfUICJssyeP","parentSessionID":null,"agent":"build","callID":"call_daqj0xp8","duration_ms":5,"metadata_keys":[]}
-
-[exit=0 wall=0.0s]
-
-## ground truth: tool calls in the session transcripts (main session via ocdrive + child sessions) vs the activity log
-$ python3.12 -I -c 
-import json,re,sys
-s=open(sys.argv[1]).read()
-calls=set(re.findall(r"\"callID\": \"([^\"]+)\"", s))
-logged={}
-for l in open(sys.argv[2]):
-    if l.strip():
-        d=json.loads(l); logged[d["callID"]]=d
-print("tool calls visible in the main-session driver transcript:", len(calls))
-print("tool calls in activity log:", len(logged))
-print("in transcript but NOT logged:", sorted(calls-set(logged)))
-extra=sorted(set(logged)-calls)
-print("logged but not in the main transcript (subagent-session calls):", [(c, logged[c]["tool"], logged[c]["sessionID"]) for c in extra])
- /Users/techfreakworm/.soma/worktrees/claude-soma/claude-soma-manager/research/opencode-soma/evidence/opencode/P2-hooks/run.log /Users/techfreakworm/.soma/worktrees/claude-soma/claude-soma-manager/research/opencode-soma/evidence/opencode/P2-hooks/activity.jsonl
-tool calls visible in the main-session driver transcript: 4
-tool calls in activity log: 3
-in transcript but NOT logged: ['call_mvzy3dwx']
-logged but not in the main transcript (subagent-session calls): []
+{"ts":"2026-10-10T06:34:02.355Z","phase":"start","tool":"task","args":"{\"description\":\"Create file with subagent\",\"prompt\":\"Run exactly this bash command: touch /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P2-hooks/p2/sentinel-subagent && echo P2-SUB-DONE  and report its output.\",\"subagent_type\":\"general\"}","sessionID":"ses_edb7e536affeYi9nZHkRfT4HkI","parentSessionID":null,"agent":"build","callID":"call_sh9xl3pg"}
+{"ts":"2026-10-10T06:34:25.502Z","phase":"start","tool":"bash","args":"{\"command\":\"touch /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P2-hooks/p2/sentinel-subagent && echo P2-SUB-DONE\",\"workdir\":\"/private/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P2-hooks/project\"}","sessionID":"ses_edb7b3effffejAhCo0vFYAcFq5","parentSessionID":"ses_edb7e536affeYi9nZHkRfT4HkI","agent":"general","callID":"call_lggclbdl"}
+{"ts":"2026-10-10T06:34:25.960Z","phase":"end","tool":"bash","args":"{\"command\":\"touch /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P2-hooks/p2/sentinel-subagent && echo P2-SUB-DONE\",\"workdir\":\"/private/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P2-hooks/project\"}","sessionID":"ses_edb7b3effffejAhCo0vFYAcFq5","parentSessionID":"ses_edb7e536affeYi9nZHkRfT4HkI","agent":"general","callID":"call_lggclbdl","duration_ms":458,"title":"touch /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P2-hooks/p2/sentinel-subagent && echo P2-SUB-DONE","result_head":"P2-SUB-DONE\n","metadata_keys":["output","exit","truncated"]}
+{"ts":"2026-10-10T06:34:40.272Z","phase":"end","tool":"task","args":"{\"description\":\"Create file with subagent\",\"prompt\":\"Run exactly this bash command: touch /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P2-hooks/p2/sentinel-subagent && echo P2-SUB-DONE  and report its output.\",\"subagent_type\":\"general\"}","sessionID":"ses_edb7e536affeYi9nZHkRfT4HkI","parentSessionID":null,"agent":"build","callID":"call_sh9xl3pg","duration_ms":37917,"title":"Create file with subagent","result_head":"<task id=\"ses_edb7b3effffejAhCo0vFYAcFq5\" state=\"completed\">\n<task_result>\nThe command was executed successfully. Output: `P2-SUB-DONE`.\n</task_result>\n</task>","metadata_keys":["parentSessionId","sessionId","model","truncated"]}
+{"ts":"2026-10-10T06:35:29.678Z","phase":"start","tool":"probe-stdio_stdio_echo","args":"{\"text\":\"P2-MCP\"}","sessionID":"ses_edb7e536affeYi9nZHkRfT4HkI","parentSessionID":null,"agent":"build","callID":"call_i1aruawz"}
+{"ts":"2026-10-10T06:35:29.684Z","phase":"end","tool":"probe-stdio_stdio_echo","args":"{\"text\":\"P2-MCP\"}","sessionID":"ses_edb7e536affeYi9nZHkRfT4HkI","parentSessionID":null,"agent":"build","callID":"call_i1aruawz","duration_ms":6,"metadata_keys":[]}
+{"ts":"2026-10-10T06:35:53.951Z","phase":"start","tool":"bash","args":"{\"command\":\"echo P2-ASK-OK\"}","sessionID":"ses_edb7e536affeYi9nZHkRfT4HkI","parentSessionID":null,"agent":"build","callID":"call_a5x0hu7r"}
+{"ts":"2026-10-10T06:35:54.317Z","phase":"end","tool":"bash","args":"{\"command\":\"echo P2-ASK-OK\"}","sessionID":"ses_edb7e536affeYi9nZHkRfT4HkI","parentSessionID":null,"agent":"build","callID":"call_a5x0hu7r","duration_ms":366,"title":"echo P2-ASK-OK","result_head":"P2-ASK-OK\n","metadata_keys":["output","exit","truncated"]}
 
 [exit=0 wall=0.1s]
 
-summary: lines=3 mcp=1 subagent-session-tools=1 task=1 with-agent=3
-VERDICT: PASS — tool.execute.before/after logged every tool call (built-in, MCP, task and the subagent's own calls) with args, session, parent session, agent, duration and result head.
+## ground truth: every tool part in every session of the tree (sessions-dump.json, read over HTTP) vs activity.jsonl and gate.jsonl
+$ python3.12 -I -c 
+import json,sys
+dump=json.load(open(sys.argv[1]))
+truth={t["callID"]:(sid,t["tool"],t["status"]) for sid,msgs in dump.items() for m in msgs for t in m["tools"]}
+act={}
+for l in open(sys.argv[2]):
+    if l.strip():
+        d=json.loads(l); act.setdefault(d["callID"],set()).add(d.get("phase","end"))
+gate={json.loads(l)["callID"]:json.loads(l)["decision"] for l in open(sys.argv[3]) if l.strip()}
+print("tool calls in all session transcripts:", len(truth))
+for c,(sid,tool,st) in sorted(truth.items(), key=lambda x:x[1]):
+    print(" ", c, tool, "status="+str(st), "session="+sid[-8:], "| activity:", sorted(act.get(c,[])), "| gate:", gate.get(c))
+print("calls in NO log at all:", sorted(c for c in truth if c not in act and c not in gate))
+print("executed calls (not gate-denied) without an activity end line:", sorted(c for c in truth if gate.get(c)!="deny" and "end" not in act.get(c,set())))
+ /Users/techfreakworm/.soma/worktrees/claude-soma/claude-soma-manager/research/opencode-soma/evidence/opencode/P2-hooks/sessions-dump.json /Users/techfreakworm/.soma/worktrees/claude-soma/claude-soma-manager/research/opencode-soma/evidence/opencode/P2-hooks/activity.jsonl /Users/techfreakworm/.soma/worktrees/claude-soma/claude-soma-manager/research/opencode-soma/evidence/opencode/P2-hooks/gate.jsonl
+tool calls in all session transcripts: 5
+  call_lggclbdl bash status=completed session=vFYAcFq5 | activity: ['end', 'start'] | gate: allow-subagent-exempt
+  call_a5x0hu7r bash status=completed session=kRfT4HkI | activity: ['end', 'start'] | gate: allow
+  call_nkzpylg1 bash status=error session=kRfT4HkI | activity: [] | gate: deny
+  call_i1aruawz probe-stdio_stdio_echo status=completed session=kRfT4HkI | activity: ['end', 'start'] | gate: allow
+  call_sh9xl3pg task status=completed session=kRfT4HkI | activity: ['end', 'start'] | gate: allow
+calls in NO log at all: []
+executed calls (not gate-denied) without an activity end line: []
+
+[exit=0 wall=0.1s]
+
+## hook order across plugin files, per call (timestamps of gate / activity start / spy tool.execute.before)
+$ python3.12 -I -c 
+import json,sys
+g={json.loads(l)["callID"]:json.loads(l)["ts"] for l in open(sys.argv[1]) if l.strip()}
+a={}
+for l in open(sys.argv[2]):
+    d=json.loads(l)
+    if d.get("phase")=="start": a[d["callID"]]=d["ts"]
+s={}
+for l in open(sys.argv[3]):
+    d=json.loads(l)
+    if d.get("kind")=="hook" and d.get("hook")=="tool.execute.before": s[json.loads(d["input"])["callID"]]=d["ts"]
+for c in sorted(set(g)|set(a)|set(s)):
+    order=sorted([(t,n) for n,t in (("gate",g.get(c)),("activity",a.get(c)),("spy",s.get(c))) if t])
+    print(c, " -> ".join(n for _,n in order), "| missing:", [n for n,t in (("gate",g.get(c)),("activity",a.get(c)),("spy",s.get(c))) if not t])
+print("plugin files: activity.js gate.js inject.js spy.js (alphabetical); a throwing hook stops the hooks of plugins after it for that call")
+ /Users/techfreakworm/.soma/worktrees/claude-soma/claude-soma-manager/research/opencode-soma/evidence/opencode/P2-hooks/gate.jsonl /Users/techfreakworm/.soma/worktrees/claude-soma/claude-soma-manager/research/opencode-soma/evidence/opencode/P2-hooks/activity.jsonl /Users/techfreakworm/.soma/worktrees/claude-soma/claude-soma-manager/research/opencode-soma/evidence/opencode/P2-hooks/spy.jsonl
+call_a5x0hu7r gate -> activity -> spy | missing: []
+call_i1aruawz gate -> activity -> spy | missing: []
+call_lggclbdl gate -> activity -> spy | missing: []
+call_nkzpylg1 gate | missing: ['activity', 'spy']
+call_sh9xl3pg gate -> activity -> spy | missing: []
+plugin files: activity.js gate.js inject.js spy.js (alphabetical); a throwing hook stops the hooks of plugins after it for that call
+
+[exit=0 wall=0.2s]
+
+summary: lines=8 missing-from-log=0 mcp=1 subagent-session-tools=1 task=1 with-agent=4
+VERDICT: PASS — every executed tool call in every session of the tree (built-in, MCP, task, the subagent's own calls) is in the activity log with args, session, parent session, agent, duration and result head; the gate-blocked attempt is on record in the gate's own log (later plugins never see a call an earlier plugin rejects).

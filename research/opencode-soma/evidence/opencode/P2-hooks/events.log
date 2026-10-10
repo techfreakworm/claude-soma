@@ -1,5 +1,5 @@
 # P2-hooks/events.log
-date-utc: 2026-10-10T06:05:34Z
+date-utc: 2026-10-10T06:37:10Z
 probe-script: research/opencode-soma/probes/opencode/P2-hooks/analyze.sh (after run.sh)
 opencode-version: 1.18.8
 model: ollama/qwen3:32b
@@ -9,19 +9,19 @@ purpose: every hook and bus event a plugin actually saw during a session with to
 source: evidence/opencode/P2-hooks/spy.jsonl written by plugins/spy.js during run.sh
 ## hooks fired (count by name)
 $ sh -c jq -r 'select(.kind=="hook") | .hook' '/Users/techfreakworm/.soma/worktrees/claude-soma/claude-soma-manager/research/opencode-soma/evidence/opencode/P2-hooks/spy.jsonl' | sort | uniq -c | sort -rn
- 132 tool.definition
-  11 experimental.chat.system.transform
-  11 experimental.chat.messages.transform
-  11 chat.params
-  11 chat.headers
+ 144 tool.definition
+  12 experimental.chat.system.transform
+  12 experimental.chat.messages.transform
+  12 chat.params
+  12 chat.headers
    7 experimental.text.complete
    7 chat.message
-   3 tool.execute.before
-   3 tool.execute.after
-   1 shell.env
+   4 tool.execute.before
+   4 tool.execute.after
+   2 shell.env
    1 config
 
-[exit=0 wall=0.0s]
+[exit=0 wall=0.1s]
 
 ## hooks declared in the 1.18.8 types that NEVER fired in this session
 $ sh -c for h in config chat.message chat.params chat.headers permission.ask command.execute.before tool.execute.before shell.env tool.execute.after experimental.chat.messages.transform experimental.chat.system.transform experimental.session.compacting experimental.compaction.autocontinue experimental.text.complete tool.definition; do jq -e --arg h $h 'select(.kind=="hook" and .hook==$h)' '/Users/techfreakworm/.soma/worktrees/claude-soma/claude-soma-manager/research/opencode-soma/evidence/opencode/P2-hooks/spy.jsonl' >/dev/null || echo "never fired: $h"; done
@@ -30,26 +30,26 @@ never fired: command.execute.before
 never fired: experimental.session.compacting
 never fired: experimental.compaction.autocontinue
 
-[exit=0 wall=0.1s]
+[exit=0 wall=0.2s]
 
 ## bus event types seen by the plugin event hook (count by type)
 $ sh -c jq -r 'select(.kind=="event") | .type' '/Users/techfreakworm/.soma/worktrees/claude-soma/claude-soma-manager/research/opencode-soma/evidence/opencode/P2-hooks/spy.jsonl' | sort | uniq -c | sort -rn
- 100 message.part.delta
-  60 message.part.updated
-  58 message.updated
+ 117 message.part.delta
+  67 message.part.updated
+  62 message.updated
   45 plugin.added
-  36 session.status
-  27 session.updated
-  18 session.diff
+  38 session.status
+  28 session.updated
+  19 session.diff
    7 session.idle
    2 session.created
+   2 permission.replied
+   2 permission.asked
    2 catalog.updated
    1 reference.updated
-   1 permission.replied
-   1 permission.asked
    1 integration.updated
 
-[exit=0 wall=0.0s]
+[exit=0 wall=0.1s]
 
 ## exact input/output field names per hook
 $ sh -c jq -c 'select(.kind=="hook") | {hook, input_keys, output_keys}' '/Users/techfreakworm/.soma/worktrees/claude-soma/claude-soma-manager/research/opencode-soma/evidence/opencode/P2-hooks/spy.jsonl' | sort -u
@@ -66,25 +66,28 @@ $ sh -c jq -c 'select(.kind=="hook") | {hook, input_keys, output_keys}' '/Users/
 {"hook":"tool.execute.after","input_keys":["tool","sessionID","callID","args"],"output_keys":["title","metadata","output","attachments"]}
 {"hook":"tool.execute.before","input_keys":["tool","sessionID","callID"],"output_keys":["args"]}
 
-[exit=0 wall=0.0s]
+[exit=0 wall=0.1s]
 
 ## sample inputs: tool.execute.before / tool.execute.after / permission.ask / chat.message / shell.env
 $ sh -c for h in tool.execute.before tool.execute.after permission.ask chat.message shell.env; do jq -c --arg h $h 'select(.kind=="hook" and .hook==$h) | {hook, input}' '/Users/techfreakworm/.soma/worktrees/claude-soma/claude-soma-manager/research/opencode-soma/evidence/opencode/P2-hooks/spy.jsonl' | head -2; done
-{"hook":"tool.execute.before","input":"{\"tool\":\"task\",\"sessionID\":\"ses_edb977777ffeyh3bfUICJssyeP\",\"callID\":\"call_3ur7pxhw\"}"}
-{"hook":"tool.execute.before","input":"{\"tool\":\"bash\",\"sessionID\":\"ses_edb962c65ffetuQnJ7IbAeUPfq\",\"callID\":\"call_yoznyu3j\"}"}
-{"hook":"tool.execute.after","input":"{\"tool\":\"bash\",\"sessionID\":\"ses_edb962c65ffetuQnJ7IbAeUPfq\",\"callID\":\"call_yoznyu3j\",\"args\":{\"command\":\"touch /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P2-hooks/p2/sentinel-subagent && echo P2-SUB-DONE\",\"workdir\":\"/private/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P2-hooks/project\"}}"}
-{"hook":"tool.execute.after","input":"{\"tool\":\"task\",\"sessionID\":\"ses_edb977777ffeyh3bfUICJssyeP\",\"callID\":\"call_3ur7pxhw\",\"args\":{\"prompt\":\"Run exactly this bash command: touch /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P2-hooks/p2/sentinel-subagent && echo P2-SUB-DONE  and report its output.\",\"subagent_type\":\"general\",\"description\":\"Run a bash command with a subagent\"}}"}
-{"hook":"chat.message","input":"{\"sessionID\":\"ses_edb977777ffeyh3bfUICJssyeP\",\"model\":{\"providerID\":\"ollama\",\"modelID\":\"qwen3:32b\"}}"}
-{"hook":"chat.message","input":"{\"sessionID\":\"ses_edb977777ffeyh3bfUICJssyeP\",\"model\":{\"providerID\":\"ollama\",\"modelID\":\"qwen3:32b\"}}"}
-{"hook":"shell.env","input":"{\"cwd\":\"/private/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P2-hooks/project\",\"sessionID\":\"ses_edb962c65ffetuQnJ7IbAeUPfq\",\"callID\":\"call_yoznyu3j\"}"}
+{"hook":"tool.execute.before","input":"{\"tool\":\"task\",\"sessionID\":\"ses_edb7e536affeYi9nZHkRfT4HkI\",\"callID\":\"call_sh9xl3pg\"}"}
+{"hook":"tool.execute.before","input":"{\"tool\":\"bash\",\"sessionID\":\"ses_edb7b3effffejAhCo0vFYAcFq5\",\"callID\":\"call_lggclbdl\"}"}
+{"hook":"tool.execute.after","input":"{\"tool\":\"bash\",\"sessionID\":\"ses_edb7b3effffejAhCo0vFYAcFq5\",\"callID\":\"call_lggclbdl\",\"args\":{\"command\":\"touch /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P2-hooks/p2/sentinel-subagent && echo P2-SUB-DONE\",\"workdir\":\"/private/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P2-hooks/project\"}}"}
+{"hook":"tool.execute.after","input":"{\"tool\":\"task\",\"sessionID\":\"ses_edb7e536affeYi9nZHkRfT4HkI\",\"callID\":\"call_sh9xl3pg\",\"args\":{\"description\":\"Create file with subagent\",\"prompt\":\"Run exactly this bash command: touch /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P2-hooks/p2/sentinel-subagent && echo P2-SUB-DONE  and report its output.\",\"subagent_type\":\"general\"}}"}
+{"hook":"chat.message","input":"{\"sessionID\":\"ses_edb7e536affeYi9nZHkRfT4HkI\",\"model\":{\"providerID\":\"ollama\",\"modelID\":\"qwen3:32b\"}}"}
+{"hook":"chat.message","input":"{\"sessionID\":\"ses_edb7e536affeYi9nZHkRfT4HkI\",\"model\":{\"providerID\":\"ollama\",\"modelID\":\"qwen3:32b\"}}"}
+{"hook":"shell.env","input":"{\"cwd\":\"/private/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P2-hooks/project\",\"sessionID\":\"ses_edb7b3effffejAhCo0vFYAcFq5\",\"callID\":\"call_lggclbdl\"}"}
+{"hook":"shell.env","input":"{\"cwd\":\"/private/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P2-hooks/project\",\"sessionID\":\"ses_edb7e536affeYi9nZHkRfT4HkI\",\"callID\":\"call_a5x0hu7r\"}"}
 
-[exit=0 wall=0.0s]
+[exit=0 wall=0.1s]
 
 ## permission-related bus events (raw)
 $ sh -c jq -c 'select(.kind=="event" and (.type|test("permission")))' '/Users/techfreakworm/.soma/worktrees/claude-soma/claude-soma-manager/research/opencode-soma/evidence/opencode/P2-hooks/spy.jsonl'
-{"ts":"2026-10-10T06:04:49.753Z","kind":"event","type":"permission.asked","props":"{\"id\":\"per_1246a02d8001vL6LkvQYlxGakB\",\"sessionID\":\"ses_edb962c65ffetuQnJ7IbAeUPfq\",\"permission\":\"external_directory\",\"patterns\":[\"/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P2-hooks/p2/*\"],\"metadata\":{\"command\":\"touch /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P2-hoo..."}
-{"ts":"2026-10-10T06:04:50.147Z","kind":"event","type":"permission.replied","props":"{\"sessionID\":\"ses_edb962c65ffetuQnJ7IbAeUPfq\",\"requestID\":\"per_1246a02d8001vL6LkvQYlxGakB\",\"reply\":\"once\"}"}
+{"ts":"2026-10-10T06:34:25.607Z","kind":"event","type":"permission.asked","props":"{\"id\":\"per_124851bc7001u6wSoT5F397b35\",\"sessionID\":\"ses_edb7b3effffejAhCo0vFYAcFq5\",\"permission\":\"external_directory\",\"patterns\":[\"/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P2-hooks/p2/*\"],\"metadata\":{\"command\":\"touch /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P2-hoo..."}
+{"ts":"2026-10-10T06:34:25.908Z","kind":"event","type":"permission.replied","props":"{\"sessionID\":\"ses_edb7b3effffejAhCo0vFYAcFq5\",\"requestID\":\"per_124851bc7001u6wSoT5F397b35\",\"reply\":\"once\"}"}
+{"ts":"2026-10-10T06:35:53.958Z","kind":"event","type":"permission.asked","props":"{\"id\":\"per_1248674e6001eYaiFbi0syGAO7\",\"sessionID\":\"ses_edb7e536affeYi9nZHkRfT4HkI\",\"permission\":\"bash\",\"patterns\":[\"echo P2-ASK-OK\"],\"metadata\":{\"command\":\"echo P2-ASK-OK\"},\"always\":[\"echo *\"],\"tool\":{\"messageID\":\"msg_12486620e0014hT5U3EJpjzjXH\",\"callID\":\"call_a5x0hu7r\"}}"}
+{"ts":"2026-10-10T06:35:54.302Z","kind":"event","type":"permission.replied","props":"{\"sessionID\":\"ses_edb7e536affeYi9nZHkRfT4HkI\",\"requestID\":\"per_1248674e6001eYaiFbi0syGAO7\",\"reply\":\"once\"}"}
 
-[exit=0 wall=0.0s]
+[exit=0 wall=0.1s]
 
 VERDICT: PASS — the spy plugin saw 11 distinct hooks and 14 distinct bus event types in one session (lists above).

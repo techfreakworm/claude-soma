@@ -1,6 +1,6 @@
 # P1-headless/crash-run.log
 date-utc: 2026-10-10T06:06:32Z
-probe-script: research/opencode-soma/probes/opencode/P1-headless/run.sh
+probe-script: research/opencode-soma/probes/opencode/P1-headless/run1-monolithic.sh (first run, archived)
 opencode-version: 1.18.8
 model: ollama/qwen3:32b (thinking off)
 sandbox: $TMPDIR/ocsoma-pe/P1-headless (HOME, XDG_*, TMPDIR all inside it)

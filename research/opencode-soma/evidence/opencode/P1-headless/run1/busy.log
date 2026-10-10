@@ -1,6 +1,6 @@
 # P1-headless/busy.log
 date-utc: 2026-10-10T06:07:33Z
-probe-script: research/opencode-soma/probes/opencode/P1-headless/run.sh
+probe-script: research/opencode-soma/probes/opencode/P1-headless/run1-monolithic.sh (first run, archived)
 opencode-version: 1.18.8
 model: ollama/qwen3:32b (thinking off)
 sandbox: $TMPDIR/ocsoma-pe/P1-headless (HOME, XDG_*, TMPDIR all inside it)
@@ -133,3 +133,98 @@ probe-engineer note 06:20:56Z: 4e run --attach (pid 17955) admitted its user mes
 
 [exit=137 wall=61.7s]
 
+$ msgs ses_edb937902ffeMoC64jQzQsx3Zh
+{"id":"msg_1246c87f9001BZDBK3t7rJhZXG","role":"user","created":1791612454905,"completed":null,"finish":null,"error":null,"text":"Remember this secret token: PEAR-5521. Reply only with the word OK."}
+{"id":"msg_1246c8808001HLsLazP8NfgX1j","role":"assistant","created":1791612454920,"completed":1791612456002,"finish":"stop","error":null,"text":"OK"}
+{"id":"msg_1246c8e74001FH1mi1XHwwzgc0","role":"user","created":1791612456564,"completed":null,"finish":null,"error":null,"text":"Count from 1 to 200, writing every number as an English word, one per line. Output only the list."}
+{"id":"msg_1246c8e780013Cw6OxM1FP4VPS","role":"assistant","created":1791612456568,"completed":1791612571414,"finish":"stop","error":null,"text":"one  \ntwo  \nthree  \nfour  \nfive  \nsix  \nseven  \neight  \nnine  \nten  \neleven  \ntwelve  \nthirteen  \nfourteen  \nfifteen  \ns"}
+{"id":"msg_1246c9b1b001CrdUX0lQUD5Wj2","role":"user","created":1791612459803,"completed":null,"finish":null,"error":null,"text":"Reply with exactly SECOND-PROMPT-OK and nothing else."}
+{"id":"msg_1246e4f1b001zygfGsjlV9tTGX","role":"assistant","created":1791612571419,"completed":1791612581275,"finish":"stop","error":null,"text":"SECOND-PROMPT-OK"}
+{"id":"msg_1246e774d0013l4UEZMbt4Uy56","role":"user","created":1791612581709,"completed":null,"finish":null,"error":null,"text":"Count from 1 to 200, writing every number as an English word, one per line. Output only the list."}
+{"id":"msg_1246e7754001Z3G6YyOlYjAe6V","role":"assistant","created":1791612581716,"completed":1791612695114,"finish":"stop","error":null,"text":"one  \ntwo  \nthree  \nfour  \nfive  \nsix  \nseven  \neight  \nnine  \nten  \neleven  \ntwelve  \nthirteen  \nfourteen  \nfifteen  \ns"}
+{"id":"msg_1246e8377001HxDVFcfsnWqpjS","role":"user","created":1791612584823,"completed":null,"finish":null,"error":null,"text":"Reply with exactly THIRD-SYNC-OK and nothing else."}
+{"id":"msg_12470324f001k2HkrAatunEc9j","role":"assistant","created":1791612695119,"completed":1791612705072,"finish":"stop","error":null,"text":"THIRD-SYNC-OK"}
+{"id":"msg_124705af0001teGCKMBTPKMduu","role":"user","created":1791612705520,"completed":null,"finish":null,"error":null,"text":"Count from 1 to 200, writing every number as an English word, one per line. Output only the list."}
+{"id":"msg_124705af5001kJzyaqkr7VMXgw","role":"assistant","created":1791612705525,"completed":1791612820378,"finish":"stop","error":null,"text":"one  \ntwo  \nthree  \nfour  \nfive  \nsix  \nseven  \neight  \nnine  \nten  \neleven  \ntwelve  \nthirteen  \nfourteen  \nfifteen  \ns"}
+{"id":"msg_124707c5c0018t6qZ89B9RknlQ","role":"user","created":1791612714076,"completed":null,"finish":null,"error":null,"text":"\"Reply with exactly CLI-WHILE-BUSY-OK and nothing else.\""}
+{"id":"msg_1247081f5001evaECNNCmalpMw","role":"assistant","created":1791612715509,"completed":1791612840480,"finish":"stop","error":null,"text":"CLI-WHILE-BUSY-OK"}
+{"id":"msg_124721ba0001LHG6E43KA2VeT3","role":"assistant","created":1791612820384,"completed":1791612851154,"finish":"stop","error":null,"text":"CLI-WHILE-BUSY-OK"}
+{"id":"msg_124726a2b0016Vr06uhvIjFYaB","role":"assistant","created":1791612840491,"completed":1791612854176,"finish":"stop","error":null,"text":""}
+{"id":"msg_1247293e2001Wm3NSRMP1xtSqa","role":"assistant","created":1791612851170,"completed":null,"finish":null,"error":null,"text":""}
+{"id":"msg_124729fa3001igPEx1CH8iQLAB","role":"assistant","created":1791612854179,"completed":null,"finish":null,"error":null,"text":""}
+{"id":"msg_12477d522001sb511EMGC8i3ea","role":"user","created":1791613195554,"completed":null,"finish":null,"error":null,"text":"\"Reply with exactly ATTACH-WHILE-BUSY-OK and nothing else.\""}
+
+[exit=0 wall=0.1s]
+
+## 4f. abort a busy session (Telegram /stop analog): POST /session/{id}/abort
+$ curl -s http://127.0.0.1:47111/session/status
+{"ses_edb937902ffeMoC64jQzQsx3Zh":{"type":"busy"}}
+[exit=0 wall=0.1s]
+
+$ jcurl -w \n-> HTTP %{http_code} in %{time_total}s\n -X POST http://127.0.0.1:47111/session/ses_edb937902ffeMoC64jQzQsx3Zh/abort
+true
+-> HTTP 200 in 0.153627s
+
+[exit=0 wall=0.2s]
+
+$ curl -s http://127.0.0.1:47111/session/status
+{}
+[exit=0 wall=0.1s]
+
+$ sh -c msgs_last() { :; }; curl -s 'http://127.0.0.1:47111/session/ses_edb937902ffeMoC64jQzQsx3Zh/message' | jq -c '.[-1] | {role: .info.role, finish: .info.finish, error: (.info.error.name // null), completed: .info.time.completed, text_len: ([.parts[] | select(.type=="text") | .text] | join("") | length)}'
+{"role":"user","finish":null,"error":null,"completed":null,"text_len":97}
+
+[exit=0 wall=0.1s]
+
+## recall after all of the above
+$ python3.12 -I /Users/techfreakworm/.soma/worktrees/claude-soma/claude-soma-manager/research/opencode-soma/probes/opencode/ocdrive.py --base http://127.0.0.1:47111 turn --session ses_edb937902ffeMoC64jQzQsx3Zh --model ollama/qwen3:32b --text What was the secret token I gave you at the very beginning of this conversation? Reply with only the token.
+{
+ "session": "ses_edb937902ffeMoC64jQzQsx3Zh",
+ "timeout": false,
+ "seen_busy": true,
+ "wall_s": 205.9,
+ "final_text": "ATTACH-WHILE-BUSY-OK\n\none  \ntwo  \nthree  \nfour  \nfive  \nsix  \nseven  \neight  \nnine  \nten  \neleven  \ntwelve  \nthirteen  \nfourteen  \nfifteen  \nsixteen  \nseventeen  \neighteen  \nnineteen  \ntwenty  \ntwenty-one  \ntwenty-two  \ntwenty-three  \ntwenty-four  \ntwenty-five  \ntwenty-six  \ntwenty-seven  \ntwenty-eight  \ntwenty-nine  \nthirty  \nthirty-one  \nthirty-two  \nthirty-three  \nthirty-four  \nthirty-five  \nthirty-six  \nthirty-seven  \nthirty-eight  \nthirty-nine  \nforty  \nforty-one  \nforty-two  \nforty-three  \nforty-four  \nforty-five  \nforty-six  \nforty-seven  \nforty-eight  \nforty-nine  \nfifty  \nfifty-one  \nfifty-two  \nfifty-three  \nfifty-four  \nfifty-five  \nfifty-six  \nfifty-seven  \nfifty-eight  \nfifty-nine  \nsixty  \nsixty-one  \nsixty-two  \nsixty-three  \nsixty-four  \nsixty-five  \nsixty-six  \nsixty-seven  \nsixty-eight  \nsixty-nine  \nseventy  \nseventy-one  \nseventy-two  \nseventy-three  \nseventy-four  \nseventy-five  \nseventy-six  \nseventy-seven  \nseventy-eight  \nseventy-nine  \neighty  \neighty-one  \neighty-two  \neighty-three  \neighty-four  \neighty-five  \neighty-six  \neighty-seven  \neighty-eight  \neighty-nine  \nninety  \nninety-one  \nninety-two  \nninety-three  \nninety-four  \nninety-five  \nninety-six  \nninety-seven  \nninety-eight  \nninety-nine  \none hundred  \none hundred one  \none hundred two  \none hundred three  \none hundred four  \none hundred five  \none hundred six  \none hundred seven  \none hundred eight  \none hundred nine  \none hundred ten  \none hundred eleven  \none hundred twelve  \none hundre",
+ "new_messages": [
+  {
+   "id": "msg_1247ddbca001WMV7xAw1IO06uw",
+   "role": "user",
+   "agent": "build",
+   "model": "qwen3:32b",
+   "created": 1791613590474,
+   "completed": null,
+   "tokens": null,
+   "finish": null,
+   "error": null,
+   "text": "What was the secret token I gave you at the very beginning of this conversation? Reply with only the token.",
+   "tools": []
+  },
+  {
+   "id": "msg_1247ddbd0001GV1oNfsWVwUAdq",
+   "role": "assistant",
+   "agent": "build",
+   "model": "qwen3:32b",
+   "created": 1791613590480,
+   "completed": 1791613796205,
+   "tokens": {
+    "total": 15640,
+    "input": 5268,
+    "output": 854,
+    "reasoning": 0,
+    "cache": {
+     "read": 9518,
+     "write": 0
+    }
+   },
+   "finish": "stop",
+   "error": null,
+   "text": "ATTACH-WHILE-BUSY-OK\n\none  \ntwo  \nthree  \nfour  \nfive  \nsix  \nseven  \neight  \nnine  \nten  \neleven  \ntwelve  \nthirteen  \nfourteen  \nfifteen  \nsixteen  \nseventeen  \neighteen  \nnineteen  \ntwenty  \ntwenty-one  \ntwenty-two  \ntwenty-three  \ntwenty-four  \ntwenty-five  \ntwenty-six  \ntwenty-seven  \ntwenty-eight  \ntwenty-nine  \nthirty  \nthirty-one  \nthirty-two  \nthirty-three  \nthirty-four  \nthirty-five  \nthirty-six  \nthirty-seven  \nthirty-eight  \nthirty-nine  \nforty  \nforty-one  \nforty-two  \nforty-three  \nforty-four  \nforty-five  \nforty-six  \nforty-seven  \nforty-eight  \nforty-nine  \nfifty  \nfifty-one  \nfifty-two  \nfifty-three  \nfifty-four  \nfifty-five  \nfifty-six  \nfifty-seven  \nfifty-eight  \nfifty-nine  \nsixty  \nsixty-one  \nsixty-two  \nsixty-three  \nsixty-four  \nsixty-five  \nsixty-six  \nsixty-seven  \nsixty-eight  \nsixty-nine  \nseventy  \nseventy-one  \nseventy-two  \nseventy-three  \nseventy-four  \nseventy-five  \nseventy-six  \nseventy-seven  \nseventy-eight  \nseventy-nine  \neighty  \neighty-one  \neighty-two  \neighty-three  \neighty-four  \neighty-five  \neighty-six  \neighty-seven  \neighty-eight  \neighty-nine  \nninety  \nninety-one  \nninety-two  \nninety-three  \nninety-four  \nninety-five  \nninety-six  \nninety-seven  \nninety-eight  \nninety-nine  \none hundred  \none hundred one  \none hundred two  \none hundred three  \none hundred four  \none hundred five  \none hundred six  \none hundred seven  \none hundred eight  \none hundred nine  \none hundred ten  \none hundred eleven  \none hundred twelve  \none hundre",
+   "tools": []
+  }
+ ],
+ "permissions": [],
+ "children": []
+}
+
+[exit=0 wall=206.1s]
+
+VERDICT: PARTIAL — observational probe; behaviour per mode is summarized in SUMMARY.md from the raw transcript above.
