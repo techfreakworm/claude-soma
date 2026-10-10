@@ -44,7 +44,39 @@ opencode and ollama so "which tools each agent was offered", "what the system pr
 | P6 danger demo: injection blocked by the gate | PARTIAL | `P6-permissions/danger.log` |
 | P7 token accounting (stats/export/HTTP/db) + rebuild | PASS | `P7-usage/usage.log` |
 | P8 serve: OpenAPI, sync+async, SSE, auth, attach, web | PASS | `P8-serve/serve.log`, `openapi.json` |
+| P8b CORS + /global/upgrade listed | PASS | `P8-serve/cors.log` |
+| P2 extras: gate parentID-lookup cost, permission.ask-never-fires, idle/token events, custom-tool ctx.agent | PASS | `P2-hooks/extras.log` |
+| P4 background-subagents capability flag | PASS | `P4-subagents/capabilities.log` |
+| P5 attach-to-serve send-keys delivery (5/5) | PARTIAL | `P5-tmux/attach.log` |
+| P6 reject a pending permission over HTTP | PASS | `P6-permissions/reject-retest.log` |
+| P9 compat: claude-soma skills/agent/command load under opencode | PASS | `P9-compat/compat.log` |
 | Conditions + per-model turn timing | PASS | `conditions.log` |
+
+Follow-up findings (second round):
+- **Gate cost**: the `tool.execute.before` primary-vs-subagent decision needs one `GET /session/{id}`
+  lookup (p50 0.73ms on loopback) per NEW session, then an in-process cache hit (0.08us); one lookup
+  per session, not per tool call (`P2-hooks/extras.log`). A custom plugin *tool*'s ctx carries `agent`
+  directly (tool.d.ts), unlike the `tool.execute.before` hook input.
+- **permission.ask hook is dead**: declared in the 1.18.8 types, registered by the spy plugin, fired
+  0 times while the bus emitted permission.asked/replied; answer permissions via the event + HTTP
+  `POST /permission/{id}/reply` (reject proven in `P6-permissions/reject-retest.log`).
+- **CORS**: any `https://*.opencode.ai` origin and `localhost` are reflected in
+  Access-Control-Allow-Origin, applied before auth, even with a password set; a non-opencode origin
+  is not (`P8-serve/cors.log`). `POST /global/upgrade` is listed in `openapi.json` (not called). A
+  non-loopback bind must set `server.cors` and rely on the password.
+- **Compat**: claude-soma `SKILL.md` files load from `.opencode/skill/` with their Claude
+  `allowed-tools` frontmatter intact; a project-lead agent converts to opencode frontmatter and is
+  accepted; a command is served. opencode auto-loads external skills only from `~/.claude/skills/`
+  (HOME-level), never project `.claude/`; `.claude/agents` is never read (`P9-compat/compat.log`).
+- **Background subagents** gated by `OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS`, reported by
+  `GET /experimental/capabilities` (`P4-subagents/capabilities.log`).
+- **Model contention (RISKS)**: one local GPU + ollama `NUM_PARALLEL=1` means a second model is not
+  served while the first has a queue (`evidence/memory/ollama-two-models.log`): everything queues
+  behind the agent model.
+
+Verifier-rerun note: ports derive from `OCSOMA_PORT_BASE` (default 47100; port = base + offset, offset
+= last 2 digits) and tmux sockets from `OCSOMA_TMUX_PREFIX` (default `ocsoma-pe-`); set both to rerun
+in another range/namespace. `isolation.sh verify` reads the version from a sandboxed run.
 
 The two raw-run artifacts that read FAIL/PARTIAL are superseded, not contradicted:
 - `P3-mcp/scoping.log` FAIL counts case D (a client putting `tools:{telegram_send_message:true}`
