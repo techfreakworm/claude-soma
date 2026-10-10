@@ -77,10 +77,10 @@ C10 (--rerun) runs every pinned RERUN_LIST entry from its own clean `git archive
     HEAD gen.log's dataset_sha256 for 50000 facts, correct = 1.0, and a Q1 p50 within 10x of HEAD's
     neo4j/Q1/50000 row. Leftover ocsoma-vf-* containers or volumes fail the entry. Transcripts and
     produced logs go to evidence/verify/rerun/. Pinned: P1-resume (P1-headless/crash-run.sh and
-    crash-serve.sh), P2-gate (P2-hooks run.sh then analyze.sh; gate.log), P3-scoping (P3-mcp/run.sh; mcp, scoping
-    and scoping-verdict logs), P5-tmux (P5-tmux/run.sh; tmux and pane-analysis logs), neo4j-timing
-    (gen_memory.py + bench.py, Q1 at 50000 facts). With an empty list it FAILs "rerun list not yet
-    pinned".
+    crash-serve.sh), P2-gate (P2-hooks run.sh then analyze.sh; gate.log), P3-scoping
+    (P3-mcp/run.sh; mcp, scoping and scoping-verdict logs), P5-tmux (P5-tmux/run.sh; tmux and
+    pane-analysis logs), neo4j-timing (gen_memory.py + bench.py, Q1 at 50000 facts). With an empty
+    list it FAILs "rerun list not yet pinned".
 C11 no file under research/opencode-soma/ (outside venv/cache dirs) contains a credential-shaped
     string (API keys, OAuth/bearer tokens, private keys); only file:line is printed.
 """
