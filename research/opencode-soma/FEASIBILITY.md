@@ -70,10 +70,10 @@ scrape (`src/claude_soma/mcp_servers/project_orchestrator/server.py:193-230`, dr
 opencode directly over 2 rounds x 6 messages (`evidence/opencode/P5-tmux/tmux.log`): `send-keys`
 DELIVERY was 12/12 verbatim (short, long, multi-line, quotes, `$`/backticks, long-reply), and once
 the turn completes a sidebar-excluded, completion-gated STRICT scrape read the reply 12/12 (so did a
-plain whole-line scrape, 12/12, post-completion) - but that completion signal itself came from the
+plain whole-line scrape, 11-12/12 across two independent 2-round runs, post-completion) - but that completion signal itself came from the
 HTTP API (the server's turn-complete status), so scraping ALONE cannot tell when a turn has ended.
 And the scrape is fragile: the naive whole-line
-checker FALSE-POSITIVED mid-turn on 8/12, matching the TUI's auto-generated session title before any
+checker FALSE-POSITIVED mid-turn on 6-8/12 (two 2-round runs: mine and the verifier's, evidence/verify/rerun/), matching the TUI's auto-generated session title before any
 reply existed (a single-sample run flipped on exactly this in the verifier's C10 rerun), and long
 replies are truncated to the visible screen (alt-screen, no tmux scrollback). `opencode attach`
 delivery was 5/5 in a separate run (`evidence/opencode/P5-tmux/attach.log`). So on messaging
@@ -166,7 +166,8 @@ remote device only through a tunnel the operator sets up (LAN/remote is `desk-re
 
 ## 11. Cross-platform no-VPS install — DEGRADED
 A Linux container and a macOS LaunchAgent path (`evidence/platform/linux-container.log`,
-`evidence/platform/macos-launchd.log`) map to the per-OS resolver (`src/claude_soma/platform/paths.py:128-146`,
+`evidence/platform/macos-launchd.log`; the LaunchAgent plist was `plutil -lint`-validated only, never
+loaded, per PLATFORM-MATRIX.md) map to the per-OS resolver (`src/claude_soma/platform/paths.py:128-146`,
 runbook `INSTALL.md:3`). The NAT result (`evidence/platform/telegram-nat.log`): the host is a private
 `192.168.0.4` behind NAT; a fake-token `getMe` returned JSON 401 over outbound HTTPS; a 10s held
 request survived (11.1s); long polling needs no inbound port while a webhook would (webhook ports

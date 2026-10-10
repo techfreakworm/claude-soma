@@ -36,7 +36,7 @@ opencode and ollama so "which tools each agent was offered", "what the system pr
 | P4 parallel task calls run concurrently | PASS | `P4-subagents/parallel.log` |
 | P4 background subagents + `/experimental/.../background` | PASS | `P4-subagents/background.log` |
 | P4 independent lead process spawns its own team | PASS | `P4-subagents/lead-team.log` |
-| P5 tmux send-keys + capture-pane scrape (2 rounds x 6: delivery 12/12, strict scrape 12/12, old-checker mid-turn false-positive 8/12, HTTP 6/6) | PARTIAL | `P5-tmux/tmux.log`, `pane-analysis.log` |
+| P5 tmux send-keys + capture-pane scrape (2 rounds x 6, two independent runs: delivery 12/12, strict 12/12, whole-line 11-12/12, naive mid-turn false-positive 6-8/12, HTTP 6/6) | PARTIAL | `P5-tmux/tmux.log`, `pane-analysis.log` |
 | P6 permission model (rules/env/flags) | PASS | `P6-permissions/model.log` |
 | P6 unattended `ask`: `run` auto-rejects, `serve` holds | PASS/obs | `P6-permissions/unattended.log` |
 | P6 plugin answers a permission (event + SDK reply) | PASS | `P6-permissions/plugin-answer.log` |
@@ -169,8 +169,9 @@ The two raw-run artifacts that read FAIL/PARTIAL are superseded, not contradicte
   `opencode.local`), `--cors`; default bind is 127.0.0.1.
 - **P5 tmux scrape is viable but fragile** and strictly worse than the HTTP API. Over 2 rounds x 6
   messages: `send-keys` delivery was 12/12 verbatim; once the turn completes, a sidebar-excluded,
-  completion-gated strict scrape read the reply 12/12 (plain whole-line also 12/12 post-completion);
-  but the naive whole-line checker FALSE-POSITIVED mid-turn 8/12, matching the TUI's auto session
+  completion-gated strict scrape read the reply 12/12 (plain whole-line 11-12/12 post-completion
+  across two independent 2-round runs, mine and the verifier's); but the naive whole-line checker
+  FALSE-POSITIVED mid-turn 6-8/12, matching the TUI's auto session
   title before any reply existed (this is what flipped a single-sample run in the verifier's C10),
   and long replies are truncated to the visible screen (alt-screen, no tmux scrollback). HTTP was
   6/6 with none of these failure modes. Use the API, not the TUI, for a rebuild.

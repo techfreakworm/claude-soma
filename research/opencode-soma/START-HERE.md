@@ -17,7 +17,7 @@ incl. background dispatch, SQLite usage) is verified. Headline numbers: 0 PARITY
 7 NEEDS-BUILD across the 12 surfaces; qwen3:32b
 turn p50 7.5s / p90 50s, 4 destructive curation calls in 100 cases and 0 secrets stored even with the
 scrub off, while the 1.2B lfm2.5 stored 5 secrets from 4 of 5 secret-bearing chats (16 dangerous
-outcomes); tmux send-keys delivery 12/12 over 2 rounds but the scrape false-positives mid-turn 8/12,
+outcomes); tmux send-keys delivery 12/12 over 2 rounds but the naive scrape false-positives mid-turn 6-8/12 (two independent runs),
 vs HTTP 6/6; crash resume and per-agent MCP scoping both hold. What is lost is model quality (frontier
 not tested), the hosted conveniences Claude Code gave for free (channels, auto-memory, Remote
 Control), and turnkey unattended reliability on one local GPU.
