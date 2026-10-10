@@ -7,8 +7,9 @@ Prints one PASS/FAIL/SKIP line per check, then `GATE: PASS` or `GATE: FAIL`; exi
 The authoritative run is the one with --rerun (without it C10 is SKIP).
 
 Paths below are relative to research/opencode-soma/ unless they start with the repo root.
-"Committed" means tracked by git and unmodified in the working tree; only committed files count
-as evidence (*.log is gitignored repo-wide, so logs need `git add -f`).
+"Committed" means: the path is in HEAD and in the index, `git status` reports nothing for it, and
+its working-tree bytes hash (git hash-object) to the HEAD blob. Only committed files count as
+evidence, whatever any .gitignore says (*.log is gitignored repo-wide, so logs need `git add -f`).
 
 C1  FEASIBILITY.md ARCHITECTURE.md MEMORY-DESIGN.md PLATFORM-MATRIX.md ROADMAP.md RISKS.md
     START-HERE.md exist, are non-empty and committed; ARCHITECTURE.md has a closed, non-empty
@@ -128,10 +129,11 @@ class GitError(RuntimeError):
     pass
 
 
-def git(*args: str, timeout: int = 120) -> str:
+def git(*args: str, timeout: int = 120, stdin: str | None = None) -> str:
     cmd = ["git", "-C", str(ROOT), "-c", "core.quotepath=off", *args]
     try:
-        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, check=True)
+        proc = subprocess.run(cmd, input=stdin, capture_output=True, text=True, timeout=timeout,
+                              check=True)
     except FileNotFoundError as exc:
         raise GitError("git binary not found") from exc
     except subprocess.CalledProcessError as exc:
@@ -141,9 +143,19 @@ def git(*args: str, timeout: int = 120) -> str:
     return proc.stdout
 
 
+def regular(p: Path) -> bool:
+    return p.is_file() and not p.is_symlink()
+
+
 class Repo:
     def __init__(self) -> None:
         self.tracked = {p for p in git("ls-files", "-z").split("\0") if p}
+        self.head: dict[str, str] = {}
+        for ent in git("ls-tree", "-r", "-z", "--full-tree", "HEAD").split("\0"):
+            meta, tab, path = ent.partition("\t")
+            parts = meta.split()
+            if tab and len(parts) == 3 and parts[1] == "blob":
+                self.head[path] = parts[2]
         self.status: dict[str, str] = {}
         out = git(
             "status", "--porcelain=v1", "-z", "--untracked-files=all", "--ignored=matching",
@@ -152,6 +164,17 @@ class Repo:
         for ent in out.split("\0"):
             if len(ent) > 3:
                 self.status[ent[3:]] = ent[:2]
+        self.disk: dict[str, str] = {}
+        self.hash_paths([t for t in self.head if t.startswith(RS_REL + "/") and regular(ROOT / t)])
+
+    def hash_paths(self, paths: list[str]) -> None:
+        todo = [t for t in paths if t not in self.disk]
+        if not todo:
+            return
+        out = git("hash-object", "--stdin-paths", stdin="\n".join(todo) + "\n").split()
+        if len(out) != len(todo):
+            raise GitError(f"git hash-object returned {len(out)} hashes for {len(todo)} paths")
+        self.disk.update(zip(todo, out))
 
     def state(self, rel: str) -> str:
         code = self.status.get(rel)
@@ -161,13 +184,18 @@ class Repo:
             return "gitignored and not committed (git add -f)"
         if code is not None:
             return f"has uncommitted changes ({code.strip()})"
-        if rel not in self.tracked:
+        if rel not in self.head or rel not in self.tracked:
             return "not committed"
+        if not regular(ROOT / rel):
+            return "missing or not a regular file"
+        self.hash_paths([rel])
+        if self.disk[rel] != self.head[rel]:
+            return "differs from the committed (HEAD) content"
         return "ok"
 
     def committed_under(self, prefix: str) -> list[str]:
         pre = prefix.rstrip("/") + "/"
-        return sorted(t for t in self.tracked if t.startswith(pre) and self.state(t) == "ok")
+        return sorted(t for t in self.head if t.startswith(pre) and self.state(t) == "ok")
 
 
 _REPO: Repo | None = None
@@ -378,8 +406,8 @@ def check_citation(span: str) -> tuple[str, str | None]:
 
 
 def check_evidence_ref(ref: str) -> tuple[str, str | None]:
-    r = ref.rstrip(".")
-    relp, err = resolve_ref(r)
+    ref = ref.rstrip(".")
+    relp, err = resolve_ref(ref)
     if err:
         return "bad", f"{ref}: {err}"
     fp = ROOT / relp
