@@ -167,11 +167,13 @@ The two raw-run artifacts that read FAIL/PARTIAL are superseded, not contradicte
   same basic auth, and shells out to `open`/`xdg-open` to launch a browser (shimmed in the probe so
   nothing opened). LAN exposure is opt-in: `--hostname 0.0.0.0`, `--mdns` (advertises
   `opencode.local`), `--cors`; default bind is 127.0.0.1.
-- **P5 tmux scrape is viable but lossy** and strictly worse than the HTTP API: 6/6 messages
-  (short, long, multi-line, quotes, `$`/backticks) were delivered to the server verbatim, but
-  whole-line `capture-pane` scraping found only 5/6 replies because the TUI's right sidebar shares
-  terminal rows (column-aware parsing finds 6/6), and long replies are truncated to the visible
-  screen (alt-screen, no tmux scrollback). Use the API, not the TUI, for a rebuild.
+- **P5 tmux scrape is viable but fragile** and strictly worse than the HTTP API. Over 2 rounds x 6
+  messages: `send-keys` delivery was 12/12 verbatim; once the turn completes, a sidebar-excluded,
+  completion-gated strict scrape read the reply 12/12 (plain whole-line also 12/12 post-completion);
+  but the naive whole-line checker FALSE-POSITIVED mid-turn 8/12, matching the TUI's auto session
+  title before any reply existed (this is what flipped a single-sample run in the verifier's C10),
+  and long replies are truncated to the visible screen (alt-screen, no tmux scrollback). HTTP was
+  6/6 with none of these failure modes. Use the API, not the TUI, for a rebuild.
 
 ## How to re-run
 `research/opencode-soma/probes/opencode/run-all.sh [--isolation]` runs every probe sequentially
