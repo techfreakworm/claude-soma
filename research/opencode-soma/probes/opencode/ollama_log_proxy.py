@@ -13,6 +13,7 @@ import argparse
 import http.client
 import http.server
 import json
+import os
 import socketserver
 import threading
 import time
@@ -244,8 +245,11 @@ def main() -> None:
     ap.add_argument("--log", required=True)
     ap.add_argument("--upstream", default="http://127.0.0.1:11434")
     a = ap.parse_args()
-    if not 47100 <= a.port <= 47199:
-        raise SystemExit("port outside the allowed 47100-47199 range")
+    # Allowed window = [OCSOMA_PORT_BASE, base+99]; default base 47100 keeps probe-engineer runs in
+    # 47100-47199, and the verifier (OCSOMA_PORT_BASE=47300) stays in its own 47300-47399 range.
+    base = int(os.environ.get("OCSOMA_PORT_BASE", "47100"))
+    if not base <= a.port <= base + 99:
+        raise SystemExit(f"port {a.port} outside the allowed [{base}, {base + 99}] range")
     srv = Server(("127.0.0.1", a.port), make_handler(a.upstream, a.log))
     srv.serve_forever()
 

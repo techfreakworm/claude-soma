@@ -15,6 +15,7 @@ from __future__ import annotations
 import argparse
 import http.server
 import json
+import os
 import socketserver
 import sys
 import time
@@ -189,8 +190,9 @@ def run_http(srv: Srv, port: int) -> None:
         daemon_threads = True
         allow_reuse_address = True
 
-    if not 47100 <= port <= 47199:
-        raise SystemExit("port outside 47100-47199")
+    base = int(os.environ.get("OCSOMA_PORT_BASE", "47100"))
+    if not base <= port <= base + 99:
+        raise SystemExit(f"port {port} outside [{base}, {base + 99}]")
     S(("127.0.0.1", port), H).serve_forever()
 
 
