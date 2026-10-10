@@ -10,8 +10,10 @@ and the cheapest test that would show it early. "desk" marks a claim no probe ex
      (`evidence/opencode/P2-hooks/inject.log`);
    - curating memory, it made 4 destructive calls in 100 planted cases (2 false merges, 2 false
      supersedes; `evidence/memory/curation-qwen3_32b-think-false.log`);
-   - lfm2.5-thinking (1.2B) stored a planted Stripe key and recorded a corrected-away port as
-     current (`evidence/memory/curation-lfm2.5-thinking-think-true.log`).
+   - lfm2.5-thinking (1.2B) made 16 dangerous calls in the same 100 cases: it stored secrets from 4
+     of 5 secret-bearing chats, stored a corrected-away port and a stale editor as current, and
+     superseded true facts on hearsay and hypotheticals
+     (`evidence/memory/curation-lfm2.5-thinking-think-true.log`, `curation-rescore.log`).
 
    Impact: wrong facts and leaked secrets enter memory, and wrong or missing tool calls go unnoticed
    unless something checks them.

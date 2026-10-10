@@ -16,15 +16,33 @@ a probe exercised them.
   existing dashboard view keeps working. Queries never read the mirror.
 - **Neo4j is not shipped.** At most it becomes an opt-in adapter later, for someone who already runs it.
 
-The measurement that decided it: on a 50,000-fact corpus, every per-prompt recall query (entity
-recall, decay ranking, visibility views, keyword recall) answers within **3.7 ms p95 on SQLite**.
-The same queries take 16–58 ms on Neo4j and 30–1,295 ms on flat files. SQLite needs no service,
-JVM, Docker or open port. Neo4j was faster on three of the ten operations:
+**Why a structured store at all.** On the benchmark corpus laid out exactly like today's Claude
+Code memory, grepping an entity's name returns the exact answer for only 10–29% of entity queries.
+Aliases, same-named components in different projects and names inside other names defeat it
+(section 2). Recall needs entity metadata, scopes and supersession, which means a database.
 
-- provenance (Q4) and 2-hop expansion (Q6), which two standard SQLite fixes overturn even at
-  500,000 facts;
-- the cross-project analytics scan (Q2), which stays 1.5–1.8x faster on Neo4j. It is a dashboard
-  query that SQLite still answers in 385 ms p95 at 50k (section 11).
+**Neo4j rejected as the default store, on capability parity and operating cost, not on latency.**
+- **Parity.** SQLite returned the oracle's answer for all ten operations on every run, at every
+  scale, including provenance and 2-hop expansion via recursive CTEs.
+- **Cost.** Neo4j adds a JVM server: 910.7 MB resident when idle at heap 512m (docker stats), a
+  cold start of up to 13.57 s before the first Bolt answer, a 1122.4 MB image, and 528108 KB of
+  preallocated transaction logs before any data (`evidence/memory/neo4j-container.log`), plus
+  Docker Desktop on macOS and Windows.
+
+**Latency is not the deciding factor.** Both stores answer per-prompt recall far below an LLM turn.
+In the fair re-run at 50k facts the recall queries (Q1, Q3, Q7a, Q7b, Q8) took:
+
+| | p50 | p95 | evidence |
+|---|---|---|---|
+| SQLite | 1.0–3.9 ms | at most 9.8 ms | `bench-50000.log` |
+| Neo4j | 13.3–37.0 ms | 15.4–46.6 ms | `bench-50000.log` |
+| Neo4j, quieter moment, best schema | 2.5–8.3 ms | | `neo4j-fairness-50000.log` |
+
+Where Neo4j still wins, all analytical (dashboard and digest work) rather than per-prompt:
+
+- the cross-project scan (Q2): 310 vs 548 ms p50 at 50k, [500k: pending];
+- provenance (Q4) and 2-hop expansion (Q6), until SQLite gets a pinned join order and a degree
+  table (section 11.5).
 
 ## 2. What claude-soma does today, and what opencode lacks
 
@@ -270,8 +288,86 @@ supersedes; 6.5). So no model decision may destroy information:
 
 ### 6.5 Model tiers for curation
 
-*[Track B results: pending. This section will hold the per-model table from
-`evidence/memory/curation-results.json` and the tier rule derived from it.]*
+**Setup.** 100 planted write-path cases (`probes/memory/curation_cases.py`), sent straight to
+ollama 0.33.3 `/api/chat` with a JSON schema in `format`, temperature 0, seed 7 and the server's
+default context:
+
+- **(a) Extraction:** 22 short chats with 31 facts to find. The traps are a hypothetical, a negation,
+  a corrected value, hearsay, a joke and a weather Q&A with nothing to keep. Five chats carry six
+  secrets.
+- **(b) Duplicates:** 24 decisions, 14 of them true duplicates. The traps are the same wording in
+  another project, a changed value and an added detail.
+- **(c) Supersede:** 24 decisions with 15 true updates and 25 facts that must be kept: another
+  project, a temporary state, hearsay, a hypothetical, compatible facts.
+- **(d) Remember-or-skip:** 30 messages: 13 to keep, 9 to skip, 8 containing secrets.
+
+Scoring is automatic: whole-token keyword keys for (a), scoring revision 2 (`curation-rescore.log`),
+and exact ids for (b) and (c). Raw model outputs are kept, secrets redacted, in
+`evidence/memory/curation-*.jsonl` for audit. With 22–30 cases per task these are coarse rates:
+2 of 25 is 8%, with a wide interval.
+
+| run | extract P / R (scoring rev 2) | extract leaks / forbidden | dup acc (false merges) | supersede P / R (false supersedes / keep decisions) | remember acc (secret leaks / flagged) | compute p50 s |
+|---|---|---|---|---|---|---|
+| lfm2.5-thinking think=true | 0.875 / 0.677 (21/31) | 5 / 2 | 0.708 (2) | 0.682 / 1.0 (7 / 25) | 0.733 (0 / 8 of 8) | 8.87, 5.39, 4.97, 6.84 |
+| qwen3:32b think=false | 1.0 / 0.903 (28/31) | 0 / 0 | 0.875 (2) | 0.882 / 1.0 (2 / 25) | 1.0 (0 / 8 of 8) | 6.03, 4.25, 4.56, 2.49 |
+| qwen3:32b think=false +prescrub | 1.0 / 1.0 (31/31) | 0 / 0 | n/a | n/a | 1.0 (0 / 8 of 8) | 5.42, 2.15 |
+| qwen3:32b think=true, PARTIAL (5 duplicate cases of a 10-case subset, stopped for scheduling) | n/a | n/a | 4/5 vs 2/5 thinking off (1 vs 2) | n/a | n/a | 36.1 (vs 4.54) |
+
+(Table from `probes/memory/summarize_curation.py`. Logs: `evidence/memory/curation-<run>.log`.)
+
+**qwen3:32b, thinking off, is safe on secrets and on facts it should not keep, but not on
+destructive judgements:**
+
+- 0 secrets stored across all 13 secret-bearing inputs, and all 8 remember-or-skip secrets flagged;
+- 0 hypotheticals, negations, corrected values, stale values or jokes stored;
+- 2 false merges: D10 folded "English" into "English and Hindi"; in D12 its own reason said
+  "different value (16 GB) … contradicts", yet it answered "duplicate";
+- 2 false supersedes: C02 ("Postgres 16" replacing "SQLite for comments"), and C22, which is
+  borderline;
+- it dropped whole messages that carried a secret (extraction recall 0.90).
+
+**The deterministic pre-scrub removes that last problem.** Extraction recall rises to 1.0 with still
+0 leaks (`curation-qwen3_32b-think-false-prescrub.log`). The scrubber removed 14/14 planted
+secrets and altered 0 of 50,000 benchmark sentences (`scrub-eval.log`). Its patterns were written
+knowing the planted formats, so this proves the mechanism, not real-world coverage. The planned
+lfm2.5 pre-scrub pass was skipped to free the shared model slot.
+
+**lfm2.5-thinking (1.2B) is dangerous, not just worse: 16 dangerous outcomes.**
+
+- It stored secrets from 4 of the 5 secret-bearing chats: a Stripe key, a GitHub token, both AWS
+  keys and a one-time code (E04, E16, E20, E21).
+- It stored the corrected-away port 5433 and the stale editor "VS Code" as current facts (E09, E01).
+- It superseded true facts on hearsay (C04), a hypothetical (C12), a temporary timezone (C16),
+  facts about other projects (C02, C21) and compatible facts (C10, C22).
+- It merged facts across projects (D03) and returned a non-id as a duplicate (D09).
+
+Each call also spent about 5,800 characters on thinking.
+
+**Thinking on** (PARTIAL: 5 duplicate cases, stopped for scheduling) got 4/5 right against 2/5 with
+thinking off, and made 1 destructive call against 2, at about 8x the compute (36 vs 4.5 s median;
+`curation-qwen3_32b-think-true-subset.log`). It helps but does not remove destructive errors: D10
+again.
+
+**Latency.** The qwen3 runs share their model with a concurrent opencode workload on the same ollama
+(the realistic opencode-soma condition: orchestrator, leads and curator on one local model).
+`/api/ps` at the start of each run showed qwen3:32b resident (logged). Compute p50 was 2.5–6.0 s
+per judgement on an M5 Max, wall p50 2.5–13.4 s, and the worst call waited 218 s in the queue.
+lfm2.5 ran alone after the shared slot was freed (2.8 s of queueing in total), but its first call
+waited 528 s for qwen3 to be unloaded (`ollama-two-models.log`).
+
+**Tier rule.**
+
+1. **Rails that never depend on the model are always on:** the scrub before and after the model,
+   key equality deciding duplicate vs update, and non-destructive writes with a reviewable digest
+   (6.4).
+2. **A model may auto-capture** only if, on this case set with the rails on, it stores no secret,
+   stores no forbidden fact, and every destructive judgement it makes is one the rails catch
+   (cross-key supersedes and merges go to review). qwen3:32b with thinking off qualifies.
+3. **Below that tier, auto-capture is off.** lfm2.5-thinking falls here: secrets reached its
+   extraction output, and it superseded on hearsay and hypotheticals. Only explicit "remember X"
+   writes, deterministic dedupe and key-based supersede are allowed.
+4. **Thinking on is optional** for duplicate and supersede judgements when latency allows. It is
+   not a substitute for the rails.
 
 ### 6.6 Promotion
 

@@ -17,7 +17,7 @@ def cell(d: dict | None, fmt) -> str:
 
 def main() -> None:
     allres = json.loads(RES.read_text())
-    print("| run | extract P / R | extract leaks / forbidden | dup acc (false merges) | supersede P / R "
+    print("| run | extract P / R (scoring rev 2) | extract leaks / forbidden | dup acc (false merges) | supersede P / R "
           "(false supersedes / keep decisions) | remember acc (secret leaks / flagged) | compute p50 s |")
     print("|---|---|---|---|---|---|---|")
     for tag in sorted(allres):
@@ -31,6 +31,8 @@ def main() -> None:
             continue
         ex, du, co, re_ = r.get("extract"), r.get("dup"), r.get("con"), r.get("rem")
         p50 = [x["compute_p50_s"] for x in (ex, du, co, re_) if x and "compute_p50_s" in x]
+        if r.get("extract_rev2"):
+            ex = r["extract_rev2"]
         sub = f" (cases: {', '.join(r['cases_filter'])})" if isinstance(r.get("cases_filter"), list) else ""
         print(f"| {r['model']} think={r['think']}{' +prescrub' if r.get('prescrub') else ''}{sub} | "
               + cell(ex, lambda d: f"{d['precision']} / {d['recall']} ({d['tp']}/{d['planted_facts']})") + " | "
