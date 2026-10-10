@@ -75,12 +75,12 @@ keys):
 
 | requirement | design | evidence |
 |---|---|---|
-| write path | explicit tools + auto-capture at `session.idle`; one upsert transaction | W1 rows; section 6 |
-| recall path | top-k injected through `chat.message` each prompt; search tool for depth | Q1/Q3/Q7/Q8 rows; `bun-sqlite.log` |
+| write path | the daemon is the single writer: explicit tools forward to it, and auto-capture at `session.idle` is a daemon job; one upsert transaction | W1 rows; sections 6 and 12 |
+| recall path | top-k injected through `chat.message` each prompt, read through the plugin's read-only connection; search tool for depth | Q1/Q3/Q7/Q8 rows; `bun-sqlite.log` |
 | index | SQLite B-tree indexes, FTS5, materialized `entity_degree` | `bench.py` schema; `sqlite-tuning-*.log` |
 | per-lead isolation | scope taken from the runtime (lead registry), never from the model; predicates in the store API | Q3/Q7/Q8 oracle-correct at every scale |
 | parent and lead visibility | `local` / `parent` / `global` / `lead:<name>` rules (section 5) | Q7a/Q7b oracle-correct |
-| dedupe / update / delete | key equality + model judgement on FTS candidates; supersede, never overwrite; soft delete | W1 rows; Track B |
+| dedupe / update / delete | key equality decides; model judgement only on FTS candidates and never destructive; supersede is a reversible link; soft delete | W1 rows; Track B (6.4, 6.5) |
 | provenance | source tree (telegram → session → tool → file), derived-from links, recursive CTE | Q4 rows |
 | recency / decay | importance × 0.5^(age / half-life by type) | Q3 rows |
 
@@ -282,7 +282,8 @@ a cross-project decision) by writing a `global` fact in the parent scope with
 ## 7. Recall path
 
 1. **Every prompt.** The `chat.message` hook (verified) adds one synthetic text part, at most about
-   800 tokens, built from:
+   800 tokens. It reads through the plugin's read-only connection, with no hop to the daemon, and is
+   built from:
    - FTS5 matches on the user's message (Q8);
    - facts about entities named in the message (Q1, alias-aware);
    - the decay ranking of the caller's visible set (Q3).
@@ -313,7 +314,8 @@ a cross-project decision) by writing a `global` fact in the parent scope with
 
 - **Dedupe.**
   - Structured duplicates (same key, same value) are caught by the upsert, no model needed.
-  - Paraphrases with unresolved keys go to the model, over FTS candidates only.
+  - Paraphrases with unresolved keys go to the model, over FTS candidates only. A duplicate verdict
+    records the restatement in `fact_observations` and deletes nothing (6.4).
   - The corpus plants 7% paraphrase duplicates. Track B tests the model judgement on 24 cases,
     including traps: same wording in another project, an added detail, a changed value.
 - **Update.** Supersede, never overwrite. Q5 lists keys with more than one active value (unresolved
@@ -364,9 +366,36 @@ the visible set measured 0.8–1.6 ms at 50k.
   - **naive**: the same files without entity metadata, used for Q1 only;
   - **sqlite**: stdlib `sqlite3`, WAL;
   - **neo4j**: Community 2026.09.0 in docker, heap 512m, pagecache 256m, python driver 6.4.0.
-- **Protocol.** Per query: the first run on a fresh client, then 30 warm runs cycling the oracle's
-  instances. "correct" means every run equalled the oracle. W1 runs last because it mutates the
-  store.
+- **Neo4j setup, checked for fairness.**
+  - Unique constraints on `Fact.id`, `Entity.id` and `Source.id`.
+  - Range indexes on `Fact(scope)`, `Fact(scope, visibility)`, `Fact(scope, subject, attribute)`,
+    `Fact(created_at)` and `Entity(name)`.
+  - A full-text index on `Fact.text` (`standard-no-stop-words`) for Q8.
+  - Every Cypher query is parameterized, and the first run follows `db.clearQueryCaches()` on a new
+    driver. So warm p50/p95 reuse the cached plan, and the first run includes planning.
+- **Protocol.** Per query and backend:
+  1. the first run on a fresh client;
+  2. 30 untimed warm-up runs (JIT, plan and page caches);
+  3. 30 timed runs cycling the oracle's instances.
+
+  "correct" means every timed run equalled the oracle. W1 runs last because it mutates the store.
+  Neo4j memory is sampled between query batches, never during timed runs.
+- **What the fairness check changed.** The first benchmark run had two flaws that hurt Neo4j:
+  - It lacked the single-property `Fact(scope)` index, so Q3's OR predicate fell back to a
+    `NodeByLabelScan` (107k db hits instead of 7.4k).
+  - It polled `docker stats` while Neo4j queries were being timed.
+
+  `neo4j_fairness.py` measured both at 50k (`evidence/memory/neo4j-fairness-50000.log`):
+  - with the index, Q3 went from 22.7 to 3.1 ms p50;
+  - with an `:Active` status label and UNION in place of OR, Neo4j recall reached 2.5–8.3 ms p50 in
+    a quiet moment.
+
+  bench.py was fixed (indexes, warm-up, sampling only between batches) and every scale re-run. The
+  first run's logs are kept, labelled, in `evidence/memory/superseded/`.
+- **Machine load.** One laptop was shared with other agents. The 50k SQLite and Neo4j phases of the
+  re-run overlapped a curation run whose model server used about 280% CPU. Absolute times move
+  2–4x between runs; the decision rests on comparisons within one run (same protocol, same load)
+  and on capability and operating cost, not on any single latency.
 
 ### 11.2 Results (p50 / p95 ms, first run in brackets; every cell matched the oracle on every run)
 

@@ -1,0 +1,33 @@
+date_utc: 2026-10-10T07:26:49Z
+command: python3.12 opencode_releases.py --base v1.18.8
+source: https://api.github.com/repos/anomalyco/opencode/releases (877 releases fetched)
+v1.18.8 published 2026-07-28T06:07:54Z
+  v1.18.9      2026-07-28  prerelease=False
+  v1.18.10     2026-07-30  prerelease=False
+  v1.18.11     2026-08-01  prerelease=False
+  v1.18.12     2026-08-04  prerelease=False
+  v1.18.13     2026-08-04  prerelease=False
+  v1.18.14     2026-08-05  prerelease=False
+  v1.18.15     2026-08-07  prerelease=False
+  v1.18.16     2026-08-10  prerelease=False
+  v1.18.17     2026-08-12  prerelease=False
+  v1.18.18     2026-08-13  prerelease=False
+  v1.18.19     2026-08-20  prerelease=False
+  v1.18.20     2026-08-21  prerelease=False
+  v1.18.21     2026-08-21  prerelease=False
+  v1.18.22     2026-08-24  prerelease=False
+  v1.18.23     2026-08-25  prerelease=False
+  v1.18.24     2026-08-28  prerelease=False
+  v1.18.25     2026-08-28  prerelease=False
+  v1.18.26     2026-09-01  prerelease=False
+  v1.18.27     2026-09-02  prerelease=False
+  v1.18.28     2026-09-04  prerelease=False
+  v1.18.29     2026-09-04  prerelease=False
+  v1.18.30     2026-09-09  prerelease=False
+  v1.18.31     2026-09-14  prerelease=False
+  v1.18.32     2026-09-21  prerelease=False
+  v1.18.33     2026-09-28  prerelease=False
+  v1.18.34     2026-09-30  prerelease=False
+  v1.18.35     2026-10-06  prerelease=False
+releases after v1.18.8: 27 over 10.0 weeks; by line: 1.18.x: 27
+VERDICT: PASS — 27 releases followed v1.18.8 within 10.0 weeks (newest v1.18.35)
