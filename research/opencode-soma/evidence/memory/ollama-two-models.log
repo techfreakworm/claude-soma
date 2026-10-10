@@ -1,0 +1,38 @@
+date_utc: 2026-10-10T06:58:54Z
+command: python3.12 ollama_two_models.py --big qwen3:32b --small lfm2.5-thinking --small-timeout 150
+ollama 0.33.3; server config from server.log: {'OLLAMA_CONTEXT_LENGTH': '0', 'OLLAMA_KEEP_ALIVE': '5m0s', 'OLLAMA_MAX_LOADED_MODELS': '0', 'OLLAMA_MAX_QUEUE': '512', 'OLLAMA_NUM_PARALLEL': '1'}
+resident at start: [('qwen3:32b', 40960)]
+t+8s: big request in flight; resident: [('qwen3:32b', 40960)]
+t+13s: small waiting, big running; resident: [('qwen3:32b', 40960)]
+t+18s: small waiting, big running; resident: [('qwen3:32b', 40960)]
+t+23s: small waiting, big running; resident: [('qwen3:32b', 40960)]
+t+28s: small waiting, big running; resident: [('qwen3:32b', 40960)]
+t+33s: small waiting, big running; resident: [('qwen3:32b', 40960)]
+t+38s: small waiting, big running; resident: [('qwen3:32b', 40960)]
+t+43s: small waiting, big running; resident: [('qwen3:32b', 40960)]
+t+48s: small waiting, big running; resident: [('qwen3:32b', 40960)]
+t+53s: small waiting, big running; resident: [('qwen3:32b', 40960)]
+t+58s: small waiting, big running; resident: [('qwen3:32b', 40960)]
+t+63s: small waiting, big running; resident: [('qwen3:32b', 40960)]
+t+68s: small waiting, big running; resident: [('qwen3:32b', 40960)]
+t+73s: small waiting, big running; resident: [('qwen3:32b', 40960)]
+t+78s: small waiting, big running; resident: [('qwen3:32b', 40960)]
+t+83s: small waiting, big done; resident: [('qwen3:32b', 40960)]
+t+88s: small waiting, big done; resident: [('qwen3:32b', 40960)]
+t+93s: small waiting, big done; resident: [('qwen3:32b', 40960)]
+t+98s: small waiting, big done; resident: [('qwen3:32b', 40960)]
+t+103s: small waiting, big done; resident: [('qwen3:32b', 40960)]
+t+108s: small waiting, big done; resident: [('qwen3:32b', 40960)]
+t+113s: small waiting, big done; resident: [('qwen3:32b', 40960)]
+t+118s: small waiting, big done; resident: [('qwen3:32b', 40960)]
+t+123s: small waiting, big done; resident: [('qwen3:32b', 40960)]
+t+128s: small waiting, big done; resident: [('qwen3:32b', 40960)]
+t+133s: small waiting, big done; resident: [('qwen3:32b', 40960)]
+t+138s: small waiting, big done; resident: [('qwen3:32b', 40960)]
+t+143s: small waiting, big done; resident: [('qwen3:32b', 40960)]
+t+148s: small waiting, big done; resident: [('qwen3:32b', 40960)]
+t+153s: small waiting, big done; resident: [('qwen3:32b', 40960)]
+t+158s: small done, big done; resident: [('qwen3:32b', 40960)]
+big qwen3:32b: {"ok": true, "wall": 80.14, "load": 0.0, "eval_count": 700, "text": "Here are the numbers from 1 to 400 separated by spaces:\n\n1 2"}
+small lfm2.5-thinking: {"ok": false, "wall": 150.0, "error": "timed out"}
+VERDICT: FAIL — lfm2.5-thinking got no answer within 150s while qwen3:32b was busy (timed out); a curator model cannot run beside the busy agent model on this ollama config
