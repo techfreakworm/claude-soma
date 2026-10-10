@@ -134,13 +134,16 @@ One Python 3.12 asyncio process, supervised by the OS user service manager (sect
   - Creates the lead's session, sends the brief with `prompt_async`, and keeps the registry: name,
     cwd, port, pid, session id and state.
   - Messages a lead with `prompt_async` and takes the reply from `session.idle` on the lead's SSE
-    stream. This replaces claude-soma's tmux typing and screen scraping
-    (`evidence/opencode/P5-tmux/tmux.log`):
+    stream. This replaces claude-soma's tmux typing and screen scraping. Across two independent
+    2-round runs (`evidence/opencode/P5-tmux/tmux.log` and
+    `evidence/verify/rerun/P5-tmux.tmux.log`):
     - tmux delivered all 12 messages verbatim;
-    - a scrape found all 12 replies, but only when the HTTP API said the turn had completed;
-    - without that signal, a scrape matched the TUI's session title, which repeats the prompt, 8 of
-      12 times before any reply existed, and long replies are cut to the screen;
-    - so scraping alone is fragile, and HTTP, 6 of 6 with neither problem, supersedes it.
+    - once the HTTP API said a turn had completed, a scrape that excludes the sidebar found 12 of
+      12 replies, and a whole-line scrape 11-12 of 12;
+    - without that signal, a naive scrape matched the TUI's session title, which repeats the
+      prompt, 6-8 times out of 12 before any reply existed, and long replies are cut to the screen;
+    - so scraping alone is fragile, and HTTP, 6 of 6 in both runs with neither problem, supersedes
+      it.
   - Admission: a lead cap and a free-memory floor before each spawn, as claude-soma does
     (`src/claude_soma/mcp_servers/project_orchestrator/server.py:90-110`).
   - Restart: a dead lead's serve is restarted on the same data dir, and its session comes back idle
@@ -662,7 +665,7 @@ relay: away from home, the user brings the tunnel. opencode can bind beyond loop
 | `relay_link_gate.py`: text-heavy replies go out as relay links | `scripts/relay_link_gate.py:129-200`, `scripts/markserv-launch.sh:14-18` | long replies go out in chunks or as a document (`sendDocument`) | No public files relay, so no extra Caddy site. |
 | voice-stt and voice-tts MCP servers | `src/claude_soma/mcp_servers/voice_stt/server.py:73-87`, `src/claude_soma/mcp_servers/voice_tts/server.py:55-78` | the daemon's voice pipeline | Voice replies are wired end to end. |
 | project-orchestrator MCP | `src/claude_soma/mcp_servers/project_orchestrator/server.py:447-549` | soma MCP orchestrator tools plus the lead manager | Same jobs, over HTTP. |
-| tmux `send-keys` in, `capture-pane` out | `src/claude_soma/mcp_servers/project_orchestrator/server.py:206-225`, `skills/message-project/SKILL.md:32-91` | `prompt_async` in, SSE `session.idle` out | HTTP got 6 of 6 replies. A scrape found all 12 only when the HTTP API said each turn had completed; without that signal, it matched the session title 8 of 12 times (P5). |
+| tmux `send-keys` in, `capture-pane` out | `src/claude_soma/mcp_servers/project_orchestrator/server.py:206-225`, `skills/message-project/SKILL.md:32-91` | `prompt_async` in, SSE `session.idle` out | HTTP got 6 of 6 replies. Once the HTTP API said each turn had completed, a whole-line scrape found 11-12 of 12 replies, or 12 of 12 with the sidebar excluded; without that signal, a naive check matched the session title 6-8 of 12 times (two 2-round runs: P5 and the verifier's rerun). |
 | lead spawn: tmux plus `sudo systemd-run` transient units | `src/claude_soma/mcp_servers/project_orchestrator/spawner.py:164-192`, `src/claude_soma/mcp_servers/project_orchestrator/spawner.py:544-557`, `systemd/sudoers.d/99-claude-soma-spawner:19-28` | one `opencode serve` per lead, user-level (on Linux, `systemd-run --user --scope`) | No sudo. |
 | `registry.sqlite` | `src/claude_soma/mcp_servers/project_orchestrator/registry.py:17-35` | registry tables in `soma.db` | One database. |
 | hermes-notify MCP (`notify_orchestrator`) | `src/claude_soma/mcp_servers/hermes_notify/server.py:252-299` | `soma_report` on the lead's soma MCP endpoint | Same five event types. The token sets the lead's identity. |
