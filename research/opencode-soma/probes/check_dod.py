@@ -19,8 +19,12 @@ C2  FEASIBILITY.md: first non-blank line is `# Title`; the next block is one pro
     feasibility). The first table after it is the parity table: header row, separator row, then
     exactly 12 rows whose first cell is 1..12 in order, each with as many cells as the header
     (escape | inside cells as \\|). The header has a column whose title contains "Verdict"; that
-    cell holds exactly one of PARITY DEGRADED NEEDS-BUILD IMPOSSIBLE. Every code span shaped
-    `path:N` or `path:N-M` (path has a / or a file extension, or is a tracked file) must resolve:
+    cell holds exactly one of PARITY DEGRADED NEEDS-BUILD IMPOSSIBLE. The header also has a
+    Feature/Item/Capability column after the # column; row N's cell there must contain item N's
+    keyword (any case): 1 telegram, 2 memory, 3 voice, 4 orchestrat, 5 routine or schedul,
+    6 dashboard, 7 social, 8 extension, 9 auth, 10 remote, 11 platform, 12 wizard. Every code
+    span shaped `path:N` or `path:N-M` (path has a / or a file extension, or is a tracked file) must
+    resolve:
     repo-root-relative (evidence/... and probes/... resolve under research/opencode-soma/), file
     committed, N>=1, M>=N, file has >=M lines. Each row needs >=1 such citation of a claude-soma
     file (a tracked file outside research/opencode-soma/). Every `evidence/...` path in the row must
@@ -108,7 +112,21 @@ DELIVERABLES = (
     "START-HERE.md",
 )
 VERDICTS = ("PARITY", "DEGRADED", "NEEDS-BUILD", "IMPOSSIBLE")
-N_ITEMS = 12
+PARITY_ITEMS = (
+    ("Telegram channel", ("telegram",)),
+    ("Memory, parent + per-lead", ("memory",)),
+    ("Voice in/out", ("voice",)),
+    ("Project orchestration", ("orchestrat",)),
+    ("Scheduled routines", ("routine", "schedul")),
+    ("Dashboard", ("dashboard",)),
+    ("Social posting", ("social",)),
+    ("Extension-point parity", ("extension",)),
+    ("Model-agnostic auth", ("auth",)),
+    ("Remote attach", ("remote",)),
+    ("Cross-platform no-VPS install", ("platform",)),
+    ("Install wizard", ("wizard",)),
+)
+N_ITEMS = len(PARITY_ITEMS)
 PROBE_GROUPS = range(1, 8)
 MAX_SHOWN = 8
 SKIP_DIRS = {".venv", "venv", "node_modules", "__pycache__", ".git", ".mypy_cache", ".ruff_cache"}
@@ -469,6 +487,10 @@ def c2() -> Result:
     vcol = next((k for k, h in enumerate(hdr) if "verdict" in h.lower()), None)
     if vcol is None:
         probs.append("parity table header has no column titled Verdict")
+    fcol = next((k for k, h in enumerate(hdr) if k > 0 and k != vcol
+                 and re.search(r"(?i)feature|item|capability", h)), None)
+    if fcol is None:
+        probs.append("parity table header has no Feature/Item column after the # column")
     rows = table[2:]
     firsts = [split_row(r)[0] for _, r in rows]
     if firsts != [str(k) for k in range(1, N_ITEMS + 1)]:
@@ -481,6 +503,12 @@ def c2() -> Result:
         if len(cells) != len(hdr):
             probs.append(f"{label}: {len(cells)} cells but header has {len(hdr)} "
                          "(escape | inside cells as \\|)")
+        if fcol is not None and cells[0].isdigit() and 1 <= int(cells[0]) <= N_ITEMS:
+            name, kws = PARITY_ITEMS[int(cells[0]) - 1]
+            fcell = cells[fcol].lower() if fcol < len(cells) else ""
+            if not any(k in fcell for k in kws):
+                probs.append(f"{label}: feature cell must name item {cells[0]} {name!r} "
+                             f"(contain {' or '.join(kws)}, any case)")
         verdict = None
         if vcol is not None:
             toks = sorted(set(VERDICT_TOKEN.findall(cells[vcol] if vcol < len(cells) else "")))
