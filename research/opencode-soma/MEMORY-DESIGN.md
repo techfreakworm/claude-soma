@@ -40,7 +40,8 @@ In the fair re-run at 50k facts the recall queries (Q1, Q3, Q7a, Q7b, Q8) took:
 
 Where Neo4j still wins, all analytical (dashboard and digest work) rather than per-prompt:
 
-- the cross-project scan (Q2): 310 vs 548 ms p50 at 50k, [500k: pending];
+- the cross-project scan (Q2): 310 vs 548 ms p50 at 50k, and 879 vs 6,346 ms at 500k (the SQLite
+  500k phase ran under heavier machine load; 11.1);
 - provenance (Q4) and 2-hop expansion (Q6), until SQLite gets a pinned join order and a degree
   table (section 11.5).
 
@@ -259,7 +260,8 @@ One transaction:
    in-place update).
 4. No match: insert.
 
-Measured p50 at 50k facts: SQLite 0.23 ms, Neo4j 22 ms, flat files 24 ms. At 500k: SQLite 0.19 ms.
+Measured p50 at 50k facts: SQLite 0.49 ms, Neo4j 30.5 ms, flat files 37.3 ms. At 500k: SQLite 0.13 ms,
+Neo4j 4.85 ms.
 All matched the oracle on all 36 planted writes per scale (12 duplicates, 12 changed values, 12 new
 keys).
 
@@ -444,8 +446,8 @@ Every fact points at the deepest source it came from: a file read inside a tool 
 opencode session, started by a Telegram message. `sources.parent_id` links that chain to its root,
 and `fact_derivation` links summaries and promotions to their inputs. Q4 returns the full upstream
 closure (facts and sources). It matched the oracle at every scale. With the join order pinned by
-`CROSS JOIN`, it costs 0.017 ms at 50k and 0.022 ms at 500k (`sqlite-tuning-*.log`); Neo4j takes
-5.2 ms and 2.7 ms.
+`CROSS JOIN`, it costs 0.017 ms at 50k and 0.022 ms at 500k (`sqlite-tuning-*.log`). Neo4j takes
+7.60 ms and 0.80 ms in the fair re-run (`bench-50000.log`, `bench-500000.log`).
 
 ## 10. Recency and decay
 
@@ -537,19 +539,22 @@ Everything is fast: SQLite at most 1.33 ms p95, Neo4j recall 1.44–2.85 ms p50 
 
 #### 500,000 facts (SQLite vs Neo4j; files extrapolate linearly from 5k→50k and were not run)
 
+The SQLite phase overlapped the lfm2.5 curation run; the Neo4j phase ran after it ended
+(11.1, machine load).
+
 | query | sqlite p50 / p95 | neo4j p50 / p95 |
 |---|---|---|
-| Q1 recall by entity | 21.3 / 31.9 | 148 / 370 |
-| Q2 cross-project links | 2,709 / 3,776 | 1,546 / 2,213 |
-| Q3 decay top-10 | 17.3 / 18.2 | 362 / 423 |
-| Q4 provenance (bench query) | 77.8 / 94.2 | 2.67 / 6.99 |
-| Q4 with `CROSS JOIN` order (`sqlite-tuning-500000.log`) | 0.022 / 0.158 | — |
-| Q5 unresolved contradictions | 1,109 / 1,577 | 2,019 / 2,751 |
-| Q6 2-hop (bench query) | 167 / 1,739 | 19.1 / 1,278 |
-| Q6 with `entity_degree` table (`sqlite-tuning-500000.log`) | 22.7 / 322 | — |
-| Q7a / Q7b visibility views | 0.96 / 10.6 | 12.1 / 149 |
-| Q8 keyword recall | 14.1 / 31.5 | 37.4 / 91.0 |
-| W1 upsert | 0.19 / 0.55 | 20.6 / 103 |
+| Q1 recall by entity | 28.0 / 48.4 | 46.8 / 73.2 |
+| Q2 cross-project links | 6,346 / 7,010 | 879 / 922 |
+| Q3 decay top-10 | 8.12 / 9.61 | 12.3 / 14.0 |
+| Q4 provenance (bench query) | 41.9 / 50.5 | 0.80 / 1.39 |
+| Q4 with `CROSS JOIN` order (`sqlite-tuning-500000.log`) | 0.022 / 0.158 | n/a |
+| Q5 unresolved contradictions | 742 / 845 | 1,093 / 1,629 |
+| Q6 2-hop (bench query) | 101 / 892 | 4.97 / 398 |
+| Q6 with `entity_degree` table (`sqlite-tuning-500000.log`) | 22.7 / 322 | n/a |
+| Q7a / Q7b visibility views (p50 of each) | 0.56 / 6.72 | 5.53 / 64.1 |
+| Q8 keyword recall | 9.17 / 19.8 | 14.0 / 33.9 |
+| W1 upsert | 0.13 / 0.49 | 4.85 / 40.0 |
 
 ### 11.3 What Neo4j costs on a laptop (measured unless marked)
 
@@ -563,7 +568,7 @@ OpenJDK 25 in the image:
 | fresh container to Bolt answering | 10.9–13.6 s (3 runs) |
 | restart with 50k facts | 10.2–12.4 s to Bolt, then 0.61–0.68 s for the first query (3 runs) |
 | memory at heap 512m / pagecache 256m | 0.91 GB idle (docker stats; JVM RSS 0.87 GB), 1.17 GB after loading 50k, 1.21 GB peak under queries |
-| memory at 500k facts | 1.5 GB (`bench-500000.log`) |
+| memory at 500k facts | 1476.4 MB after loading, 1570.9 MB at most between query batches (`bench-500000.log`) |
 | smallest config that still loaded and correctly answered the 50k corpus | heap 96m / pagecache 16m (still 0.67–0.75 GB resident) |
 | heap 64m / pagecache 8m | dies with `Java heap space` during the load |
 | disk | 516 MB before any data: two preallocated 257 MB transaction logs (`/data/transactions/{neo4j,system}`; this preallocation is configurable). 558 MB with the 50k store checkpointed (store 43 MB; SQLite 34 MB) |
@@ -591,23 +596,25 @@ queries. The extra flat-file code is parsing and cross-file link following.
 ### 11.5 Where SQLite stops being good enough
 
 - **Not at the sizes a personal assistant reaches for interactive recall.** At 500k facts, entity,
-  keyword, visibility and decay recall stay at 1–32 ms p95.
-- **Two graph-shaped queries** (provenance, 2-hop) went bad at 500k while Neo4j stayed at 2.7 ms and
-  19 ms. **Both were query-shape problems, not engine limits.**
+  keyword, visibility and decay recall stay at 0.6–48 ms p95, even with the SQLite 500k phase
+  under heavier load.
+- **Two graph-shaped queries** (provenance, 2-hop) went bad at 500k: 41.9 and 101 ms p50, while
+  Neo4j stayed at 0.80 and 4.97 ms. **Both were query-shape problems, not engine limits.**
   - Provenance: the planner scanned `facts` for the join with the recursive table. Pinning the join
-    order took it from 78 ms to 0.022 ms.
+    order took it from 46 ms to 0.022 ms (`sqlite-tuning-500000.log`).
   - 2-hop: it counted every candidate's mentions to apply the hub cap. A degree table maintained on
-    write took it from 167 to 23 ms p50.
+    write took it from 118 to 23 ms p50 (p95 1,150 to 322 ms, against Neo4j's 398 ms;
+    `sqlite-tuning-500000.log`).
 - **What stays slow at 500k is analytics:**
-  - cross-project links over every entity: 2.7 s. This is the one query where Neo4j keeps a lead:
-    1.5 s, and 174 vs 264 ms at 50k;
-  - all open conflicts: 1.1 s. Neo4j is slower here: 2.0 s.
+  - cross-project links over every entity: 6.3 s under that load. This is the one query where
+    Neo4j keeps a clear lead: 0.88 s, and 310 vs 548 ms at 50k;
+  - all open conflicts: 0.74 s. Neo4j is slower here: 1.09 s.
 
   Both are dashboard and digest work. The design maintains them incrementally (`conflicts` is
   written by the upsert; a per-entity scope count can be kept the same way as `entity_degree`)
   instead of scanning.
-- **Flat files** stop being good enough around 5k facts. Full-scan queries take 130–230 ms there
-  and 2–3 s at 50k.
+- **Flat files** stop being good enough around 5k facts. Full-scan queries take 135–180 ms p50
+  there and 1.2–1.9 s at 50k.
 
 ## 12. Process model and concurrency
 
@@ -663,7 +670,7 @@ Platform notes:
   mirror can rebuild facts, sources and links via the importer (section 14).
 - **No model trustworthy enough for auto-capture.** Auto-capture is off for that model tier (6.5).
   Explicit `memory_save` / `memory_forget`, deterministic dedupe and key-based supersede still work.
-- **Tiny memories.** Below about 2k facts the flat-file mirror alone would work: 13–65 ms for entity
+- **Tiny memories.** Below about 2k facts the flat-file mirror alone would work: 15–65 ms for entity
   recall at 600–5k facts. It loses contradiction detection, cross-project links and fast
   provenance, so it is a degraded mode, not a choice.
 
