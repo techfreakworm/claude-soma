@@ -1,0 +1,50 @@
+
+  ┃                                                                                                                                                             p5-attach
+  ┃  Reply with exactly ATTACH-A-OK and nothing else.
+  ┃                                                                                                                                                             Context
+                                                                                                                                                                7,960 tokens
+     + Thought: 1.0s                                                                                                                                            6% used
+                                                                                                                                                                $0.00 spent
+     ATTACH-A-OK
+                                                                                                                                                                LSP
+     ▣  Build · LFM2.5 1.2B thinking · 2.9s                                                                                                                     LSPs are disabled
+
+  ┃
+  ┃  He said "hi" and paid $5 for `ls`. Reply with exactly ATTACH-B-OK and nothing else.
+  ┃
+
+     + Thought: 1.1s
+
+     ATTACH-A-OK
+
+     ▣  Build · LFM2.5 1.2B thinking · 2.1s
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  ┃
+  ┃                                                                                                                                                             /private/var/folders/lp/
+  ┃                                                                                                                                                             m_0rzyhs19g7l2x5dnql4tjh0000gp/T/
+  ┃  Build · LFM2.5 1.2B thinking Ollama (local)                                                                                                                ocsoma-pe/P5-attach/project:main
+  ╹▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀
+   ⬝⬝⬝⬝⬝⬝⬝⬝  esc interrupt                                                                                                        8.0K (6%)  ctrl+p commands    • OpenCode 1.18.8
+

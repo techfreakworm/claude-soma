@@ -1,0 +1,50 @@
+
+  ┃                                                                                                                                                             p5-attach
+  ┃  Reply with exactly ATTACH-A-OK and nothing else.
+  ┃                                                                                                                                                             Context
+                                                                                                                                                                0 tokens
+     ▣  Build · LFM2.5 1.2B thinking                                                                                                                            0% used
+                                                                                                                                                                $0.00 spent
+
+                                                                                                                                                                LSP
+                                                                                                                                                                LSPs are disabled
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  ┃
+  ┃                                                                                                                                                             /private/var/folders/lp/
+  ┃                                                                                                                                                             m_0rzyhs19g7l2x5dnql4tjh0000gp/T/
+  ┃  Build · LFM2.5 1.2B thinking Ollama (local)                                                                                                                ocsoma-pe/P5-attach/project:main
+  ╹▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀
+   ⬝⬝⬝⬝⬝⬝⬝⬝  esc interrupt                                                                                                       tab agents  ctrl+p commands    • OpenCode 1.18.8
+

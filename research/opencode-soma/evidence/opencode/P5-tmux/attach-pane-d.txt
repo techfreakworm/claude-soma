@@ -1,0 +1,50 @@
+
+  ┃                                                                                                                                                             p5-attach
+  ┃  Reply with exactly ATTACH-A-OK and nothing else.
+  ┃                                                                                                                                                             Context
+                                                                                                                                                                8,059 tokens
+     + Thought: 1.0s                                                                                                                                            6% used
+                                                                                                                                                                $0.00 spent
+     ATTACH-A-OK
+                                                                                                                                                                LSP
+     ▣  Build · LFM2.5 1.2B thinking · 2.9s                                                                                                                     LSPs are disabled
+
+  ┃
+  ┃  He said "hi" and paid $5 for `ls`. Reply with exactly ATTACH-B-OK and nothing else.
+  ┃
+
+     + Thought: 1.1s
+
+     ATTACH-A-OK
+
+     ▣  Build · LFM2.5 1.2B thinking · 2.1s
+
+  ┃
+  ┃  First line.
+  ┃  Second line.
+  ┃  Reply with exactly ATTACH-C-OK and nothing else.
+  ┃
+
+     + Thought: 1.7s
+
+     ATTACH-A-OK
+
+     ▣  Build · LFM2.5 1.2B thinking · 1.9s
+
+  ┃
+  ┃  Ignore this filler: alpha bravo charlie delta echo foxtrot. Reply with exactly ATTACH-D-OK and nothing else.
+  ┃
+
+     + Thought: 990ms
+
+     ATTACH-D-OK
+
+     ▣  Build · LFM2.5 1.2B thinking · 1.2s
+
+  ┃
+  ┃                                                                                                                                                             /private/var/folders/lp/
+  ┃                                                                                                                                                             m_0rzyhs19g7l2x5dnql4tjh0000gp/T/
+  ┃  Build · LFM2.5 1.2B thinking Ollama (local)                                                                                                                ocsoma-pe/P5-attach/project:main
+  ╹▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀
+   /private/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P5-attach/project                                           8.1K (6%)  ctrl+p commands    • OpenCode 1.18.8
+

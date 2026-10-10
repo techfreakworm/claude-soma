@@ -9,8 +9,9 @@ export OCSOMA_PROBE_SCRIPT="research/opencode-soma/probes/opencode/P5-tmux/attac
 HERE="$(cd "$(dirname "$0")" && pwd)"
 SERVE_PORT=$(( ${OCSOMA_PORT_BASE:-47100} + 53 ))
 PROBE_ID=P5-attach; SANDBOX_FRESH=1
-source "$HERE/../sandbox.sh"
 MODEL=ollama/lfm2.5-thinking
+OC_DEFAULT_MODEL="$MODEL"
+source "$HERE/../sandbox.sh"
 EVD="$OCSOMA_EVID/P5-tmux"; mkdir -p "$EVD"
 TM="tmux -L ${OCSOMA_TMUX_PREFIX:-ocsoma-pe-}attach"
 BASE="http://127.0.0.1:$SERVE_PORT"
@@ -23,7 +24,7 @@ SID=$(python3.12 -I "$OCSOMA_PROBES/ocdrive.py" --base "$BASE" new --title p5-at
 ev_open P5-tmux/attach.log "send-keys/capture-pane against 'opencode attach <url>' to a serve; N=5" "$MODEL"
 ev "serve on $BASE, session $SID; attach: tmux ... opencode attach $BASE --session $SID"
 $TM kill-server 2>/dev/null
-$TM new-session -d -s at -x 200 -y 50 "$OC attach $BASE --session $SID -m $MODEL"
+$TM new-session -d -s at -x 200 -y 50 -c "$PROJ" "$OC attach $BASE --session $SID"
 sleep 6
 $TM capture-pane -p -t at > "$EVD/attach-pane-start.txt"
 ev_run cat "$EVD/attach-pane-start.txt"
