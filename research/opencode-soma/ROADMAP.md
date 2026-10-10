@@ -22,9 +22,9 @@ part of its phase.
   - runs a Telegram long-poll bridge, behind the channel adapter interface (`receive`, `send`,
     `ack`; ARCHITECTURE.md 2.1), with a one-chat allowlist and an instant deterministic ack
     (`sendChatAction` typing, plus an "on it" line if the turn passes about 5 s);
-  - launches the orchestrator `opencode serve` (127.0.0.1, random port and password, isolated XDG
-    dirs) with a daemon-hosted soma MCP server: `spawn_lead`, `message_lead`, `list_leads`,
-    `memory_save`, `memory_search`;
+  - launches the orchestrator `opencode serve` (127.0.0.1, random port and password, the dedicated
+    soma HOME and its own XDG dirs) with a daemon-hosted soma MCP server: `spawn_lead`,
+    `message_lead`, `list_leads`, `memory_save`, `memory_search`;
   - sends Telegram text in with `prompt_async`, collects the final assistant text from SSE at
     `session.idle`, and sends it back.
 - Exactly one lead: its own `opencode serve`, cwd and data dir. Its brief goes in with
@@ -64,7 +64,8 @@ Then a manual smoke test with a real token on an operator-made bot
 - **MCP servers callable, scoped per agent:** `evidence/opencode/P3-mcp/mcp.log` and
   `scoping-verdict.log`.
 - **Recall injection by `chat.message`:** `evidence/opencode/P2-hooks/inject.log`.
-- **Isolated XDG dirs:** `evidence/opencode/P0-setup/sandbox-verify.log`.
+- **Isolated HOME and XDG dirs:** `evidence/opencode/P0-setup/sandbox-verify.log`. The user's own
+  opencode config leaks without them (`evidence/opencode/P9-compat/fakehome.log`).
 - **Long polling with no inbound port:** `evidence/platform/telegram-nat.log`.
 - **SQLite recall and the read-only plugin path:** `evidence/memory/bench-50000.log` and
   `bun-sqlite.log`.

@@ -204,15 +204,24 @@ One Python 3.12 asyncio process, supervised by the OS user service manager (sect
 - **What every instance gets.** The daemon generates this into the instance's own dirs at each start:
   - `--hostname 127.0.0.1`, a port the daemon chose, and a random `OPENCODE_SERVER_PASSWORD` per
     instance per start;
-  - its own XDG config, data, cache and state dirs under `~/.opencode-soma/instances/<name>/`, so
-    opencode's state never mixes with the user's own. With HOME and the XDG dirs redirected, every
-    opencode path resolved inside the redirect (`evidence/opencode/P0-setup/sandbox-verify.log`);
-  - the real HOME, so git and SSH work in the lead's project. This is design intent, unprobed: the
-    real HOME may expose the user's own opencode and Claude Code config to soma's agents (section
-    12);
-  - `OPENCODE_DISABLE_CLAUDE_CODE=1` and `OPENCODE_DISABLE_EXTERNAL_SKILLS=1`, to keep the user's
-    `~/.claude` rules and skills out. The 1.18.8 binary carries these switches
-    (`evidence/opencode/P9-compat/compat.log`); their effect is unprobed (section 12);
+  - **a dedicated soma HOME**, `~/.opencode-soma/home/`, shared by all instances. It is empty except
+    for two links, `.gitconfig` and `.ssh`, which point at the user's own, so git and SSH still work
+    in a lead's project. The user's real HOME cannot be used: `~/.opencode/agent` is read from HOME
+    even when the XDG dirs are redirected, so the user's own opencode agents loaded into the
+    instance (`evidence/opencode/P9-compat/fakehome.log`, runs A and B);
+  - **its own XDG config, data, cache and state dirs**, under `~/.opencode-soma/instances/<name>/`.
+    The XDG_CONFIG_HOME redirect is what keeps the user's `~/.config/opencode` out: its config and
+    agents loaded without the redirect and not with it (`fakehome.log`). With HOME and the XDG dirs
+    both redirected, every opencode path resolved inside the redirect
+    (`evidence/opencode/P0-setup/sandbox-verify.log`);
+  - **`OPENCODE_DISABLE_CLAUDE_CODE=1` and `OPENCODE_DISABLE_EXTERNAL_SKILLS=1`**, as belt and
+    braces.
+    - opencode's own config reference says it auto-loads `~/.claude/skills` and `~/.agents/skills`
+      from HOME (`evidence/opencode/P9-compat/compat.log`). The soma HOME has neither, and the
+      switches cover the case where one appears.
+    - That `.claude` leak was documented, not seeded: the probe harness blocks creating `.claude`
+      paths (`fakehome.log`).
+    - The switch did not stop the opencode-config leaks above (`fakehome.log`, run B2);
   - `autoupdate: false` with `OPENCODE_DISABLE_AUTOUPDATE=1`, and `share: "disabled"`, as in the
     Linux run (`evidence/platform/linux-container.log`);
   - an explicit `limit.context` for the model, because without it auto-compaction never fires
@@ -291,8 +300,10 @@ Startup order:
 2. It opens `soma.db` and runs migrations.
 3. It adopts any serve still answering on its recorded port and password, and stops anything else
    it had recorded.
-4. It starts the orchestrator and every lead marked running. Then it waits until each
-   `GET /global/health` reports healthy and version 1.18.8.
+4. It starts the orchestrator and every lead marked running, each with HOME set to the soma HOME
+   and its own XDG dirs (2.2). Then it waits until each `GET /global/health` reports healthy and
+   version 1.18.8. The daemon itself, and the whisper-cli and ffmpeg it runs, keep the user's
+   HOME.
 5. It subscribes to each serve's `/event` stream. SSE does not replay missed events (desk), so after
    every subscribe or resubscribe it reconciles with `GET /session/status` and the latest messages.
 6. Last, it starts polling Telegram.
@@ -313,6 +324,7 @@ The ack never waits for the model; the reply can.
 | soma.db | `~/.opencode-soma/soma.db` (SQLite, WAL) | the daemon only | plugins (read-only `bun:sqlite`), dashboard | lead registry, lead events and pending inputs, schedules and runs, memory (MEMORY-DESIGN.md sections 4–5), usage rollups, pairing state |
 | instance data | `~/.opencode-soma/instances/<name>/data/opencode/` (`opencode.db`, opencode's log, snapshots) | that instance's serve only | the daemon, over HTTP only | sessions, messages, token counts; they survive a `kill -9` (`evidence/opencode/P1-headless/crash-serve.log`) |
 | instance config | `~/.opencode-soma/instances/<name>/config/opencode/` | the daemon, at each start | that serve | `opencode.json`, agents, plugins |
+| soma HOME | `~/.opencode-soma/home/` | `init` writes the two links; tools that leads run may leave caches there | every opencode instance, as its HOME | links to the user's `.gitconfig` and `.ssh`, and nothing else from soma |
 | activity | `~/.opencode-soma/activity/<name>.jsonl` | that instance's activity plugin | dashboard | one line per tool call; the daemon rotates it |
 | config | `~/.opencode-soma/config.toml` | `init`, `opencode-soma config` | daemon | settings, no secrets |
 | secrets | `~/.opencode-soma/secrets.env` (0600) | `init` | daemon | the bot token, and hosted-provider keys if any |
@@ -330,7 +342,7 @@ but it must stay on a local filesystem, because WAL needs one (MEMORY-DESIGN.md 
 |---|---|---|---|
 | Daemon supervision | systemd `--user` service plus `loginctl enable-linger`, so it runs without a login session. The unit and timer shapes pass `systemd-analyze verify` (`evidence/platform/linux-container.log`). | LaunchAgent `org.opencode-soma.daemon` with `RunAtLoad` and `KeepAlive`. It passes `plutil -lint` (`evidence/platform/macos-launchd.log`). | the Linux setup inside the distro (systemd enabled in `wsl.conf`), plus the keep-alive recipe (PLATFORM-MATRIX.md, desk) |
 | Lead processes | each lead in a `systemd-run --user --scope -p MemoryMax=<tier>` unit, with no sudo (desk; ROADMAP.md P6) | plain child processes. macOS has no cgroups, so there is no memory cap. The free-memory check at spawn is the only guard. | as on Linux, inside the WSL2 VM's own memory limit (desk) |
-| opencode state | per-instance XDG dirs | same | same |
+| opencode config and state | the soma HOME plus per-instance XDG dirs (2.2), so the user's own opencode config never loads (`evidence/opencode/P9-compat/fakehome.log`) | same | same |
 | File access | a lead works in its cwd, and `external_directory` is denied for leads (rule syntax: `evidence/opencode/P6-permissions/model.log`) | same | same, plus the Windows drives under `/mnt`, which the same rule covers (desk) |
 | Sleep | the scheduler catches up after any suspend | same. Keeping the Mac awake is the user's choice. | WSL2 stops an idle distro (15 s and 60 s defaults). The keep-alive recipe prevents that (PLATFORM-MATRIX.md, desk). |
 | Not isolated | leads run as the user, with the user's files and network; there is no container or VM sandbox in v1 | same | same |
@@ -610,7 +622,14 @@ user), secrets (the bot token, any provider keys), and memory.
 10. **Outbound traffic opencode makes on its own** (desk): models.dev refreshes, LSP downloads, the
     app.opencode.ai fallback when the embedded web UI is missing, and Exa web search. `share` is
     disabled, and `doctor` lists the rest, so users know what leaves the machine.
-11. **No root.** `init` refuses root, and nothing needs sudo. claude-soma, by contrast, installs a
+11. **The user's own opencode and Claude Code config.**
+    - Every instance runs under the soma HOME with its own XDG dirs. The user's `~/.opencode/agent`
+      loads from HOME even with the XDG dirs redirected, and `~/.config/opencode` loads without the
+      XDG redirect (`evidence/opencode/P9-compat/fakehome.log`). Either would put the user's own
+      agents and settings into soma's instances.
+    - The two links in the soma HOME are a deliberate grant: leads get the user's git identity and
+      SSH keys, so they can push. `init` asks before it links `~/.ssh`.
+12. **No root.** `init` refuses root, and nothing needs sudo. claude-soma, by contrast, installs a
     sudoers grant for `systemd-run` (`systemd/sudoers.d/99-claude-soma-spawner:19-28`).
 
 ## 9. Remote access
@@ -683,7 +702,7 @@ relay: away from home, the user brings the tunnel. opencode can bind beyond loop
 | model tier | whether this model passed `opencode-soma doctor --curation`, the 100-case replay | auto-curation stays off until it passes (MEMORY-DESIGN.md 6.5). The replay takes minutes, so `init` asks before running it. |
 | voice tools | whisper-cli, ffmpeg, piper-tts and the voice models | voice off |
 | ports | a free 127.0.0.1 port for the daemon | pick another |
-| the user's own opencode and Claude Code config | `~/.config/opencode`, `~/.opencode` and `~/.claude` exist | noted and never touched. They are why instances set the switches in 2.2 (section 12). |
+| the user's own opencode and Claude Code config | `~/.config/opencode`, `~/.opencode` and `~/.claude` exist | noted and never touched. Instances never see them, because they run under the soma HOME (2.2). |
 | Telegram reachability | before pairing, a `getMe` with a placeholder token. Telegram's JSON 401 means the API is reachable; a connection failure means the network blocks it. This is the check `probes/platform/telegram_nat.py` makes (`evidence/platform/telegram-nat.log`). | blocked: stop before pairing, say why, and offer the Discord path, whose adapter is v2 (RISKS.md item 8) |
 | an existing install | the data dir, the service file, a held lock | the repair or upgrade path, never a second copy |
 
@@ -712,6 +731,8 @@ curl -fsSL https://opencode.ai/install | bash -s -- --version 1.18.8 --no-modify
 - `config.toml`, `secrets.env` (0600) and `run/` (0700) in the data dir.
 - The instance templates: `opencode.json`, agents and plugins inside the data dir, never in
   `~/.config/opencode`.
+- The soma HOME, `~/.opencode-soma/home/`, with links to the user's `~/.gitconfig` and `~/.ssh`.
+  `init` asks before it links `~/.ssh`, because that hands leads the user's SSH keys.
 - The service:
   - on Linux and WSL2, `~/.config/systemd/user/opencode-soma.service`. `init` asks before running
     `loginctl enable-linger`;
@@ -732,30 +753,21 @@ curl -fsSL https://opencode.ai/install | bash -s -- --version 1.18.8 --no-modify
 | a second poller: the lock is held, or `getUpdates` answers 409 | one consumer per token (RISKS.md item 9) |
 | native Windows | v1 supports WSL2 only (PLATFORM-MATRIX.md) |
 | any path inside the user's own opencode config or data dirs | the user's own opencode setup stays untouched |
+| an instance whose HOME is the user's real HOME | `~/.opencode/agent` loads from HOME even with the XDG dirs redirected (`evidence/opencode/P9-compat/fakehome.log`) |
 | a data dir on a network filesystem | WAL needs a local filesystem (MEMORY-DESIGN.md section 12, desk) |
 
 ## 12. Open items
 
 This design assumes the following, and no probe has shown them yet:
 
-- **The real HOME, kept for leads.** It is design intent, so git and SSH work. P0 redirected HOME
-  and the XDG dirs together, so this combination is unprobed.
-  - The concern: with the real HOME, the user's own opencode and Claude Code config could leak into
-    soma's instances.
-  - Desk research says opencode scans `~/.opencode` as a config dir, and reads `~/.claude/CLAUDE.md`
-    and `~/.claude/skills` unless `OPENCODE_DISABLE_CLAUDE_CODE` is set.
-  - The binary's own config guide lists `~/.config/opencode` as the global config, "NOT
-    `~/.opencode/`", and names `~/.claude/skills` and `~/.agents/skills` as auto-loaded
-    (`evidence/opencode/P9-compat/compat.log`). P9 deferred the empirical `~/.claude` test.
-  - The cheap probe:
-    1. Make a fake user HOME seeded with `.config/opencode`, `.opencode` and `.claude` content.
-    2. Redirect the XDG dirs.
-    3. Run `opencode debug paths`, `debug config` and `debug skill`, with and without
-       `OPENCODE_DISABLE_CLAUDE_CODE`.
-
-    It must never run against the real HOME.
-  - The fallback: if the switches cannot stop a leak, leads get a private HOME with links to the
-    user's `.gitconfig` and `.ssh`.
+- **The `~/.claude` and `~/.agents` skill leak.** opencode's own config reference documents it
+  (`evidence/opencode/P9-compat/compat.log`), but the fake-HOME probe could not seed it, because the
+  probe harness blocks creating `.claude` paths (`fakehome.log`). The soma HOME has neither
+  directory, and the two switches in 2.2 are belt and braces. The question of which user config
+  leaks with the real HOME is closed: `fakehome.log` answered it, and the soma HOME is the design.
+- **Credentials beyond the two links.** Two cases are not probed with HOME and XDG redirected:
+  git over HTTPS through a credential helper, and tools whose login lives under `~/.config`, such
+  as `gh`. More links can be added in `config.toml` if a user needs them.
 - **Remote MCP `headers`** carrying a per-instance bearer token (2.1). The binary's config guide
   documents them, but P3 used a remote MCP without headers.
 - **Provider timeouts** in config, and what they do to a hung local model (desk).
