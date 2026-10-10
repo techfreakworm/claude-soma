@@ -69,18 +69,18 @@ C9  evidence/opencode/isolation-check.log is committed and non-empty; names ~/.c
     `opencode-version:` (outside evidence/verify/) has a `date-utc:` inside that window.
 C10 (--rerun) runs every pinned RERUN_LIST entry from its own clean `git archive HEAD` copy, with
     HOME, XDG_*, TMPDIR and OCSOMA_REAL_TMPDIR in a fresh dir under $TMPDIR/ocsoma-vf/ and secret,
-    CLAUDE* and TMUX variables removed. Ports and tmux sockets are remapped into 47300-47399 and
-    ocsoma-vf-* (OCSOMA_PORT_BASE=47300, OCSOMA_TMUX_PREFIX=ocsoma-vf-, plus the two port-range
-    guards in ollama_log_proxy.py and mini_mcp.py, edited in the copy only); a remap that no longer
-    matches the script fails as a stale pin. Each entry must exit 0, and every compared log's
-    VERDICT words (first word after `VERDICT:`) must equal HEAD's. The Neo4j entry instead needs
-    HEAD gen.log's dataset_sha256 for 50000 facts, correct = 1.0, and a Q1 p50 within 10x of HEAD's
-    neo4j/Q1/50000 row. Leftover ocsoma-vf-* containers or volumes fail the entry. Transcripts and
-    produced logs go to evidence/verify/rerun/. Pinned: P1-resume (P1-headless/crash-run.sh and
-    crash-serve.sh), P2-gate (P2-hooks run.sh then analyze.sh; gate.log), P3-scoping
-    (P3-mcp/run.sh; mcp, scoping and scoping-verdict logs), P5-tmux (P5-tmux/run.sh; tmux and
-    pane-analysis logs), neo4j-timing (gen_memory.py + bench.py, Q1 at 50000 facts). With an empty
-    list it FAILs "rerun list not yet pinned".
+    CLAUDE* and TMUX variables removed. Ports and tmux sockets move into 47300-47399 and
+    ocsoma-vf-* through OCSOMA_PORT_BASE=47300 and OCSOMA_TMUX_PREFIX=ocsoma-vf-; an entry may also
+    carry literal edits for its copy (exact counts asserted, logged), and an edit that no longer
+    matches fails as a stale pin. Each entry must exit 0, and every compared log's VERDICT words
+    (first word after `VERDICT:`) must equal HEAD's. The Neo4j entry instead needs HEAD gen.log's
+    dataset_sha256 for 50000 facts, correct = 1.0, and a Q1 p50 within 10x of HEAD's neo4j/Q1/50000
+    row. Leftover ocsoma-vf-* containers or volumes fail the entry. Transcripts and produced logs
+    go to evidence/verify/rerun/. Pinned: P1-resume (P1-headless/crash-run.sh and crash-serve.sh),
+    P2-gate (P2-hooks run.sh then analyze.sh; gate.log), P3-scoping (P3-mcp/run.sh; mcp, scoping
+    and scoping-verdict logs), P5-tmux (P5-tmux/run.sh; tmux and pane-analysis logs), neo4j-timing
+    (gen_memory.py + bench.py, Q1 at 50000 facts). With an empty list it FAILs "rerun list not yet
+    pinned".
 C11 no file under research/opencode-soma/ (outside venv/cache dirs) contains a credential-shaped
     string (API keys, OAuth/bearer tokens, private keys); only file:line is printed.
 """
@@ -155,10 +155,6 @@ OCE = f"{EV_REL}/opencode"
 EVM = f"{EV_REL}/memory"
 # rerun-list-begin
 OC_ENV = {"OCSOMA_PORT_BASE": "47300", "OCSOMA_TMUX_PREFIX": "ocsoma-vf-"}
-PROXY_GUARD = (f"{OCP}/ollama_log_proxy.py", "if not 47100 <= a.port <= 47199:",
-               "if not 47300 <= a.port <= 47399:", 1)
-MINI_GUARD = (f"{OCP}/P3-mcp/mini_mcp.py", "if not 47100 <= port <= 47199:",
-              "if not 47300 <= port <= 47399:", 1)
 NEO4J_SH = (
     'set -euo pipefail\n'
     'mkdir -p "$OCSOMA_SCRATCH"\n'
@@ -172,21 +168,20 @@ NEO4J_SH = (
 )
 RERUN_LIST: list[dict[str, Any]] = [
     {"id": "P1-resume", "tags": ["P1-resume"], "timeout": 1800, "env": OC_ENV,
-     "argv": ["bash", f"{OCP}/P1-headless/crash-run.sh"], "rewrite": [PROXY_GUARD],
+     "argv": ["bash", f"{OCP}/P1-headless/crash-run.sh"],
      "compare": [f"{OCE}/P1-headless/crash-run.log"]},
     {"id": "P1-resume-serve", "tags": ["P1-resume"], "timeout": 1800, "env": OC_ENV,
-     "argv": ["bash", f"{OCP}/P1-headless/crash-serve.sh"], "rewrite": [PROXY_GUARD],
+     "argv": ["bash", f"{OCP}/P1-headless/crash-serve.sh"],
      "compare": [f"{OCE}/P1-headless/crash-serve.log"]},
     {"id": "P2-gate", "tags": ["P2-gate"], "timeout": 2400, "env": OC_ENV,
      "argv": ["bash", "-c", f"bash {OCP}/P2-hooks/run.sh; bash {OCP}/P2-hooks/analyze.sh"],
-     "rewrite": [PROXY_GUARD], "compare": [f"{OCE}/P2-hooks/gate.log"]},
+     "compare": [f"{OCE}/P2-hooks/gate.log"]},
     {"id": "P3-scoping", "tags": ["P3-scoping"], "timeout": 2400, "env": OC_ENV,
-     "argv": ["bash", f"{OCP}/P3-mcp/run.sh"], "rewrite": [MINI_GUARD, PROXY_GUARD],
+     "argv": ["bash", f"{OCP}/P3-mcp/run.sh"],
      "compare": [f"{OCE}/P3-mcp/mcp.log", f"{OCE}/P3-mcp/scoping.log",
                  f"{OCE}/P3-mcp/scoping-verdict.log"]},
     {"id": "P5-tmux", "tags": ["P5-tmux"], "timeout": 2400, "env": OC_ENV,
-     "argv": ["bash", f"{OCP}/P5-tmux/run.sh"], "rewrite": [PROXY_GUARD],
-     "tmux_sockets": ["ocsoma-vf-tui"],
+     "argv": ["bash", f"{OCP}/P5-tmux/run.sh"], "tmux_sockets": ["ocsoma-vf-tui"],
      "compare": [f"{OCE}/P5-tmux/tmux.log", f"{OCE}/P5-tmux/pane-analysis.log"]},
     {"id": "neo4j-timing", "tags": ["neo4j-timing"], "timeout": 1800, "check": "neo4j-q1",
      "argv": ["bash", "-c", NEO4J_SH],
