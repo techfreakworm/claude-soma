@@ -104,10 +104,10 @@ systemd-analyze calendar 'Mon..Fri 08:00' --iterations=2 2>&1 | head -6"
   echo "cleanup: container $NAME removed ($(docker ps -a --filter name=$NAME --format '{{.Names}}' | wc -l | tr -d ' ') left)"
 } 2>&1 | tee "$LOG"
 ok_ver=$(grep -c "^opencode --version: $OC_VERSION" "$LOG")
-ok_run=$(grep -c 'PONG' "$LOG")
+ok_run=$(( $(grep -c -x 'PONG' "$LOG") > 0 && $(grep -c 'opencode-run-rc=0' "$LOG") > 0 ))
 ok_tmux=$(grep -c 'tmux-roundtrip=ok' "$LOG")
 ok_sd=$(grep -c 'verify-rc=0' "$LOG")
-if [ "$ok_ver" -ge 1 ] && [ "$ok_run" -ge 2 ] && [ "$ok_tmux" -ge 1 ] && [ "$ok_sd" -ge 1 ]; then
+if [ "$ok_ver" -ge 1 ] && [ "$ok_run" -ge 1 ] && [ "$ok_tmux" -ge 1 ] && [ "$ok_sd" -ge 1 ]; then
   v="PASS"; m="opencode $OC_VERSION installed and answered via host ollama; tmux round-trip ok; systemd-analyze verify clean"
 else
   v="PARTIAL"; m="version=$ok_ver run=$ok_run tmux=$ok_tmux systemd_verify=$ok_sd (see log)"

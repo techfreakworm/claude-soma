@@ -1,0 +1,23 @@
+date_utc: 2026-10-10T06:57:13Z
+command: python3.12 artifacts.py
+== PyPI playwright==1.63.0: 8 wheels
+   platforms: linux/arm64, linux/x64, macos/arm64, macos/universal, macos/x64, windows/arm64, windows/x64, windows/x86
+== PyPI piper-tts==1.8.0: 5 wheels
+   platforms: linux/arm64, linux/x64, macos/arm64, macos/x64, windows/x64
+== PyPI onnxruntime==1.31.0: 24 wheels
+   platforms: linux/arm64, linux/x64, macos/arm64, windows/arm64, windows/x64
+== GitHub anomalyco/opencode release v1.18.8 (2026-07-28): 37 assets
+   platforms: linux/?, linux/arm64, linux/x64, macos/?, macos/arm64, macos/x64, windows/arm64, windows/x64
+   windows assets: opencode-desktop-win-arm64.exe, opencode-desktop-win-arm64.exe.blockmap, opencode-desktop-win-x64.exe, opencode-desktop-win-x64.exe.blockmap, opencode-windows-arm64.zip, opencode-windows-x64-baseline.zip, opencode-windows-x64.zip
+== GitHub ggml-org/whisper.cpp newest releases (tag: assets): v1.9.5: 0, b5454: 12, v1.9.4: 0, b5130: 12, b5127: 12, v1.9.3: 0, b4938: 9, v1.9.2: 9, v1.9.1: 9, v1.9.0: 9
+== GitHub ggml-org/whisper.cpp release b5454 (2026-10-06): 12 assets
+   platforms: ?/arm64, ?/x64, windows/arm64, windows/x64, windows/x86
+   windows assets: whisper-bin-win-cpu-arm64.zip, whisper-bin-win-cuda-11.8.0-x64.zip, whisper-bin-win-cuda-12.4.0-x64.zip, whisper-bin-win-cuda-13.4-arm64.zip, whisper-bin-win-opencl-adreno-arm64.zip, whisper-bin-Win32.zip, whisper-blas-bin-Win32.zip
+== GitHub ollama/ollama release v0.40.2 (2026-10-08): 17 assets
+   platforms: linux/arm64, linux/x64, macos/?, windows/?, windows/arm64, windows/x64
+   windows assets: ollama-windows-amd64-mlx.zip, ollama-windows-amd64-rocm.zip, ollama-windows-amd64.zip, ollama-windows-arm64.zip, OllamaSetup.exe
+== GitHub oven-sh/bun release bun-v1.3.6 (2026-01-13): 24 assets
+   platforms: linux/arm64, linux/x64, macos/arm64, macos/x64, windows/x64
+   windows assets: bun-windows-x64-baseline-profile.zip, bun-windows-x64-baseline.zip, bun-windows-x64-profile.zip, bun-windows-x64.zip
+== opencode installer (https://opencode.ai/install) supported targets: linux-x64|linux-arm64|darwin-x64|darwin-arm64|windows-x64
+VERDICT: PASS — every listed dependency publishes Linux, macOS and Windows artifacts; piper-tts has no Windows arm64 wheel (platforms: linux/arm64, linux/x64, macos/arm64, macos/x64, windows/x64); artifact availability is not a Windows run

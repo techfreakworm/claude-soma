@@ -1,0 +1,49 @@
+date_utc: 2026-10-10T06:56:00Z
+command: bash linux_container.sh   (OC_VERSION=1.18.8 MODEL=qwen3:32b)
+docker: 29.8.0 (linux/arm64)  host: Darwin 25.4.0 arm64
+container up in 0.2s: PRETTY_NAME="Ubuntu 24.04.5 LTS"
+Linux 7.0.12-linuxkit aarch64
+apt-rc=0
+apt-get install curl ca-certificates tmux systemd: 16.7s
+== opencode install (official installer, pinned)
+
+For more information visit https://opencode.ai/docs
+
+
+install wall: 3.8s
+total 174772
+drwxr-xr-x 2 root root      4096 Oct 10 06:56 .
+drwxr-xr-x 3 root root      4096 Oct 10 06:56 ..
+-rwxr-xr-x 1 1001 1001 178956432 Jul 28 05:38 opencode
+171M	/root/.opencode/bin/opencode
+opencode --version: 1.18.8
+== opencode run against host ollama
+{
+  "$schema": "https://opencode.ai/config.json",
+  "autoupdate": false,
+  "share": "disabled",
+  "enabled_providers": ["ollama"],
+  "model": "ollama/qwen3:32b",
+  "small_model": "ollama/qwen3:32b",
+  "provider": {
+host ollama reachable from the container: {"version":"0.33.3"}
+opencode-run-rc=0
+> build · qwen3:32b
+PONG
+opencode run wall: 14.0s
+== tmux inside the container
+tmux 3.4
+lead1: 1 windows (created Sat Oct 10 06:56:36 2026)
+hello-from-tmux-42
+tmux-roundtrip=ok
+== systemd-analyze verify on a sample user unit
+systemd 255 (255.4-1ubuntu8.17)
+verify-rc=0
+  Original form: Mon..Fri 08:00
+Normalized form: Mon..Fri *-*-* 08:00:00
+    Next elapse: Mon 2026-10-12 08:00:00 UTC
+       From now: 2 days left
+   Iteration #2: Tue 2026-10-13 08:00:00 UTC
+       From now: 3 days left
+cleanup: container ocsoma-me-linux removed (0 left)
+VERDICT: PASS — ubuntu:24.04 arm64 container: opencode 1.18.8 installed and answered via host ollama; tmux round-trip ok; systemd-analyze verify clean

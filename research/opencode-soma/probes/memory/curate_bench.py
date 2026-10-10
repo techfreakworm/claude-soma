@@ -267,7 +267,7 @@ def main() -> int:
     rows: dict[str, list[dict]] = {}
     ver = json.load(urllib.request.urlopen(OLLAMA + "/api/version", timeout=10))["version"]
     tags = json.load(urllib.request.urlopen(OLLAMA + "/api/tags", timeout=10))["models"]
-    minfo = next((m for m in tags if m["name"] == a.model), {})
+    minfo = next((m for m in tags if m["name"] in (a.model, a.model + ":latest")), {})
     with open(log_path, "w") as log, open(jsonl_path, "w") as jl:
         def out(*x):
             print(*x, file=log, flush=True)
