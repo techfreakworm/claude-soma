@@ -1,0 +1,33 @@
+# start-here reproduce
+date-utc: 2026-10-10T07:54:58Z
+purpose: literal commands from START-HERE.md run verbatim; each prints a key result
+
+$ printf '%s' '{"tool_name":"WebFetch","tool_input":{"url":"http://x"}}' | python3.12 scripts/orchestrator_gate.py
+{"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "deny", "permissionDecisionReason": "WebFetch is slow/multi-step \u2014 dispatch via Agent (model=opus, run_in_background=true) instead."}}
+$ tail -n1 research/opencode-soma/evidence/opencode/P8-serve/serve.log
+VERDICT: PASS — serve exposes a full OpenAPI HTTP+SSE API; sync and async prompts, basic-auth (401 without creds), run --attach, TUI attach and the web UI all worked on 127.0.0.1.
+
+$ tail -n1 research/opencode-soma/evidence/opencode/P2-hooks/gate.log
+VERDICT: PASS — tool.execute.before blocked the primary's bash call before execution (sentinel absent, reason in the tool result) and exempted the subagent via a session.parentID lookup (the hook input itself carries only tool/sessionID/callID).
+
+$ tail -n1 research/opencode-soma/evidence/opencode/P1-headless/crash-serve.log
+VERDICT: PASS — after kill -9 of serve mid-generation, the restarted serve returned the session and its history over HTTP (status idle, partial reply left incomplete) and continued it (MANGO-2290 recalled).
+
+$ grep -m1 VERDICT research/opencode-soma/evidence/memory/bench-5000.log
+VERDICT: PASS — 31 backend x query rows at n=5000; all non-naive backends match the oracle on every run
+
+$ tail -n1 research/opencode-soma/evidence/opencode/P5-tmux/tmux.log
+VERDICT: PARTIAL — send-keys + capture-pane scraping got 5/6 replies vs HTTP 6/6; failure modes per case above.
+
+$ python3.12 -I research/opencode-soma/probes/opencode/turn_timing.py research/opencode-soma/evidence/opencode
+model                 n wall p50 wall p90 ttfb p50 decode tok/s p50 prefill tok/s p50 prompt tok p50 max prompt
+lfm2.5-thinking       2      4.1    208.2      3.1            158.5                37           7368       7558
+qwen3:32b           184      7.5     49.8      5.8              8.2               106           6836      14786
+(requests cut by a client kill are excluded; decode rate only from replies >= 20 tokens)
+
+$ bash research/opencode-soma/probes/opencode/isolation.sh verify
+new top-level entries in /Users/techfreakworm/.claude:
+
+VERDICT: PASS — no opencode-owned real dir changed since the snapshot; all probe I/O stayed in the sandbox.
+
+VERDICT: PASS — reproduce block ran; see research/opencode-soma/evidence/start-here/reproduce.log
