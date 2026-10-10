@@ -1,6 +1,6 @@
 # start-here reproduce
-date-utc: 2026-10-10T08:37:52Z
-purpose: literal commands from START-HERE.md run verbatim; each prints a key result
+date-utc: 2026-10-10T08:47:49Z
+purpose: literal commands from START-HERE.md run verbatim; each leaves the committed repo untouched
 
 $ python3.12 -I research/opencode-soma/probes/check_dod.py
 PASS C1: 7 deliverables committed, mermaid block present, probes/ and evidence/ populated
@@ -11,21 +11,27 @@ PASS C5: P0 acceptance command at ROADMAP.md:39
 PASS C6: 13 ranked risks, each with a cheapest early test
 FAIL C7: no committed *.log under evidence/start-here/
 FAIL C8: 1 uncommitted path(s): research/opencode-soma/evidence/start-here/reproduce.log (M)
-FAIL C9: research/opencode-soma/evidence/opencode/P5-tmux/pane-analysis.log ran at 2026-10-10T08:36:11Z, outside the isolation window [2026-10-10T05:48:44Z, 2026-10-10T08:17:59Z]; research/opencode-soma/evidence/opencode/P5-tmux/tmux.log ran at 2026-10-10T08:34:32Z, outside the isolation window [2026-10-10T05:48:44Z, 2026-10-10T08:17:59Z]
+PASS C9: real dirs unchanged; 42 opencode log(s) inside the window
 SKIP C10: re-runs only with --rerun (the final gate uses --rerun)
-PASS C11: 242 files scanned, no credential-shaped strings
+PASS C11: 236 files scanned, no credential-shaped strings
 GATE: FAIL
 
-$ bash research/opencode-soma/probes/opencode/P2-hooks/analyze.sh
-VERDICT: PASS — the spy plugin saw 11 distinct hooks and 14 distinct bus event types in one session (lists above).
-VERDICT: PASS — chat.message injection (the additionalContext analog) re-read the file per prompt and the model quoted the latest value; system.transform also delivered the fresh value (proxy) but qwen3:32b repeated its stale earlier answer for that field.
-VERDICT: PASS — tool.execute.before blocked the primary's bash call before execution (sentinel absent, reason in the tool result) and exempted the subagent via a session.parentID lookup (the hook input itself carries only tool/sessionID/callID).
-VERDICT: PASS — every executed tool call in every session of the tree (built-in, MCP, task, the subagent's own calls) is in the activity log with args, session, parent session, agent, duration and result head; the gate-blocked attempt is on record in the gate's own log (later plugins never see a call an earlier plugin rejects).
+$ rm -rf "$TMPDIR/ocsoma-repro" && mkdir -p "$TMPDIR/ocsoma-repro" && git archive HEAD research/opencode-soma | tar -x -C "$TMPDIR/ocsoma-repro"
 
-$ bash research/opencode-soma/probes/opencode/P5-tmux/analyze.sh
+$ bash "$TMPDIR/ocsoma-repro/research/opencode-soma/probes/opencode/P5-tmux/analyze.sh"
 VERDICT: PARTIAL — these are the committed round-1 panes (a single sample); the authoritative scrape reliability is the multi-round aggregate in tmux.log. On these panes whole-line parsing and column-aware parsing differ (the sidebar shares rows, so whole-line can miss or match the wrong column), and long replies are cut to the visible screen (alt-screen, no tmux scrollback). Separately, tmux.log shows the old whole-line checker also false-positives mid-turn on the sidebar auto-title before any reply exists. Net: pane scraping is lossy and can false-positive; the HTTP API supersedes it.
 
-$ python3.12 research/opencode-soma/probes/memory/gen_memory.py --n-facts 5000 --out "$TMPDIR/sh-mem-5k"
+$ grep -h "^VERDICT" "$TMPDIR/ocsoma-repro/research/opencode-soma/evidence/opencode/P5-tmux/pane-analysis.log" research/opencode-soma/evidence/opencode/P5-tmux/pane-analysis.log
+VERDICT: PARTIAL — these are the committed round-1 panes (a single sample); the authoritative scrape reliability is the multi-round aggregate in tmux.log. On these panes whole-line parsing and column-aware parsing differ (the sidebar shares rows, so whole-line can miss or match the wrong column), and long replies are cut to the visible screen (alt-screen, no tmux scrollback). Separately, tmux.log shows the old whole-line checker also false-positives mid-turn on the sidebar auto-title before any reply exists. Net: pane scraping is lossy and can false-positive; the HTTP API supersedes it.
+VERDICT: PARTIAL — these are the committed round-1 panes (a single sample); the authoritative scrape reliability is the multi-round aggregate in tmux.log. On these panes whole-line parsing and column-aware parsing differ (the sidebar shares rows, so whole-line can miss or match the wrong column), and long replies are cut to the visible screen (alt-screen, no tmux scrollback). Separately, tmux.log shows the old whole-line checker also false-positives mid-turn on the sidebar auto-title before any reply exists. Net: pane scraping is lossy and can false-positive; the HTTP API supersedes it.
+
+$ python3.12 -I "$TMPDIR/ocsoma-repro/research/opencode-soma/probes/opencode/turn_timing.py" "$TMPDIR/ocsoma-repro/research/opencode-soma/evidence/opencode"
+model                 n wall p50 wall p90 ttfb p50 decode tok/s p50 prefill tok/s p50 prompt tok p50 max prompt
+lfm2.5-thinking       2      4.1    208.2      3.1            158.5                37           7368       7558
+qwen3:32b           190      7.2     45.2      5.3              8.2               106           6870      14786
+(requests cut by a client kill are excluded; decode rate only from replies >= 20 tokens)
+
+$ python3.12 "$TMPDIR/ocsoma-repro/research/opencode-soma/probes/memory/gen_memory.py" --n-facts 5000 --out "$TMPDIR/ocsoma-repro-mem"
 {
  "by_scope_parent": 590,
  "by_type": {
@@ -40,7 +46,7 @@ $ python3.12 research/opencode-soma/probes/memory/gen_memory.py --n-facts 5000 -
   "parent": 3413,
   "targeted": 77
  },
- "dataset_path": "/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T//sh-mem-5k/dataset-5000.json",
+ "dataset_path": "/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T//ocsoma-repro-mem/dataset-5000.json",
  "dataset_sha256": "110ebab5ab3717a0f84f6b89c49ecdff36fa2534540d6b188005339e7df52adf",
  "days_span": 179.9,
  "entities_in_2plus_leads": 46,
@@ -164,27 +170,25 @@ $ python3.12 research/opencode-soma/probes/memory/gen_memory.py --n-facts 5000 -
   "telegram": 429,
   "tool": 1288
  },
- "truth_path": "/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T//sh-mem-5k/truth-5000.json",
+ "truth_path": "/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T//ocsoma-repro-mem/truth-5000.json",
  "truth_sha256": "ad02781ed9d86926b13e8efcf44d96f5f4790c3df260d9e83d9c7d9e649e4a20"
 }
 
-$ python3.12 -I research/opencode-soma/probes/opencode/sqlite_mem_bench.py --data "$TMPDIR/sh-mem-5k" --n-facts 5000
+$ python3.12 -I "$TMPDIR/ocsoma-repro/research/opencode-soma/probes/opencode/sqlite_mem_bench.py" --data "$TMPDIR/ocsoma-repro-mem" --n-facts 5000
 sqlite-only memory bench: n_facts=5000 entities=251
-  build (facts + fact_entity + FTS5, in-memory): 13 ms
+  build (facts + fact_entity + FTS5, in-memory): 15 ms
   Q1 entity-recall queries: 10
-  query latency ms: p50=0.395 p95=0.444 max=0.444
+  query latency ms: p50=0.443 p95=0.519 max=0.519
   recall=1.000 precision=1.000 vs the generated oracle
 VERDICT: PASS - SQLite entity recall at n=5000 is exact (recall=1.000 precision=1.000); full multi-backend matrix is in evidence/memory/bench-results.json
 
-$ python3.12 -I research/opencode-soma/probes/opencode/turn_timing.py research/opencode-soma/evidence/opencode
-model                 n wall p50 wall p90 ttfb p50 decode tok/s p50 prefill tok/s p50 prompt tok p50 max prompt
-lfm2.5-thinking       2      4.1    208.2      3.1            158.5                37           7368       7558
-qwen3:32b           190      7.2     45.2      5.3              8.2               106           6870      14786
-(requests cut by a client kill are excluded; decode rate only from replies >= 20 tokens)
-
-$ bash research/opencode-soma/probes/opencode/isolation.sh verify
+$ bash "$TMPDIR/ocsoma-repro/research/opencode-soma/probes/opencode/isolation.sh" verify
 new top-level entries in /Users/techfreakworm/.claude:
 
 VERDICT: PASS — no opencode-owned real dir changed since the snapshot; all probe I/O stayed in the sandbox.
 
-VERDICT: PASS — reproduce block ran; see research/opencode-soma/evidence/start-here/reproduce.log
+$ grep -h "^VERDICT" "$TMPDIR/ocsoma-repro/research/opencode-soma/evidence/opencode/isolation-check.log" research/opencode-soma/evidence/opencode/isolation-check.log
+VERDICT: PASS — no opencode-owned real dir changed since the snapshot; all probe I/O stayed in the sandbox.
+VERDICT: PASS — no opencode-owned real dir changed since the snapshot; all probe I/O stayed in the sandbox.
+
+VERDICT: PASS — reproduce block ran entirely in a $TMPDIR copy; committed repo untouched (git status clean).
