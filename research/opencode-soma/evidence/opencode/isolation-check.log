@@ -1,14 +1,17 @@
 # isolation-check
-date-utc: 2026-10-10T08:08:31Z
+date-utc: 2026-10-10T08:13:33Z
 snapshot-utc: 2026-10-10T05:48:44Z
 command: bash research/opencode-soma/probes/opencode/isolation.sh verify
 opencode-version: 1.18.8
 note: the version line above is read from opencode run with a THROWAWAY HOME+XDG under
       $TMPDIR/ocsoma-pe/isolation/verx (see sandboxed_version); this script makes NO opencode
-      call against the operator's real HOME. (For the record: a plain 'opencode --version' only
-      prints the version; opencode Global init only mkdir -p's dirs that already exist, so the
-      operator's earlier real-HOME --version calls today wrote nothing and changed no mtime -
-      corroborated by the UNCHANGED listings below.) All probes ran under sandbox.sh.
+      call against the real HOME. For the record, the only real-HOME 'opencode --version'
+      calls today were: one by the LEAD at ~05:44Z, before this snapshot, during orientation;
+      and the ones this verify step itself made before the sandboxed-version fix (at least the
+      07:24:18Z run). A plain 'opencode --version' only prints the version and opencode's
+      Global init only mkdir -p's dirs that already exist, so none of those calls wrote
+      anything or changed an mtime - corroborated by the UNCHANGED listings below. All probes
+      ran under sandbox.sh.
 
 == /Users/techfreakworm/.config/opencode
 listing (depth<=3, size+mtime): UNCHANGED (364 entries)
@@ -46,7 +49,7 @@ sha256 of top-level files: UNCHANGED (0 files)
 
 == /Users/techfreakworm/.claude (top level only; this Claude Code session itself writes here)
   --- /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/isolation/claude-top.listing	2026-10-10 11:18:44
-  +++ /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/isolation/claude-top.listing.after	2026-10-10 13:38:33
+  +++ /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/isolation/claude-top.listing.after	2026-10-10 13:43:34
   @@ -1,11 +1,11 @@
   -1791610466 1184 /Users/techfreakworm/.claude
   +1791612130 1184 /Users/techfreakworm/.claude
@@ -58,7 +61,7 @@ sha256 of top-level files: UNCHANGED (0 files)
    1753548653 22 /Users/techfreakworm/.claude/.superclaude-metadata.json
    1789319008 1280 /Users/techfreakworm/.claude/agents
   -1791611294 224 /Users/techfreakworm/.claude/backups
-  +1791619667 224 /Users/techfreakworm/.claude/backups
+  +1791619967 224 /Users/techfreakworm/.claude/backups
    1791605830 160 /Users/techfreakworm/.claude/cache
    1767721822 96 /Users/techfreakworm/.claude/chrome
    1780989703 64 /Users/techfreakworm/.claude/commands

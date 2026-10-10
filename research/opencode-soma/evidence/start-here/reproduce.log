@@ -1,19 +1,19 @@
 # start-here reproduce
-date-utc: 2026-10-10T08:08:27Z
+date-utc: 2026-10-10T08:13:30Z
 purpose: literal commands from START-HERE.md run verbatim; each prints a key result
 
 $ python3.12 -I research/opencode-soma/probes/check_dod.py
-FAIL C1: research/opencode-soma/ARCHITECTURE.md has uncommitted changes (M)
-PASS C2: verdict paragraph ok; 12 rows valid (PARITY 1, DEGRADED 4, NEEDS-BUILD 7, IMPOSSIBLE 0)
+PASS C1: 7 deliverables committed, mermaid block present, probes/ and evidence/ populated
+PASS C2: verdict paragraph ok; 12 rows valid (PARITY 0, DEGRADED 5, NEEDS-BUILD 7, IMPOSSIBLE 0)
 PASS C3: qualifying logs per group P1:8 P2:8 P3:3 P4:6 P5:3 P6:5 P7:1
 PASS C4: 44 neo4j bench row(s) with timings; container cold-start and RSS present
 PASS C5: P0 acceptance command at ROADMAP.md:38
 PASS C6: 12 ranked risks, each with a cheapest early test
 FAIL C7: no committed *.log under evidence/start-here/
-FAIL C8: 2 uncommitted path(s): research/opencode-soma/ARCHITECTURE.md (M), research/opencode-soma/evidence/start-here/reproduce.log (M)
-FAIL C9: research/opencode-soma/evidence/opencode/P2-hooks/activity.log ran at 2026-10-10T08:08:13Z, outside the isolation window [2026-10-10T05:48:44Z, 2026-10-10T07:58:24Z]; research/opencode-soma/evidence/opencode/P2-hooks/events.log ran at 2026-10-10T08:08:12Z, outside the isolation window [2026-10-10T05:48:44Z, 2026-10-10T07:58:24Z]; research/opencode-soma/evidence/opencode/P2-hooks/gate.log ran at 2026-10-10T08:08:13Z, outside the isolation window [2026-10-10T05:48:44Z, 2026-10-10T07:58:24Z]; research/opencode-soma/evidence/opencode/P2-hooks/inject.log ran at 2026-10-10T08:08:12Z, outside the isolation window [2026-10-10T05:48:44Z, 2026-10-10T07:58:24Z]; research/opencode-soma/evidence/opencode/P5-tmux/pane-analysis.log ran at 2026-10-10T08:08:14Z, outside the isolation window [2026-10-10T05:48:44Z, 2026-10-10T07:58:24Z]
+FAIL C8: 1 uncommitted path(s): research/opencode-soma/evidence/start-here/reproduce.log (M)
+PASS C9: real dirs unchanged; 41 opencode log(s) inside the window
 SKIP C10: re-runs only with --rerun (the final gate uses --rerun)
-PASS C11: 228 files scanned, no credential-shaped strings
+PASS C11: 239 files scanned, no credential-shaped strings
 GATE: FAIL
 
 $ bash research/opencode-soma/probes/opencode/P2-hooks/analyze.sh
@@ -170,9 +170,9 @@ $ python3.12 research/opencode-soma/probes/memory/gen_memory.py --n-facts 5000 -
 
 $ python3.12 -I research/opencode-soma/probes/opencode/sqlite_mem_bench.py --data "$TMPDIR/sh-mem-5k" --n-facts 5000
 sqlite-only memory bench: n_facts=5000 entities=251
-  build (facts + fact_entity + FTS5, in-memory): 19 ms
+  build (facts + fact_entity + FTS5, in-memory): 13 ms
   Q1 entity-recall queries: 10
-  query latency ms: p50=0.603 p95=0.692 max=0.692
+  query latency ms: p50=0.415 p95=0.479 max=0.479
   recall=1.000 precision=1.000 vs the generated oracle
 VERDICT: PASS - SQLite entity recall at n=5000 is exact (recall=1.000 precision=1.000); full multi-backend matrix is in evidence/memory/bench-results.json
 

@@ -1,5 +1,5 @@
 # P2-hooks/gate.log
-date-utc: 2026-10-10T08:08:29Z
+date-utc: 2026-10-10T08:13:31Z
 probe-script: research/opencode-soma/probes/opencode/P2-hooks/analyze.sh (after run.sh)
 opencode-version: 1.18.8
 model: ollama/qwen3:32b
