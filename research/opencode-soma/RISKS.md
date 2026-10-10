@@ -76,14 +76,16 @@ and the cheapest test that would show it early. "desk" marks a claim no probe ex
    - Without `OPENCODE_SERVER_PASSWORD`, `opencode serve` starts unauthenticated ("server is
      unsecured") and exposes `POST /global/upgrade` (`evidence/opencode/P8-serve/serve.log`); with a
      password every route returns 401.
-   - CORS is opt-in via `--cors` (`evidence/opencode/SUMMARY.md`). The default CORS policy of 1.18.8
-     toward opencode.ai origins was not probed (desk).
+   - Its default CORS policy allows `https://*.opencode.ai` and `localhost` origins, is applied
+     before auth, and sends no `Access-Control-Allow-Credentials` (`evidence/opencode/P8-serve/cors.log`).
+     A script on any opencode.ai subdomain, or a local dev server, can therefore drive an
+     unsecured serve through the user's browser. A password-protected serve answers it with 401.
    - A LAN dashboard adds another surface.
 
-   Impact: a local process or LAN host drives the agent or upgrades the binary.
-   Cheapest early test: curl the serve API and the dashboard from another LAN host without
-   credentials (expect 401), and send a credentialed preflight from an opencode.ai origin (expect
-   no access).
+   Impact: a web page, a local process or a LAN host drives the agent or upgrades the binary.
+   Cheapest early test: call the serve API and the dashboard without credentials from a page on an
+   opencode.ai-style origin and from another LAN host (expect 401), and assert that every serve the
+   daemon launches carries its random password.
 6. **Prompt injection with broad permissions.** In the P6 demo the model ignored the injected
    command when ungated, but tried it when gated, and the gate blocked it
    (`evidence/opencode/P6-permissions/danger.log`). Whether a model follows an injection is not
@@ -141,6 +143,7 @@ and the cheapest test that would show it early. "desk" marks a claim no probe ex
   model switch. Churn is mitigated cheaply by pinning 1.18.8 and contract tests.
 - **Claims the evidence does not support, re-worded here:**
   - "no default provider timeouts in 1.18.8" (not probed, marked desk);
-  - "CORS for *.opencode.ai" (only the opt-in `--cors` flag is evidenced);
+  - "CORS for *.opencode.ai" was confirmed afterwards by probe-engineer's P8b probe
+    (`evidence/opencode/P8-serve/cors.log`) and is now cited in item 5;
   - "approvals never time out" (the evidence shows a pending approval held with no server-side
     timeout seen in 40 s);

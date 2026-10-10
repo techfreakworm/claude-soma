@@ -575,7 +575,10 @@ OpenJDK 25 in the image:
 
 These are from the final run of `neo4j_container.py`, made while no other probe of mine was running.
 Earlier runs during heavy local load were slower; their logs were overwritten, and they are not
-used.
+used. That run predates the fairness fix, so it used the schema without the `Fact(scope)`,
+`Fact(created_at)` and `Entity(name)` indexes. Those indexes don't affect cold start or idle
+memory, and memory with them is in the fair re-run's load lines: 1157.5 MB after loading 50k
+(`bench-50000.log`) and 1476.4 MB after 500k (`bench-500000.log`).
 
 **Install burden for a stranger** (desk-research-only):
 
