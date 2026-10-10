@@ -621,8 +621,8 @@ queries. The extra flat-file code is parsing and cross-file link following.
 
 ## 12. Process model and concurrency
 
-**The daemon is the single writer.** One SQLite file per user (for example
-`~/.opencode-soma/memory.sqlite`), in WAL mode:
+**The daemon is the single writer.** The memory tables live in the daemon's SQLite database
+(`~/.opencode-soma/soma.db`, WAL mode), next to the lead registry, events, schedules and usage:
 
 - **The opencode-soma daemon** is the only process that opens it read-write. It runs capture jobs,
   the upsert, `memory_save` / `memory_forget` (forwarded from the plugins over localhost), the digest,
