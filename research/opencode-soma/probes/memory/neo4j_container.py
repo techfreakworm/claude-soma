@@ -47,8 +47,8 @@ def settle_mem(seconds: float = 15.0) -> dict:
 
 def disk_breakdown() -> dict:
     out = B.sh(["docker", "exec", B.CONTAINER, "sh", "-c",
-                "du -sk /data /data/databases/neo4j /data/databases/system /data/transactions/neo4j "
-                "/data/transactions/system 2>/dev/null"], check=False)
+                "for d in /data /data/databases/neo4j /data/databases/system /data/transactions/neo4j "
+                "/data/transactions/system; do du -sk $d 2>/dev/null; done"], check=False)
     return {Path(p).as_posix(): int(k) for k, p in (ln.split() for ln in out.splitlines() if ln.strip())}
 
 

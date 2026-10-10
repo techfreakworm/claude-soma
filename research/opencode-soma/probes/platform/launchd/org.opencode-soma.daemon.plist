@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Sample per-user LaunchAgent for the long-running opencode-soma daemon (Telegram long-poll,
+     scheduler, dashboard). The installer must template USERNAME: launchd does not expand ~ or $HOME.
+     Install target: ~/Library/LaunchAgents/. Validated with plutil -lint only, never loaded here. -->
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>org.opencode-soma.daemon</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>/Users/USERNAME/.local/bin/opencode-soma</string>
+		<string>daemon</string>
+	</array>
+	<key>RunAtLoad</key>
+	<true/>
+	<key>KeepAlive</key>
+	<true/>
+	<key>ThrottleInterval</key>
+	<integer>10</integer>
+	<key>ProcessType</key>
+	<string>Adaptive</string>
+	<key>WorkingDirectory</key>
+	<string>/Users/USERNAME/.opencode-soma</string>
+	<key>EnvironmentVariables</key>
+	<dict>
+		<key>PATH</key>
+		<string>/Users/USERNAME/.opencode/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+	</dict>
+	<key>StandardOutPath</key>
+	<string>/Users/USERNAME/Library/Logs/opencode-soma/daemon.out.log</string>
+	<key>StandardErrorPath</key>
+	<string>/Users/USERNAME/Library/Logs/opencode-soma/daemon.err.log</string>
+</dict>
+</plist>

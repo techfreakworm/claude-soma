@@ -1,0 +1,25 @@
+date_utc: 2026-10-10T06:21:13Z
+command: python3.12 telegram_nat.py
+host: Darwin 25.4.0 arm64  curl: curl 8.7.1 (x86_64-apple-darwin25.0) libcurl/8.7.1 (SecureTransport) LibreSSL/3.3.6 zlib/1.2.12 nghttp2/1.68.0
+default route: interface en0, gateway 192.168.0.1
+interface address 192.168.0.4: private (RFC 1918) = True; gateway 192.168.0.1 private = True
+public egress address (seen by api.ipify.org): private = False, equals interface address = False, sha256 prefix 55667284b2 (address itself not recorded)
+=> behind NAT: True
+local TCP listeners bound to all interfaces: 10 (reachable on the LAN only; the NAT does not forward unsolicited inbound traffic unless the router has a port-forward/UPnP mapping, which this probe cannot see from inside; that part is desk-research-only)
+GET https://api.telegram.org/bot<fake>/getMe -> HTTP 401 in 0.50s body={"ok":false,"error_code":401,"description":"Unauthorized: invalid token specified"}
+GET https://api.telegram.org/bot<fake>/getUpdates?timeout=5 -> HTTP 401 in 30.50s body={"ok":false,"error_code":401,"description":"Unauthorized: invalid token specified"}
+TLS: SSL connection using TLSv1.3 / AEAD-AES256-GCM-SHA384 / [blank] / UNDEF
+TLS: subject: CN=api.telegram.org
+TLS: issuer: C=US; ST=Arizona; L=Scottsdale; O=GoDaddy.com, Inc.; OU=http://certs.godaddy.com/repository/; CN=Go Daddy Secure Certificate Authority - G2
+held outbound HTTPS request (httpbin.org/delay/10, stand-in for a long-poll hold): HTTP 200 after 11.1s
+Bot API docs fetched: https://core.telegram.org/bots/api HTTP 200 (857715 bytes). Quoted sentences:
+  - There are two mutually exclusive ways of receiving updates for your bot - the getUpdates method on one hand and webhooks on the other.
+  - Incoming updates are stored on the server until the bot receives them either way, but they will not be kept longer than 24 hours.
+  - Use this method to receive incoming updates using long polling (wiki).
+  - Timeout in seconds for long polling.
+  - This method will not work if an outgoing webhook is set up.
+  - Use this method to specify a URL and receive incoming updates via an outgoing webhook.
+  - Whenever there is an update for the bot, we will send an HTTPS POST request to the specified URL, containing a JSON-serialized Update.
+  - Ports currently supported for webhooks: 443, 80, 88, 8443.
+interpretation: getUpdates is an HTTPS request the bot opens to api.telegram.org and Telegram holds open for up to `timeout` seconds; the answer travels back on that same outbound connection, so the NAT's connection tracking delivers it and no inbound port is needed. setWebhook makes Telegram open the connection to a public HTTPS URL on 443/80/88/8443, which a host behind home NAT cannot offer without a port-forward, a tunnel, or a relay.
+VERDICT: PASS — host is on a private address behind NAT; api.telegram.org answered the fake-token requests with its JSON 401/404 over outbound HTTPS; a 10s held outbound request completed; 8/8 Bot API sentences quoted (the 30-50s real long hold needs a token: see telegram_longpoll_e2e.py, not run)

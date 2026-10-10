@@ -1,0 +1,38 @@
+date_utc: 2026-10-10T06:19:17Z
+command: bash macos_launchd.sh  (plutil -lint + plutil -convert json; no launchctl)
+host: Darwin 25.4.0 arm64 macOS 26.4.1 build 25E253
+== org.opencode-soma.daemon.plist
+/Users/techfreakworm/.soma/worktrees/claude-soma/claude-soma-manager/research/opencode-soma/probes/platform/launchd/org.opencode-soma.daemon.plist: OK
+{"RunAtLoad":true,"StandardErrorPath":"/Users/USERNAME/Library/Logs/opencode-soma/daemon.err.log","ThrottleInterval":10,"ProcessType":"Adaptive","EnvironmentVariables":{"PATH":"/Users/USERNAME/.opencode/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"},"StandardOutPath":"/Users/USERNAME/Library/Logs/opencode-soma/daemon.out.log","ProgramArguments":["/Users/USERNAME/.local/bin/opencode-soma","daemon"],"WorkingDirectory":"/Users/USERNAME/.opencode-soma","KeepAlive":true,"Label":"org.opencode-soma.daemon"}
+== org.opencode-soma.routine.daily-digest.plist
+/Users/techfreakworm/.soma/worktrees/claude-soma/claude-soma-manager/research/opencode-soma/probes/platform/launchd/org.opencode-soma.routine.daily-digest.plist: OK
+{"ProgramArguments":["/Users/USERNAME/.local/bin/opencode-soma","routine","run","daily-digest"],"Label":"org.opencode-soma.routine.daily-digest","StartCalendarInterval":[{"Weekday":1,"Hour":8,"Minute":0},{"Weekday":2,"Hour":8,"Minute":0},{"Weekday":3,"Hour":8,"Minute":0},{"Weekday":4,"Hour":8,"Minute":0},{"Weekday":5,"Hour":8,"Minute":0}],"StandardOutPath":"/Users/USERNAME/Library/Logs/opencode-soma/routine-daily-digest.log","StandardErrorPath":"/Users/USERNAME/Library/Logs/opencode-soma/routine-daily-digest.log"}
+== launchd.plist(5), StartCalendarInterval and sleep (local man page)
+ StartInterval <integer>
+ This optional key causes the job to be started every N seconds. If the
+ system is asleep during the time of the next scheduled interval firing,
+ that interval will be missed due to shortcomings in kqueue(3). If the
+ job is running during an interval firing, that interval firing will
+ likewise be missed.
+
+ StartCalendarInterval <dictionary of integers or array of dictionaries of
+ integers>
+--
+ intervals.
+
+ Unlike cron which skips job invocations when the computer is asleep,
+ launchd will start the job the next time the computer wakes up. If
+ multiple intervals transpire before the computer is woken, those events
+ will be coalesced into one event upon wake from sleep.
+
+ Note that StartInterval and StartCalendarInterval are not aware of each
+ other. They are evaluated completely independently by the system.
+== launchd.plist(5), KeepAlive
+ KeepAlive <boolean or dictionary of stuff>
+ This optional key is used to control whether your job is to be kept
+ continuously running or to let demand and conditions control the
+ invocation. The default is false and therefore only demand will start the
+ job. The value may be set to true to unconditionally keep the job alive.
+ Alternatively, a dictionary of conditions may be specified to selectively
+launchctl not invoked; nothing was loaded, bootstrapped or enabled.
+VERDICT: PASS — both sample LaunchAgents (KeepAlive daemon, weekday StartCalendarInterval routine) pass plutil -lint; launchd runs a missed calendar job once on wake, coalescing missed intervals

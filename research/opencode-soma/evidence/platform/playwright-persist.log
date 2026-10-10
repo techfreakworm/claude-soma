@@ -1,0 +1,13 @@
+date_utc: 2026-10-10T06:22:41Z
+command: python3.12 playwright_persist.py   (re-executed in the scratch venv)
+host: Darwin 25.4.0 arm64  python 3.12.10
+playwright: 1.63.0  PLAYWRIGHT_BROWSERS_PATH=/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-me/pw/browsers
+pip install playwright==1.63.0: rc=0 4.8s | playwright install chromium: rc=0 28.0s, browsers dir 566 MB; Chrome Headless Shell 153.0.8010.12 (playwright chromium-headless-shell v1243) downloaded to /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-me/pw/browsers/chromium_headless_shell-1243
+chromium executable: /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-me/pw/browsers/chromium-1243/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing
+launch 1 (headless) persistent context in 2.52s, browser 153.0.8010.12
+launch 1 state after login: {"cookies": ["session"], "localStorage": "logged-in-as-probe"}
+profile dir after close: 80 files, 1.8 MB
+launch 2 (headless, same dir): {"cookies": ["session"], "localStorage": "logged-in-as-probe"} (0.35s)
+launch 3 (headed, same dir): {"cookies": ["session"], "localStorage": "logged-in-as-probe"} (6.80s)
+control (different empty dir): {"cookies": [], "localStorage": null}
+VERDICT: PASS — a Playwright persistent context kept its cookie and localStorage across a headless relaunch and a headed relaunch of the same user-data-dir; an empty control dir had neither

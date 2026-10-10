@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Sample per-user LaunchAgent for one scheduled routine (weekdays 08:00). If the Mac is asleep at
+     08:00, launchd runs it once on wake (missed intervals are coalesced into one run). Validated with
+     plutil -lint only, never loaded here. -->
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>org.opencode-soma.routine.daily-digest</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>/Users/USERNAME/.local/bin/opencode-soma</string>
+		<string>routine</string>
+		<string>run</string>
+		<string>daily-digest</string>
+	</array>
+	<key>StartCalendarInterval</key>
+	<array>
+		<dict><key>Weekday</key><integer>1</integer><key>Hour</key><integer>8</integer><key>Minute</key><integer>0</integer></dict>
+		<dict><key>Weekday</key><integer>2</integer><key>Hour</key><integer>8</integer><key>Minute</key><integer>0</integer></dict>
+		<dict><key>Weekday</key><integer>3</integer><key>Hour</key><integer>8</integer><key>Minute</key><integer>0</integer></dict>
+		<dict><key>Weekday</key><integer>4</integer><key>Hour</key><integer>8</integer><key>Minute</key><integer>0</integer></dict>
+		<dict><key>Weekday</key><integer>5</integer><key>Hour</key><integer>8</integer><key>Minute</key><integer>0</integer></dict>
+	</array>
+	<key>StandardOutPath</key>
+	<string>/Users/USERNAME/Library/Logs/opencode-soma/routine-daily-digest.log</string>
+	<key>StandardErrorPath</key>
+	<string>/Users/USERNAME/Library/Logs/opencode-soma/routine-daily-digest.log</string>
+</dict>
+</plist>
