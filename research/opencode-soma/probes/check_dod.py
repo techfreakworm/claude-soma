@@ -41,7 +41,7 @@ C4  evidence/memory/bench-results.json (valid JSON, committed) has >=1 Neo4j row
     elapsed wall p50 p90 p95 p99; nested objects allowed, lists not). evidence/memory/
     neo4j-container.json (committed) has a positive number whose key path has cold+start (or
     coldstart) and one whose key path has a token containing rss (rss_mb, java_vmrss_mb).
-    Fallback when those are absent: MEMORY-DESIGN.md has a line starting `Neo4j rejected`
+    Fallback only when neither file exists: MEMORY-DESIGN.md has a line starting `Neo4j rejected`
     (markdown emphasis/bullets allowed) whose paragraph carries >=1 number with a unit (ms s sec
     min MB MiB GB GiB KB KiB % x), and every such number appears in a committed file under
     evidence/memory/.
@@ -746,6 +746,9 @@ def c4() -> Result:
     if not primary:
         return finish("C4", [], f"{rows} neo4j bench row(s) with timings; container cold-start "
                                 "and RSS present")
+    if any(p.exists() or rel(p) in repo().head for p in (bench, cont)):
+        return finish("C4", primary + ["the Neo4j-rejected fallback applies only when neither "
+                                       "Neo4j evidence file exists"], "")
     md = RS / "MEMORY-DESIGN.md"
     lines = read(md).splitlines() if md.is_file() else []
     start = next((k for k, ln in enumerate(lines)
