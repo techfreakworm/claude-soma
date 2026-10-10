@@ -1,4 +1,4 @@
-date_utc: 2026-10-10T07:26:49Z
+date_utc: 2026-10-10T07:37:27Z
 command: python3.12 opencode_releases.py --base v1.18.8
 source: https://api.github.com/repos/anomalyco/opencode/releases (877 releases fetched)
 v1.18.8 published 2026-07-28T06:07:54Z
@@ -30,4 +30,10 @@ v1.18.8 published 2026-07-28T06:07:54Z
   v1.18.34     2026-09-30  prerelease=False
   v1.18.35     2026-10-06  prerelease=False
 releases after v1.18.8: 27 over 10.0 weeks; by line: 1.18.x: 27
-VERDICT: PASS — 27 releases followed v1.18.8 within 10.0 weeks (newest v1.18.35)
+$ git ls-remote --tags https://github.com/anomalyco/opencode
+  1134 tags; v2.x tags: 27 (v2.0.0 .. v2.0.26)
+  v2.x tags with a GitHub release: 0
+$ npm view opencode-ai dist-tags --json
+  {"beta": "0.0.0-beta-202608110357", "brendan-cli-codesign": "0.0.0-brendan-cli-codesign-202603250532", "ci": "0.0.0-ci-202601291809", "dev": "0.0.0-dev-202610092229", "latest": "1.18.35", "latest-0": "1.0.142", "latest-1": "1.1.4", "next": "0.0.0-next-202606270058", "snapshot-cleaner-view-subagents": "0.0.0-snapshot-cleaner-view-subagents-202512310424", "snapshot-current-agent-animation-color": "0.0.0-snapshot-current-agent-animation-color-202601160010", "snapshot-e2e-tests": "0.0.0-snapshot-e2e-tests-202601191506", "snapshot-file-tree": "0.0.0-snapshot-file-tree-202601251233", "snapshot-kmdr-debug": "0.0.0-snapshot-kmdr-debug-202601122237", "snapshot-lander-tui": "0.0.0-snapshot-lander-tui-202601070150", "snapshot-layout": "0.0.0-snapshot-layout-202601191714", "snapshot-learn-agent": "0.0.0-snapshot-learn-agent-202601011707", "snapshot-memory": "0.0.0-snapshot-memory-202603261432", "snapshot-minimal-interrupt": "0.0.0-snapshot-minimal-interrupt-202601051453", "snapshot-node-logic": "0.0.0-snapshot-node-logic-202602200818", "snapshot-node-pty": "0.0.0-snapshot-node-pty-202602201113", "snapshot-opentui-upgrade": "0.0.0-snapshot-opentui-upgrade-202601260132", "snapshot-plz-help": "0.0.0-snapshot-plz-help-202512122319", "snapshot-pnpm": "0.0.0-snapshot-pnpm-202511302105", "snapshot-proxy": "0.0.0-snapshot-proxy-202512080622", "snapshot-selection": "0.0.0-snapshot-selection-202602061133", "snapshot-session-perf": "0.0.0-snapshot-session-perf-202601082348", "snapshot-settings": "0.0.0-snapshot-settings-202601070200", "snapshot-sort-diffs": "0.0.0-snapshot-sort-diffs-202601052145", "snapshot-spawn-server-logs": "0.0.0-snapshot-spawn-server-logs-202603052132", "snapshot-start-screen-tips": "0.0.0-snapshot-start-screen-tips-202512231927", "snapshot-symlink-fix": "0.0.0-snapshot-symlink-fix-202601130539", "snapshot-terminal-title-animation": "0.0.0-snapshot-terminal-title-animation-202512231827", "snapshot-thinking-toggle": "0.0.0-snapshot-thinking-toggle-202512300328", "snapshot-thinking-toggle-animated": "0.0.0-snapshot-thinking-toggle-animated-202512291322", "snapshot-timeline": "0.0.0-snapshot-timeline-202602192036", "snapshot-tui-plugins": "0.0.0-snapshot-tui-plugins-202603271347", "snapshot-virtualized-diffs": "0.0.0-snapshot-virtualized-diffs-202602121142", "snapshot-windows-desktop": "0.0.0-snapshot-windows-desktop-202602121945", "tui-v2": "0.0.0-tui-v2-202606261840"}
+  dist-tags pointing at a 2.x version: none
+VERDICT: PASS — 27 releases followed v1.18.8 within 10.0 weeks (newest v1.18.35); 27 v2.x git tags exist without GitHub releases (0) or a 2.x npm dist-tag

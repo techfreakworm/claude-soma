@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """How fast does opencode move? Lists GitHub releases of anomalyco/opencode published after the
-probed version (v1.18.8) and groups them by version line. Unauthenticated GitHub API.
+probed version (v1.18.8) and groups them by version line (unauthenticated GitHub API), lists the
+repo's git tags (`git ls-remote --tags`) to find any v2.x line, and records the npm dist-tags of
+`opencode-ai` (`npm view opencode-ai dist-tags`).
 
     python3.12 opencode_releases.py [--base v1.18.8]
 
@@ -10,6 +12,8 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
+import subprocess
 import sys
 import time
 import urllib.request
@@ -53,8 +57,27 @@ def main() -> int:
              - time.mktime(time.strptime(base["published_at"][:10], "%Y-%m-%d"))) / (7 * 86400) if after else 0
     lines.append(f"releases after {a.base}: {len(after)} over {weeks:.1f} weeks; by line: "
                  + ", ".join(f"{k}.x: {len(v)}" for k, v in sorted(lines_by.items())))
+    cmd = ["git", "ls-remote", "--tags", "https://github.com/anomalyco/opencode"]
+    out = subprocess.run(cmd, capture_output=True, text=True, timeout=120).stdout
+    tags = sorted({ln.split("refs/tags/")[1].removesuffix("^{}") for ln in out.splitlines() if "refs/tags/" in ln})
+    v2 = sorted((t for t in tags if re.match(r"^v2\.", t)), key=lambda t: [int(x) for x in re.findall(r"\d+", t)])
+    lines.append(f"$ {' '.join(cmd)}")
+    lines.append(f"  {len(tags)} tags; v2.x tags: {len(v2)} ({v2[0] if v2 else '-'} .. {v2[-1] if v2 else '-'})")
+    v2_releases = [r["tag_name"] for r in rels if r["tag_name"].startswith("v2.")]
+    lines.append(f"  v2.x tags with a GitHub release: {len(v2_releases)}")
+    cmd = ["npm", "view", "opencode-ai", "dist-tags", "--json"]
+    try:
+        npm = subprocess.run(cmd, capture_output=True, text=True, timeout=120).stdout
+        dist = json.loads(npm)
+    except Exception as e:  # noqa: BLE001
+        dist = {"error": str(e)[:120]}
+    lines.append(f"$ {' '.join(cmd)}")
+    lines.append(f"  {json.dumps(dist, sort_keys=True)}")
+    npm2 = [k for k, v in dist.items() if isinstance(v, str) and v.startswith("2.")]
+    lines.append(f"  dist-tags pointing at a 2.x version: {npm2 or 'none'}")
     lines.append(f"VERDICT: PASS — {len(after)} releases followed {a.base} within {weeks:.1f} weeks "
-                 f"(newest {max(after, key=lambda r: r['published_at'])['tag_name'] if after else 'none'})")
+                 f"(newest {max(after, key=lambda r: r['published_at'])['tag_name'] if after else 'none'}); "
+                 f"{len(v2)} v2.x git tags exist without GitHub releases ({len(v2_releases)}) or a 2.x npm dist-tag")
     LOG.parent.mkdir(parents=True, exist_ok=True)
     LOG.write_text("\n".join(lines) + "\n")
     print("\n".join(lines[-3:]))

@@ -15,6 +15,18 @@ and the cheapest test that would show it early. "desk" marks a claim no probe ex
      superseded true facts on hearsay and hypotheticals
      (`evidence/memory/curation-lfm2.5-thinking-think-true.log`, `curation-rescore.log`).
 
+   **Rule.** Auto-curation is OFF for a model below the measured bar. At or above it, auto-curation
+   is ON only with the deterministic scrub and non-destructive writes. The bar
+   (`opencode-soma doctor --curation`, MEMORY-DESIGN.md 6.5), measured on the 100-case replay with
+   the scrub off:
+   - 0 secrets stored;
+   - 0 forbidden facts stored;
+   - at most 2 of 25 false supersedes;
+   - remember-or-skip accuracy of at least 0.90, with every secret flagged;
+   - extraction recall of at least 0.85.
+
+   qwen3:32b passes it; lfm2.5-thinking fails five of the six criteria.
+
    Impact: wrong facts and leaked secrets enter memory, and wrong or missing tool calls go unnoticed
    unless something checks them.
    Cheapest early test: a 30-scenario scripted Telegram replay on qwen3:32b against the fake Bot API,
@@ -46,12 +58,18 @@ and the cheapest test that would show it early. "desk" marks a claim no probe ex
    curator model is unusable.
    Cheapest early test: measure ack and reply latency of a Telegram message while one lead is
    mid-turn on the same model, then with two leads.
-4. **opencode churn.** 27 releases followed the probed 1.18.8 in 10 weeks, up to 1.18.35
-   (`evidence/platform/opencode-releases.log`). 1.18.x also carries a parallel v2 API with its own
-   event bus and message store, and background subagents sit behind an experimental flag
-   (`evidence/opencode/SUMMARY.md`).
+4. **opencode churn.** Three separate facts:
+   - **Patch pace.** 27 releases followed the probed 1.18.8 in 10 weeks, up to 1.18.35
+     (`evidence/platform/opencode-releases.log`).
+   - **A 2.x major appears to be in progress.** There are 27 v2.0.x git tags (v2.0.0 to v2.0.26),
+     unpublished as GitHub releases or on npm: `latest` is 1.18.35, with no 2.x dist-tag (same
+     log). Expect an API break.
+   - **Two parallel APIs already.** 1.18.x ships a v2 HTTP API (`/api/*`) with its own event bus
+     and message store, which must not be mixed with v1 on one session. Background subagents sit
+     behind an experimental flag (`evidence/opencode/SUMMARY.md`).
 
    Impact: hooks, endpoints or event names the product relies on change under it.
+   Mitigation: pin 1.18.8 and use the probe suite as a contract test before any upgrade.
    Cheapest early test: re-run the probe suite (`probes/opencode/run-all.sh`) against 1.18.35 and
    diff the verdicts.
 5. **Local server exposure.**
@@ -126,4 +144,3 @@ and the cheapest test that would show it early. "desk" marks a claim no probe ex
   - "CORS for *.opencode.ai" (only the opt-in `--cors` flag is evidenced);
   - "approvals never time out" (the evidence shows a pending approval held with no server-side
     timeout seen in 40 s);
-  - "a separate V2 line" (no v2 release line exists; it is a parallel v2 API inside 1.18.x).

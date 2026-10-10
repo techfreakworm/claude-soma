@@ -1,0 +1,7 @@
+date_utc: 2026-10-10T07:36:54Z
+command: python3.12 ollama_unload.py --model lfm2.5-thinking --reason "memory-engineer's Track B lfm2.5 run finished at 07:33:13Z; free the single model slot for probe-engineer's P4 on qwen3:32b (approved by the lead)"
+resident before: ['lfm2.5-thinking:latest']
+server.log: runner idle since its last prompt = True; last slot line: 'srv update_slots: all slots are idle'
+unload response after 0.00s: done=True done_reason=unload
+resident after: []
+VERDICT: PASS — lfm2.5-thinking:latest unloaded (memory-engineer's Track B lfm2.5 run finished at 07:33:13Z; free the single model slot for probe-engineer's P4 on qwen3:32b (approved by the lead))
