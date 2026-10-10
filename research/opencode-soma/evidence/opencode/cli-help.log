@@ -1,5 +1,5 @@
 # cli-help.log
-date-utc: 2026-10-10T06:24:14Z
+date-utc: 2026-10-10T07:30:36Z
 probe-script: research/opencode-soma/probes/opencode/P0-setup/cli-help.sh
 opencode-version: 1.18.8
 model: none
@@ -124,7 +124,7 @@ Options:
       --no-replay     disable mini session history replay on resume and after resize       [boolean]
       --replay-limit  cap visible mini replay to the newest N messages                      [number]
 
-[exit=1 wall=1.2s]
+[exit=1 wall=1.0s]
 
 $ /Users/techfreakworm/.opencode/bin/opencode acp --help
 opencode acp
@@ -166,7 +166,7 @@ Options:
       --print-logs  print logs to stderr                                                   [boolean]
       --log-level   log level                   [string] [choices: "DEBUG", "INFO", "WARN", "ERROR"]
       --pure        run without external plugins                                           [boolean]
-[exit=0 wall=0.8s]
+[exit=0 wall=1.0s]
 
 $ /Users/techfreakworm/.opencode/bin/opencode attach --help
 opencode attach <url>
@@ -192,7 +192,7 @@ Options:
       --mini          start the minimal interactive interface             [boolean] [default: false]
       --no-replay     disable mini session history replay on resume and after resize       [boolean]
       --replay-limit  cap visible mini replay to the newest N messages                      [number]
-[exit=0 wall=0.8s]
+[exit=0 wall=0.9s]
 
 $ /Users/techfreakworm/.opencode/bin/opencode run --help
 opencode run [message..]
@@ -232,7 +232,7 @@ Options:
   -i, --interactive  run in direct interactive split-footer mode          [boolean] [default: false]
       --auto         auto-approve permissions that are not explicitly denied (dangerous!)
                                                                           [boolean] [default: false]
-[exit=0 wall=1.0s]
+[exit=0 wall=0.7s]
 
 $ /Users/techfreakworm/.opencode/bin/opencode debug --help
 opencode debug
@@ -260,7 +260,7 @@ Options:
       --print-logs  print logs to stderr                                                   [boolean]
       --log-level   log level                   [string] [choices: "DEBUG", "INFO", "WARN", "ERROR"]
       --pure        run without external plugins                                           [boolean]
-[exit=0 wall=1.1s]
+[exit=0 wall=0.8s]
 
 $ /Users/techfreakworm/.opencode/bin/opencode providers --help
 opencode providers
@@ -278,7 +278,7 @@ Options:
       --print-logs  print logs to stderr                                                   [boolean]
       --log-level   log level                   [string] [choices: "DEBUG", "INFO", "WARN", "ERROR"]
       --pure        run without external plugins                                           [boolean]
-[exit=0 wall=1.5s]
+[exit=0 wall=0.9s]
 
 $ /Users/techfreakworm/.opencode/bin/opencode agent --help
 opencode agent
@@ -295,7 +295,7 @@ Options:
       --print-logs  print logs to stderr                                                   [boolean]
       --log-level   log level                   [string] [choices: "DEBUG", "INFO", "WARN", "ERROR"]
       --pure        run without external plugins                                           [boolean]
-[exit=0 wall=1.0s]
+[exit=0 wall=0.9s]
 
 $ /Users/techfreakworm/.opencode/bin/opencode upgrade --help
 opencode upgrade [target]
@@ -313,7 +313,7 @@ Options:
       --pure        run without external plugins                                           [boolean]
   -m, --method      installation method to use
                           [string] [choices: "curl", "npm", "pnpm", "bun", "brew", "choco", "scoop"]
-[exit=0 wall=1.0s]
+[exit=0 wall=0.9s]
 
 $ /Users/techfreakworm/.opencode/bin/opencode uninstall --help
 opencode uninstall
@@ -350,7 +350,7 @@ Options:
       --mdns-domain  custom domain name for mDNS service (default: opencode.local)
                                                                 [string] [default: "opencode.local"]
       --cors         additional domains to allow for CORS                      [array] [default: []]
-[exit=0 wall=0.9s]
+[exit=0 wall=0.8s]
 
 $ /Users/techfreakworm/.opencode/bin/opencode web --help
 opencode web
@@ -370,7 +370,7 @@ Options:
       --mdns-domain  custom domain name for mDNS service (default: opencode.local)
                                                                 [string] [default: "opencode.local"]
       --cors         additional domains to allow for CORS                      [array] [default: []]
-[exit=0 wall=1.6s]
+[exit=0 wall=1.0s]
 
 $ /Users/techfreakworm/.opencode/bin/opencode models --help
 opencode models [provider]
@@ -406,7 +406,7 @@ Options:
       --models      show model statistics (default: hidden). Pass a number to show top N, otherwise
                     shows all
       --project     filter by project (default: all projects, empty string: current project)[string]
-[exit=0 wall=0.8s]
+[exit=0 wall=1.0s]
 
 $ /Users/techfreakworm/.opencode/bin/opencode export --help
 opencode export [sessionID]
@@ -423,7 +423,7 @@ Options:
       --log-level   log level                   [string] [choices: "DEBUG", "INFO", "WARN", "ERROR"]
       --pure        run without external plugins                                           [boolean]
       --sanitize    redact sensitive transcript and file data                              [boolean]
-[exit=0 wall=0.7s]
+[exit=0 wall=1.0s]
 
 $ /Users/techfreakworm/.opencode/bin/opencode import --help
 opencode import <file>
@@ -439,7 +439,7 @@ Options:
       --print-logs  print logs to stderr                                                   [boolean]
       --log-level   log level                   [string] [choices: "DEBUG", "INFO", "WARN", "ERROR"]
       --pure        run without external plugins                                           [boolean]
-[exit=0 wall=0.7s]
+[exit=0 wall=1.0s]
 
 $ /Users/techfreakworm/.opencode/bin/opencode github --help
 opencode github
@@ -456,7 +456,7 @@ Options:
       --print-logs  print logs to stderr                                                   [boolean]
       --log-level   log level                   [string] [choices: "DEBUG", "INFO", "WARN", "ERROR"]
       --pure        run without external plugins                                           [boolean]
-[exit=0 wall=0.7s]
+[exit=0 wall=1.0s]
 
 $ /Users/techfreakworm/.opencode/bin/opencode pr --help
 opencode pr <number>
@@ -472,7 +472,7 @@ Options:
       --print-logs  print logs to stderr                                                   [boolean]
       --log-level   log level                   [string] [choices: "DEBUG", "INFO", "WARN", "ERROR"]
       --pure        run without external plugins                                           [boolean]
-[exit=0 wall=0.7s]
+[exit=0 wall=1.0s]
 
 $ /Users/techfreakworm/.opencode/bin/opencode session --help
 opencode session
@@ -489,7 +489,7 @@ Options:
       --print-logs  print logs to stderr                                                   [boolean]
       --log-level   log level                   [string] [choices: "DEBUG", "INFO", "WARN", "ERROR"]
       --pure        run without external plugins                                           [boolean]
-[exit=0 wall=0.7s]
+[exit=0 wall=0.9s]
 
 $ /Users/techfreakworm/.opencode/bin/opencode plugin --help
 opencode plugin <module>
@@ -507,7 +507,7 @@ Options:
       --pure        run without external plugins                                           [boolean]
   -g, --global      install in global config                              [boolean] [default: false]
   -f, --force       replace existing plugin version                       [boolean] [default: false]
-[exit=0 wall=0.8s]
+[exit=0 wall=0.7s]
 
 $ /Users/techfreakworm/.opencode/bin/opencode db --help
 opencode db
@@ -528,7 +528,7 @@ Options:
       --log-level   log level                   [string] [choices: "DEBUG", "INFO", "WARN", "ERROR"]
       --pure        run without external plugins                                           [boolean]
       --format      Output format                 [string] [choices: "json", "tsv"] [default: "tsv"]
-[exit=0 wall=2.0s]
+[exit=0 wall=0.8s]
 
 $ /Users/techfreakworm/.opencode/bin/opencode mcp add --help
 opencode mcp add [name]
@@ -579,7 +579,7 @@ Options:
       --print-logs  print logs to stderr                                                   [boolean]
       --log-level   log level                   [string] [choices: "DEBUG", "INFO", "WARN", "ERROR"]
       --pure        run without external plugins                                           [boolean]
-[exit=0 wall=1.1s]
+[exit=0 wall=1.0s]
 
 $ /Users/techfreakworm/.opencode/bin/opencode mcp logout --help
 opencode mcp logout [name]
@@ -595,7 +595,7 @@ Options:
       --print-logs  print logs to stderr                                                   [boolean]
       --log-level   log level                   [string] [choices: "DEBUG", "INFO", "WARN", "ERROR"]
       --pure        run without external plugins                                           [boolean]
-[exit=0 wall=1.4s]
+[exit=0 wall=1.1s]
 
 $ /Users/techfreakworm/.opencode/bin/opencode mcp debug --help
 opencode mcp debug <name>
@@ -611,7 +611,7 @@ Options:
       --print-logs  print logs to stderr                                                   [boolean]
       --log-level   log level                   [string] [choices: "DEBUG", "INFO", "WARN", "ERROR"]
       --pure        run without external plugins                                           [boolean]
-[exit=0 wall=1.0s]
+[exit=0 wall=1.1s]
 
 $ /Users/techfreakworm/.opencode/bin/opencode debug config --help
 opencode debug config
@@ -624,7 +624,7 @@ Options:
       --print-logs  print logs to stderr                                                   [boolean]
       --log-level   log level                   [string] [choices: "DEBUG", "INFO", "WARN", "ERROR"]
       --pure        run without external plugins                                           [boolean]
-[exit=0 wall=1.3s]
+[exit=0 wall=1.0s]
 
 $ /Users/techfreakworm/.opencode/bin/opencode debug lsp --help
 opencode debug lsp
@@ -642,7 +642,7 @@ Options:
       --print-logs  print logs to stderr                                                   [boolean]
       --log-level   log level                   [string] [choices: "DEBUG", "INFO", "WARN", "ERROR"]
       --pure        run without external plugins                                           [boolean]
-[exit=0 wall=1.5s]
+[exit=0 wall=0.9s]
 
 $ /Users/techfreakworm/.opencode/bin/opencode debug rg --help
 opencode debug rg
@@ -677,7 +677,7 @@ Options:
       --print-logs  print logs to stderr                                                   [boolean]
       --log-level   log level                   [string] [choices: "DEBUG", "INFO", "WARN", "ERROR"]
       --pure        run without external plugins                                           [boolean]
-[exit=0 wall=1.0s]
+[exit=0 wall=0.9s]
 
 $ /Users/techfreakworm/.opencode/bin/opencode debug scrap --help
 opencode debug scrap
@@ -690,7 +690,7 @@ Options:
       --print-logs  print logs to stderr                                                   [boolean]
       --log-level   log level                   [string] [choices: "DEBUG", "INFO", "WARN", "ERROR"]
       --pure        run without external plugins                                           [boolean]
-[exit=0 wall=1.1s]
+[exit=0 wall=1.0s]
 
 $ /Users/techfreakworm/.opencode/bin/opencode debug skill --help
 opencode debug skill
@@ -703,7 +703,7 @@ Options:
       --print-logs  print logs to stderr                                                   [boolean]
       --log-level   log level                   [string] [choices: "DEBUG", "INFO", "WARN", "ERROR"]
       --pure        run without external plugins                                           [boolean]
-[exit=0 wall=1.2s]
+[exit=0 wall=0.9s]
 
 $ /Users/techfreakworm/.opencode/bin/opencode debug snapshot --help
 opencode debug snapshot
@@ -721,7 +721,7 @@ Options:
       --print-logs  print logs to stderr                                                   [boolean]
       --log-level   log level                   [string] [choices: "DEBUG", "INFO", "WARN", "ERROR"]
       --pure        run without external plugins                                           [boolean]
-[exit=0 wall=0.9s]
+[exit=0 wall=1.0s]
 
 $ /Users/techfreakworm/.opencode/bin/opencode debug startup --help
 opencode debug startup
@@ -734,7 +734,7 @@ Options:
       --print-logs  print logs to stderr                                                   [boolean]
       --log-level   log level                   [string] [choices: "DEBUG", "INFO", "WARN", "ERROR"]
       --pure        run without external plugins                                           [boolean]
-[exit=0 wall=0.9s]
+[exit=0 wall=1.0s]
 
 $ /Users/techfreakworm/.opencode/bin/opencode debug agent --help
 opencode debug agent <name>
@@ -791,7 +791,7 @@ Options:
       --print-logs  print logs to stderr                                                   [boolean]
       --log-level   log level                   [string] [choices: "DEBUG", "INFO", "WARN", "ERROR"]
       --pure        run without external plugins                                           [boolean]
-[exit=0 wall=0.9s]
+[exit=0 wall=0.8s]
 
 $ /Users/techfreakworm/.opencode/bin/opencode debug wait --help
 opencode debug wait
@@ -804,7 +804,7 @@ Options:
       --print-logs  print logs to stderr                                                   [boolean]
       --log-level   log level                   [string] [choices: "DEBUG", "INFO", "WARN", "ERROR"]
       --pure        run without external plugins                                           [boolean]
-[exit=0 wall=0.8s]
+[exit=0 wall=1.0s]
 
 $ /Users/techfreakworm/.opencode/bin/opencode providers list --help
 opencode providers list
@@ -817,7 +817,7 @@ Options:
       --print-logs  print logs to stderr                                                   [boolean]
       --log-level   log level                   [string] [choices: "DEBUG", "INFO", "WARN", "ERROR"]
       --pure        run without external plugins                                           [boolean]
-[exit=0 wall=0.9s]
+[exit=0 wall=1.0s]
 
 $ /Users/techfreakworm/.opencode/bin/opencode providers login --help
 opencode providers login [url]
@@ -851,7 +851,7 @@ Options:
       --print-logs  print logs to stderr                                                   [boolean]
       --log-level   log level                   [string] [choices: "DEBUG", "INFO", "WARN", "ERROR"]
       --pure        run without external plugins                                           [boolean]
-[exit=0 wall=1.0s]
+[exit=0 wall=1.2s]
 
 $ /Users/techfreakworm/.opencode/bin/opencode agent create --help
 opencode agent create
@@ -871,7 +871,7 @@ Options:
                               Available: "bash, read, edit, glob, grep, webfetch, task, todowrite,
                               websearch, lsp, skill"                                        [string]
   -m, --model                 model to use in the format of provider/model                  [string]
-[exit=0 wall=0.8s]
+[exit=0 wall=1.1s]
 
 $ /Users/techfreakworm/.opencode/bin/opencode agent list --help
 opencode agent list
@@ -884,7 +884,7 @@ Options:
       --print-logs  print logs to stderr                                                   [boolean]
       --log-level   log level                   [string] [choices: "DEBUG", "INFO", "WARN", "ERROR"]
       --pure        run without external plugins                                           [boolean]
-[exit=0 wall=0.8s]
+[exit=0 wall=1.0s]
 
 $ /Users/techfreakworm/.opencode/bin/opencode session list --help
 opencode session list
@@ -899,7 +899,7 @@ Options:
       --pure        run without external plugins                                           [boolean]
   -n, --max-count   limit to N most recent sessions                                         [number]
       --format      output format             [string] [choices: "table", "json"] [default: "table"]
-[exit=0 wall=0.9s]
+[exit=0 wall=1.2s]
 
 $ /Users/techfreakworm/.opencode/bin/opencode session delete --help
 opencode session delete <sessionID>
@@ -915,7 +915,7 @@ Options:
       --print-logs  print logs to stderr                                                   [boolean]
       --log-level   log level                   [string] [choices: "DEBUG", "INFO", "WARN", "ERROR"]
       --pure        run without external plugins                                           [boolean]
-[exit=0 wall=1.1s]
+[exit=0 wall=1.0s]
 
 $ /Users/techfreakworm/.opencode/bin/opencode db path --help
 opencode db path
@@ -928,7 +928,7 @@ Options:
       --print-logs  print logs to stderr                                                   [boolean]
       --log-level   log level                   [string] [choices: "DEBUG", "INFO", "WARN", "ERROR"]
       --pure        run without external plugins                                           [boolean]
-[exit=0 wall=0.9s]
+[exit=0 wall=1.0s]
 
 $ /Users/techfreakworm/.opencode/bin/opencode db query --help
 opencode db
@@ -949,7 +949,7 @@ Options:
       --log-level   log level                   [string] [choices: "DEBUG", "INFO", "WARN", "ERROR"]
       --pure        run without external plugins                                           [boolean]
       --format      Output format                 [string] [choices: "json", "tsv"] [default: "tsv"]
-[exit=0 wall=1.1s]
+[exit=0 wall=1.0s]
 
 $ /Users/techfreakworm/.opencode/bin/opencode db migrate --help
 opencode db
@@ -970,7 +970,7 @@ Options:
       --log-level   log level                   [string] [choices: "DEBUG", "INFO", "WARN", "ERROR"]
       --pure        run without external plugins                                           [boolean]
       --format      Output format                 [string] [choices: "json", "tsv"] [default: "tsv"]
-[exit=0 wall=0.8s]
+[exit=0 wall=0.9s]
 
 $ /Users/techfreakworm/.opencode/bin/opencode github install --help
 opencode github install
@@ -983,7 +983,7 @@ Options:
       --print-logs  print logs to stderr                                                   [boolean]
       --log-level   log level                   [string] [choices: "DEBUG", "INFO", "WARN", "ERROR"]
       --pure        run without external plugins                                           [boolean]
-[exit=0 wall=0.7s]
+[exit=0 wall=0.9s]
 
 $ /Users/techfreakworm/.opencode/bin/opencode github run --help
 opencode github run
@@ -998,6 +998,6 @@ Options:
       --pure        run without external plugins                                           [boolean]
       --event       GitHub mock event to run the agent for                                  [string]
       --token       GitHub personal access token (github_pat_********)                      [string]
-[exit=0 wall=0.7s]
+[exit=0 wall=0.8s]
 
 VERDICT: PASS — help for the top level and every subcommand captured from the 1.18.8 binary inside the sandbox.

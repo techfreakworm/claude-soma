@@ -3,7 +3,7 @@
 # and record the context length ollama really allocates vs the size of opencode's prompt.
 set -u
 export OCSOMA_PROBE_SCRIPT="research/opencode-soma/probes/opencode/P0-setup/sandbox-verify.sh"
-PORT=47101
+PORT=$(( ${OCSOMA_PORT_BASE:-47100} + 1 ))
 PROBE_ID=P0-setup; SANDBOX_FRESH=1; OC_BASEURL="http://127.0.0.1:$PORT/v1"
 source "$(dirname "$0")/../sandbox.sh"
 cd "$PROJ" || exit 1

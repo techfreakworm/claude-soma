@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # P1.2 kill -9 an `opencode run` mid-generation, then continue the same session id.
 export OCSOMA_PROBE_SCRIPT="research/opencode-soma/probes/opencode/P1-headless/crash-run.sh"
-P1_PART=crashrun; P1_PROXY=47116; P1_SERVE=47112
+P1_PART=crashrun; P1_PROXY=$(( ${OCSOMA_PORT_BASE:-47100} + 16 )); P1_SERVE=$(( ${OCSOMA_PORT_BASE:-47100} + 12 ))
 source "$(dirname "$0")/common.sh"
 ev_open P1-headless/crash-run.log "kill -9 an opencode run mid-generation, then continue the same session id" "$MODEL (thinking off)"
 "$OC" run -m "$MODEL" --format json "Remember this secret token: KIWI-4417. Reply only with the word OK." > "$SANDBOX/plant.json" 2>&1

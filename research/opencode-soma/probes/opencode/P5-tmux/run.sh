@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # P5: claude-soma's tmux send-keys hack against the opencode TUI.
-#  TUI detached in `tmux -L ocsoma-pe-tui` (200x50); for each message: send-keys -l <text>, Enter,
+#  TUI detached in `tmux -L ${OCSOMA_TMUX_PREFIX:-ocsoma-pe-}tui` (200x50); for each message: send-keys -l <text>, Enter,
 #  poll capture-pane -p until the expected token shows up and a new turn-footer line appears,
 #  then extract the reply from the pane. The TUI is started with --port so the probe can ALSO
 #  read what the server actually received (mangling check) and, afterwards, send the same
@@ -8,7 +8,7 @@
 set -u
 export OCSOMA_PROBE_SCRIPT="research/opencode-soma/probes/opencode/P5-tmux/run.sh"
 HERE="$(cd "$(dirname "$0")" && pwd)"
-PROXY_PORT=47155; TUI_PORT=47151
+PROXY_PORT=$(( ${OCSOMA_PORT_BASE:-47100} + 55 )); TUI_PORT=$(( ${OCSOMA_PORT_BASE:-47100} + 51 ))
 PROBE_ID=P5-tmux; SANDBOX_FRESH=1; OC_BASEURL="http://127.0.0.1:$PROXY_PORT/v1"
 source "$HERE/../sandbox.sh"
 cd "$PROJ" || exit 1
@@ -16,7 +16,7 @@ MODEL=ollama/qwen3:32b
 EVD="$OCSOMA_EVID/P5-tmux"; mkdir -p "$EVD"
 : > "$EVD/proxy.jsonl"
 proxy_start "$PROXY_PORT" "$EVD/proxy.jsonl" || exit 1
-TM="tmux -L ocsoma-pe-tui"
+TM="tmux -L ${OCSOMA_TMUX_PREFIX:-ocsoma-pe-}tui"
 BASE="http://127.0.0.1:$TUI_PORT"
 
 $TM kill-server 2>/dev/null
@@ -26,7 +26,7 @@ sleep 3
 $TM capture-pane -p -t tui > "$EVD/pane-start.txt"
 
 ev_open P5-tmux/tmux.log "tmux send-keys -l + Enter into the opencode TUI, scrape capture-pane -p; success rate and failure modes; HTTP comparison" "$MODEL (thinking off)"
-ev "TUI: tmux -L ocsoma-pe-tui new-session -d -s tui -x 200 -y 50 \"opencode --port $TUI_PORT --hostname 127.0.0.1 -m $MODEL\""
+ev "TUI: tmux -L ${OCSOMA_TMUX_PREFIX:-ocsoma-pe-}tui new-session -d -s tui -x 200 -y 50 \"opencode --port $TUI_PORT --hostname 127.0.0.1 -m $MODEL\""
 ev "## pane right after start"
 ev_run cat "$EVD/pane-start.txt"
 

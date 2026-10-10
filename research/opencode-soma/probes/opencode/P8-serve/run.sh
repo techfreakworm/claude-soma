@@ -6,14 +6,14 @@
 #  C. `opencode web` on :47183 (127.0.0.1) with an `open` PATH shim so no real browser starts.
 set -u
 export OCSOMA_PROBE_SCRIPT="research/opencode-soma/probes/opencode/P8-serve/run.sh"
-PROXY_PORT=47185
+PROXY_PORT=$(( ${OCSOMA_PORT_BASE:-47100} + 85 ))
 PROBE_ID=P8-serve; SANDBOX_FRESH=1; OC_BASEURL="http://127.0.0.1:$PROXY_PORT/v1"
 source "$(dirname "$0")/../sandbox.sh"
 cd "$PROJ" || exit 1
 EVD="$OCSOMA_EVID/P8-serve"; mkdir -p "$EVD"
 : > "$EVD/proxy.jsonl"
 proxy_start "$PROXY_PORT" "$EVD/proxy.jsonl" || exit 1
-TM="tmux -L ocsoma-pe-p8"
+TM="tmux -L ${OCSOMA_TMUX_PREFIX:-ocsoma-pe-}p8"
 A=http://127.0.0.1:47181
 MODEL='{"providerID":"ollama","modelID":"qwen3:32b"}'
 
@@ -76,7 +76,7 @@ ev_run sh -c "curl -s '$A/api/session/$SID/message' | head -c 1500"
 ev "## A9. lsof of the running server: every open file must be inside the sandbox (or system libs)"
 ev_run sh -c "lsof -p $SA | awk '{print \$4, \$5, \$9}' | grep ' REG ' | sort -u"
 
-ev "## A10. opencode attach $A --session $SID  in tmux -L ocsoma-pe-p8 (200x50)"
+ev "## A10. opencode attach $A --session $SID  in tmux -L ${OCSOMA_TMUX_PREFIX:-ocsoma-pe-}p8 (200x50)"
 $TM kill-server 2>/dev/null
 $TM new-session -d -s attach -x 200 -y 50 "$OC attach $A --session $SID"
 sleep 6

@@ -6,7 +6,7 @@
 #  4f an independent `opencode run -s` process (second writer, no --attach) while busy (separate
 #     session; bounded; then wedge check + abort recovery)
 export OCSOMA_PROBE_SCRIPT="research/opencode-soma/probes/opencode/P1-headless/busy.sh"
-P1_PART=busy; P1_PROXY=47118; P1_SERVE=47114
+P1_PART=busy; P1_PROXY=$(( ${OCSOMA_PORT_BASE:-47100} + 18 )); P1_SERVE=$(( ${OCSOMA_PORT_BASE:-47100} + 14 ))
 source "$(dirname "$0")/common.sh"
 long_async() { jcurl -o /dev/null -X POST "$BASE/session/$1/prompt_async" -d "{\"model\":$MJSON,\"parts\":[{\"type\":\"text\",\"text\":\"$LONG\"}]}"; }
 ev_open P1-headless/busy.log "second prompt while a session is busy: queue / block / abort / attach / v2 / second process" "$MODEL (thinking off)"

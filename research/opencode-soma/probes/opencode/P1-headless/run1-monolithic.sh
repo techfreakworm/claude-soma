@@ -8,7 +8,7 @@
 set -u
 export OCSOMA_PROBE_SCRIPT="research/opencode-soma/probes/opencode/P1-headless/run1-monolithic.sh (first run; superseded by session.sh crash-run.sh crash-serve.sh busy.sh)"
 HERE="$(cd "$(dirname "$0")" && pwd)"
-PROXY_PORT=47115; SERVE_PORT=47111
+PROXY_PORT=$(( ${OCSOMA_PORT_BASE:-47100} + 15 )); SERVE_PORT=$(( ${OCSOMA_PORT_BASE:-47100} + 11 ))
 PROBE_ID=P1-headless; SANDBOX_FRESH=1; OC_BASEURL="http://127.0.0.1:$PROXY_PORT/v1"
 source "$HERE/../sandbox.sh"
 cd "$PROJ" || exit 1

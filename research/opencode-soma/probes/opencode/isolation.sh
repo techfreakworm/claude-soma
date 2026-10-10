@@ -41,6 +41,19 @@ hashes() {
 
 key() { echo "$1" | sed 's#[/ ]#_#g'; }
 
+# Read opencode's version WITHOUT touching the operator's real HOME: redirect HOME + every XDG dir
+# (and TMPDIR, since opencode also keeps a tmp dir under os.tmpdir()) into a throwaway sandbox.
+sandboxed_version() {
+  local vx="$STATE_DIR/verx"
+  rm -rf "$vx"; mkdir -p "$vx/home" "$vx/config" "$vx/data" "$vx/cache" "$vx/state" "$vx/tmp"
+  env -i PATH="$PATH" \
+    HOME="$vx/home" \
+    XDG_CONFIG_HOME="$vx/config" XDG_DATA_HOME="$vx/data" XDG_CACHE_HOME="$vx/cache" XDG_STATE_HOME="$vx/state" \
+    TMPDIR="$vx/tmp/" OPENCODE_DISABLE_AUTOUPDATE=1 \
+    "$OC_BIN" --version 2>/dev/null </dev/null
+  rm -rf "$vx"
+}
+
 snapshot() {
   mkdir -p "$STATE_DIR"
   rm -f "$STATE_DIR"/*.listing "$STATE_DIR"/*.sha256 "$STATE_DIR"/claude-top.listing
@@ -64,9 +77,13 @@ verify() {
     echo "date-utc: $(date -u '+%Y-%m-%dT%H:%M:%SZ')"
     echo "snapshot-utc: $(cat "$STATE_DIR/snapshot-time")"
     echo "command: bash research/opencode-soma/probes/opencode/isolation.sh verify"
-    echo "opencode-version: $("$OC_BIN" --version 2>/dev/null </dev/null)"
-    echo "note: the version line above is the ONLY opencode invocation made with the real HOME by this script;"
-    echo "      Global init only mkdir -p's existing dirs (no mtime change). All probes ran with sandbox.sh."
+    echo "opencode-version: $(sandboxed_version)"
+    echo "note: the version line above is read from opencode run with a THROWAWAY HOME+XDG under"
+    echo "      \$TMPDIR/ocsoma-pe/isolation/verx (see sandboxed_version); this script makes NO opencode"
+    echo "      call against the operator's real HOME. (For the record: a plain 'opencode --version' only"
+    echo "      prints the version; opencode Global init only mkdir -p's dirs that already exist, so the"
+    echo "      operator's earlier real-HOME --version calls today wrote nothing and changed no mtime -"
+    echo "      corroborated by the UNCHANGED listings below.) All probes ran under sandbox.sh."
     echo
     for d in "${DIRS[@]}"; do
       local k; k="$(key "$d")"

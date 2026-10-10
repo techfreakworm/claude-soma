@@ -10,7 +10,7 @@
 set -u
 export OCSOMA_PROBE_SCRIPT="research/opencode-soma/probes/opencode/P6-permissions/run.sh"
 HERE="$(cd "$(dirname "$0")" && pwd)"
-PROXY_PORT=47165; SERVE_PORT=47161
+PROXY_PORT=$(( ${OCSOMA_PORT_BASE:-47100} + 65 )); SERVE_PORT=$(( ${OCSOMA_PORT_BASE:-47100} + 61 ))
 PROBE_ID=P6-permissions; SANDBOX_FRESH=1; OC_BASEURL="http://127.0.0.1:$PROXY_PORT/v1"
 source "$HERE/../sandbox.sh"
 cd "$PROJ" || exit 1

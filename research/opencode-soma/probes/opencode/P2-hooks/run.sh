@@ -5,7 +5,7 @@
 set -u
 export OCSOMA_PROBE_SCRIPT="research/opencode-soma/probes/opencode/P2-hooks/run.sh"
 HERE="$(cd "$(dirname "$0")" && pwd)"
-PROXY_PORT=47125; SERVE_PORT=47121
+PROXY_PORT=$(( ${OCSOMA_PORT_BASE:-47100} + 25 )); SERVE_PORT=$(( ${OCSOMA_PORT_BASE:-47100} + 21 ))
 PROBE_ID=P2-hooks; SANDBOX_FRESH=1; OC_BASEURL="http://127.0.0.1:$PROXY_PORT/v1"
 source "$HERE/../sandbox.sh"
 MODEL=ollama/qwen3:32b

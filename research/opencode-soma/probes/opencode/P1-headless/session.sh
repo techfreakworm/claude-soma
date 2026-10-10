@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # P1.1 opencode run --format json: session ids stable and reusable via --continue and -s <id>.
 export OCSOMA_PROBE_SCRIPT="research/opencode-soma/probes/opencode/P1-headless/session.sh"
-P1_PART=session; P1_PROXY=47115; P1_SERVE=47111
+P1_PART=session; P1_PROXY=$(( ${OCSOMA_PORT_BASE:-47100} + 15 )); P1_SERVE=$(( ${OCSOMA_PORT_BASE:-47100} + 11 ))
 source "$(dirname "$0")/common.sh"
 ev_open P1-headless/run-session.log "opencode run --format json; session ids stable and reusable via --continue and -s" "$MODEL (thinking off)"
 ev "## plant token KIWI-4417 in session 1"

@@ -1,0 +1,93 @@
+# P8-serve/cors.log
+date-utc: 2026-10-10T07:32:58Z
+probe-script: research/opencode-soma/probes/opencode/P8-serve/cors.sh
+opencode-version: 1.18.8
+model: none (no LLM)
+sandbox: $TMPDIR/ocsoma-pe/P8-cors (HOME, XDG_*, TMPDIR all inside it)
+purpose: CORS + auth headers of opencode serve for a cross-origin browser client; /global/upgrade listed not called
+
+## unsecured serve on 127.0.0.1:47186 (no password)
+### OPTIONS preflight, Origin https://x.opencode.ai
+$ sh -c :
+
+[exit=0 wall=0.1s]
+
+HTTP/1.1 204 No Content
+Access-Control-Allow-Origin: https://x.opencode.ai
+Vary: Access-Control-Request-Headers, Origin
+Access-Control-Allow-Methods: GET, HEAD, PUT, PATCH, POST, DELETE
+Access-Control-Allow-Headers: authorization,content-type
+Access-Control-Max-Age: 86400
+### GET, Origin https://x.opencode.ai
+HTTP/1.1 200 OK
+Access-Control-Allow-Origin: https://x.opencode.ai
+Vary: Origin
+
+### OPTIONS preflight, Origin https://evil.example.com
+$ sh -c :
+
+[exit=0 wall=0.1s]
+
+HTTP/1.1 204 No Content
+Access-Control-Allow-Methods: GET, HEAD, PUT, PATCH, POST, DELETE
+Vary: Access-Control-Request-Headers
+Access-Control-Allow-Headers: authorization,content-type
+Access-Control-Max-Age: 86400
+### GET, Origin https://evil.example.com
+HTTP/1.1 200 OK
+
+### OPTIONS preflight, Origin http://localhost:5173
+$ sh -c :
+
+[exit=0 wall=0.1s]
+
+HTTP/1.1 204 No Content
+Access-Control-Allow-Origin: http://localhost:5173
+Vary: Access-Control-Request-Headers, Origin
+Access-Control-Allow-Methods: GET, HEAD, PUT, PATCH, POST, DELETE
+Access-Control-Allow-Headers: authorization,content-type
+Access-Control-Max-Age: 86400
+### GET, Origin http://localhost:5173
+HTTP/1.1 200 OK
+Access-Control-Allow-Origin: http://localhost:5173
+Vary: Origin
+
+## password-protected serve on 127.0.0.1:47187 (CORS headers are applied BEFORE auth per the 1.18.x changelog)
+### OPTIONS preflight (no creds), Origin https://x.opencode.ai
+HTTP/1.1 204 No Content
+Access-Control-Allow-Origin: https://x.opencode.ai
+Vary: Access-Control-Request-Headers, Origin
+Access-Control-Allow-Methods: GET, HEAD, PUT, PATCH, POST, DELETE
+Access-Control-Allow-Headers: authorization,content-type
+Access-Control-Max-Age: 86400
+
+### GET (no creds), Origin https://x.opencode.ai
+HTTP/1.1 401 Unauthorized
+Access-Control-Allow-Origin: https://x.opencode.ai
+Vary: Origin
+www-authenticate: Basic realm="Secure Area"
+
+### OPTIONS preflight (no creds), Origin https://evil.example.com
+HTTP/1.1 204 No Content
+Access-Control-Allow-Methods: GET, HEAD, PUT, PATCH, POST, DELETE
+Vary: Access-Control-Request-Headers
+Access-Control-Allow-Headers: authorization,content-type
+Access-Control-Max-Age: 86400
+
+### GET (no creds), Origin https://evil.example.com
+HTTP/1.1 401 Unauthorized
+www-authenticate: Basic realm="Secure Area"
+
+### GET (with creds, --netrc), Origin https://x.opencode.ai
+HTTP/1.1 200 OK
+Access-Control-Allow-Origin: https://x.opencode.ai
+Vary: Origin
+
+## /global/upgrade is LISTED in the OpenAPI (NOT called here)
+$ sh -c jq -r '.paths | to_entries[] | select(.key=="/global/upgrade") | .key + ": " + ([.value | keys[]] | join(","))' '/Users/techfreakworm/.soma/worktrees/claude-soma/claude-soma-manager/research/opencode-soma/evidence/opencode/P8-serve/openapi.json' 2>/dev/null || echo 'openapi.json not present (run P8-serve/run.sh first)'
+/global/upgrade: post
+
+[exit=0 wall=0.1s]
+
+## config knob: server.cors (whitelist additional origins); default allows https://*.opencode.ai + localhost
+VERDICT: PASS — serve emits Access-Control-Allow-Origin for opencode.ai/localhost origins (headers captured, both with and without a password; CORS is applied before auth). A rebuild that binds non-loopback must set server.cors tightly; evil.example.com behaviour is in the transcript.

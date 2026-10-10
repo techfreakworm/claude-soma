@@ -6,7 +6,7 @@
 set -u
 export OCSOMA_PROBE_SCRIPT="research/opencode-soma/probes/opencode/P3-mcp/run.sh"
 HERE="$(cd "$(dirname "$0")" && pwd)"
-PROXY_PORT=47135; SERVE_PORT=47131; HTTP_MCP_PORT=47132
+PROXY_PORT=$(( ${OCSOMA_PORT_BASE:-47100} + 35 )); SERVE_PORT=$(( ${OCSOMA_PORT_BASE:-47100} + 31 )); HTTP_MCP_PORT=$(( ${OCSOMA_PORT_BASE:-47100} + 32 ))
 PROBE_ID=P3-mcp; SANDBOX_FRESH=1; OC_BASEURL="http://127.0.0.1:$PROXY_PORT/v1"
 source "$HERE/../sandbox.sh"
 cd "$PROJ" || exit 1

@@ -10,7 +10,7 @@
 set -u
 export OCSOMA_PROBE_SCRIPT="research/opencode-soma/probes/opencode/P4-subagents/run.sh"
 HERE="$(cd "$(dirname "$0")" && pwd)"
-PROXY_PORT=47145; SERVE_PORT=47141; LEAD_PORT=47142; LEAD_PROXY=47146
+PROXY_PORT=$(( ${OCSOMA_PORT_BASE:-47100} + 45 )); SERVE_PORT=$(( ${OCSOMA_PORT_BASE:-47100} + 41 )); LEAD_PORT=$(( ${OCSOMA_PORT_BASE:-47100} + 42 )); LEAD_PROXY=$(( ${OCSOMA_PORT_BASE:-47100} + 46 ))
 PROBE_ID=P4-subagents; SANDBOX_FRESH=1; OC_BASEURL="http://127.0.0.1:$PROXY_PORT/v1"
 source "$HERE/../sandbox.sh"
 cd "$PROJ" || exit 1

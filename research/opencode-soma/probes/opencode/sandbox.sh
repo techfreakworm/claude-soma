@@ -22,6 +22,9 @@ if [ -z "${OCSOMA_REAL_TMPDIR:-}" ]; then
   _t="${TMPDIR:-/tmp}"; export OCSOMA_REAL_TMPDIR="${_t%/}"
 fi
 
+: "${OCSOMA_PORT_BASE:=47100}"   # probes derive 127.0.0.1 ports as base+offset (offset = last 2 digits); verifier overrides
+: "${OCSOMA_TMUX_PREFIX:=ocsoma-pe-}"  # tmux -L socket prefix; verifier overrides to ocsoma-vf-
+export OCSOMA_PORT_BASE OCSOMA_TMUX_PREFIX
 : "${PROBE_ID:=adhoc}"
 : "${SANDBOX:=$OCSOMA_REAL_TMPDIR/ocsoma-pe/$PROBE_ID}"
 export PROBE_ID SANDBOX

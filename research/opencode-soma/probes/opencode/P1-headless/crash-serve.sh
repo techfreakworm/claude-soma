@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # P1.3 kill -9 `opencode serve` mid-generation, restart it, read the session over HTTP, continue it.
 export OCSOMA_PROBE_SCRIPT="research/opencode-soma/probes/opencode/P1-headless/crash-serve.sh"
-P1_PART=crashserve; P1_PROXY=47117; P1_SERVE=47113
+P1_PART=crashserve; P1_PROXY=$(( ${OCSOMA_PORT_BASE:-47100} + 17 )); P1_SERVE=$(( ${OCSOMA_PORT_BASE:-47100} + 13 ))
 source "$(dirname "$0")/common.sh"
 ev_open P1-headless/crash-serve.log "kill -9 opencode serve mid-generation, restart, read the session over HTTP, continue it" "$MODEL (thinking off)"
 start_serve || ev "serve did not start"
