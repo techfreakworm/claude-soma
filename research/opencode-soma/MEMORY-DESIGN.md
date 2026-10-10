@@ -26,8 +26,8 @@ Aliases, same-named components in different projects and names inside other name
   scale, including provenance and 2-hop expansion via recursive CTEs.
 - **Cost.** Neo4j adds a JVM server: 910.7 MB resident when idle at heap 512m (docker stats), a
   cold start of up to 13.57 s before the first Bolt answer, a 1122.4 MB image, and 528108 KB of
-  preallocated transaction logs before any data (`evidence/memory/neo4j-container.log`), plus
-  Docker Desktop on macOS and Windows.
+  disk before any data, nearly all of it two preallocated transaction logs of 263172 KB each
+  (`evidence/memory/neo4j-container.log`), plus Docker Desktop on macOS and Windows.
 
 **Latency is not the deciding factor.** Both stores answer per-prompt recall far below an LLM turn.
 In the fair re-run at 50k facts the recall queries (Q1, Q3, Q7a, Q7b, Q8) took:
