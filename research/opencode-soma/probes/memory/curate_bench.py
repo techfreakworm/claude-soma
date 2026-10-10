@@ -145,8 +145,13 @@ def hedged(text: str) -> bool:
     return any(h in text for h in C.HEDGES)
 
 
+def has_token(text: str, key: str) -> bool:
+    tail = r"(?![0-9])" if key[-1:].isdigit() else r"(?![a-z0-9])"
+    return re.search(r"(?<![a-z0-9])" + re.escape(key) + tail, text) is not None
+
+
 def key_match(text: str, keys: list[str]) -> bool:
-    return all(any(alt in text for alt in k.split("|")) for k in keys)
+    return all(any(has_token(text, alt) for alt in k.split("|")) for k in keys)
 
 
 def score_extraction(case: dict, out: dict, secrets: dict[str, str]) -> dict:
@@ -172,10 +177,10 @@ def score_extraction(case: dict, out: dict, secrets: dict[str, str]) -> dict:
     for i, t in enumerate(texts):
         if i in used:
             continue
-        if any(k in t for k in case.get("forbidden", [])) and not hedged(t):
+        if any(has_token(t, k) for k in case.get("forbidden", [])) and not hedged(t):
             forbidden += 1
             fp += 1
-        elif any(k in t for k in case.get("allowed", [])):
+        elif any(has_token(t, k) for k in case.get("allowed", [])):
             continue
         else:
             fp += 1

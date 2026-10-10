@@ -22,6 +22,13 @@ def main() -> None:
     print("|---|---|---|---|---|---|---|")
     for tag in sorted(allres):
         r = allres[tag]
+        if r.get("partial"):
+            n = len(r["completed_cases"])
+            print(f"| {r['model']} think={r['think']} PARTIAL (completed {', '.join(r['completed_cases'])}; stopped at slot end) "
+                  f"| n/a | n/a | {r['correct']}/{n} vs {r['correct_ref_same_cases']}/{n} thinking off "
+                  f"({r['destructive']} vs {r['destructive_ref_same_cases']}) | n/a | n/a | "
+                  f"{r['compute_median_s']} (vs {r['compute_median_ref_s']}) |")
+            continue
         ex, du, co, re_ = r.get("extract"), r.get("dup"), r.get("con"), r.get("rem")
         p50 = [x["compute_p50_s"] for x in (ex, du, co, re_) if x and "compute_p50_s" in x]
         sub = f" (cases: {', '.join(r['cases_filter'])})" if isinstance(r.get("cases_filter"), list) else ""
