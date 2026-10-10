@@ -340,8 +340,9 @@ Load: files 5.4 s and 202 MB on disk (50,126 files); SQLite 1.2 s and 34 MB; Neo
 
 #### 5,000 facts
 
-Files are already 52–173 ms on scans. SQLite and Neo4j are at most 11 ms and 27 ms p95 on recall
-(`bench-5000.log`).
+p95 on the recall queries (Q1, Q3, Q7a, Q7b, Q8): files up to 76 ms; SQLite at most 0.39 ms;
+Neo4j at most 10.4 ms. The cross-project scan (Q2) takes 224 / 12 / 27 ms p95 respectively, and
+the files backend's full scans already take 132–173 ms p50 (`bench-5000.log`).
 
 #### 600 facts
 
@@ -380,9 +381,9 @@ OpenJDK 25 in the image:
 | heap 64m / pagecache 8m | dies with `Java heap space` during the load |
 | disk | 516 MB before any data: two preallocated 257 MB transaction logs (`/data/transactions/{neo4j,system}`; this preallocation is configurable). 558 MB with the 50k store checkpointed (store 43 MB; SQLite 34 MB) |
 
-These are from the final quiet run of `neo4j_container.py`. Two earlier runs, made while the
-machine was busy with other probes, were slower (fresh start up to 18–24 s); they are superseded,
-not averaged in.
+These are from the final run of `neo4j_container.py`, made while no other probe of mine was running.
+Earlier runs during heavy local load were slower; their logs were overwritten, and they are not
+used.
 
 **Install burden for a stranger** (desk-research-only):
 
