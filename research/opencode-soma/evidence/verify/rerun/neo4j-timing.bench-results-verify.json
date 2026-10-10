@@ -1,0 +1,89 @@
+{
+ "loads": {
+  "50000": {
+   "neo4j": {
+    "disk_kb": 528500,
+    "disk_kb_after_bench": 528500,
+    "fresh_start_to_bolt_s": 5.03,
+    "idle_mem_mb_before_load": 932.3,
+    "load_s": 6.066,
+    "mem_during_bench": {
+     "max_mb_between_batches": 1147.8,
+     "note": "docker stats sampled after each query batch, never during timed runs"
+    },
+    "mem_mb_after_load": 1138.2
+   }
+  }
+ },
+ "loc": {
+  "files": {
+   "load_and_helpers": 56,
+   "per_query": {
+    "Q1": 8,
+    "Q2": 8,
+    "Q3": 11,
+    "Q4": 11,
+    "Q5": 7,
+    "Q6": 8,
+    "Q7a": 2,
+    "Q7b": 3,
+    "Q8": 16,
+    "W1": 24
+   }
+  },
+  "naive": {
+   "load_and_helpers": 4,
+   "per_query": {
+    "Q1": 8
+   }
+  },
+  "neo4j": {
+   "load_and_helpers": 44,
+   "per_query": {
+    "Q1": 3,
+    "Q2": 7,
+    "Q3": 7,
+    "Q4": 7,
+    "Q5": 7,
+    "Q6": 7,
+    "Q7a": 3,
+    "Q7b": 3,
+    "Q8": 5,
+    "W1": 17
+   }
+  },
+  "sqlite": {
+   "load_and_helpers": 32,
+   "per_query": {
+    "Q1": 3,
+    "Q2": 9,
+    "Q3": 7,
+    "Q4": 8,
+    "Q5": 4,
+    "Q6": 13,
+    "Q7a": 2,
+    "Q7b": 3,
+    "Q8": 6,
+    "W1": 17
+   }
+  }
+ },
+ "notes": "first_ms = first execution on a fresh client; then --warmup untimed runs (JIT/plan/page caches), then p50/p95 over --runs timed runs cycling the truth instances; correct = share of all timed runs equal to the oracle answer; W1 mutates the store and runs last (no warm-up); naive = files without entity metadata (Q1 only, precision/recall given); Neo4j memory is sampled between query batches, never during timed runs",
+ "rows": [
+  {
+   "backend": "neo4j",
+   "connect_ms": 33.277,
+   "correct": 1.0,
+   "first_ms": 125.379,
+   "instances": 10,
+   "mem_mb_after_batch": 1147.8,
+   "n_facts": 50000,
+   "p50_ms": 8.276,
+   "p95_ms": 12.638,
+   "query": "Q1",
+   "runs": 31,
+   "untimed_warmup_runs": 30,
+   "warm_runs": 30
+  }
+ ]
+}

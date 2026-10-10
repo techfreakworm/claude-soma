@@ -1,0 +1,449 @@
+# P5-tmux/tmux.log
+date-utc: 2026-10-10T08:10:11Z
+probe-script: research/opencode-soma/probes/opencode/P5-tmux/run.sh
+opencode-version: 1.18.8
+model: ollama/qwen3:32b (thinking off)
+sandbox: $TMPDIR/ocsoma-pe/P5-tmux (HOME, XDG_*, TMPDIR all inside it)
+purpose: tmux send-keys -l + Enter into the opencode TUI, scrape capture-pane -p; success rate and failure modes; HTTP comparison
+
+TUI: tmux -L ocsoma-vf-tui new-session -d -s tui -x 200 -y 50 "opencode --port 47351 --hostname 127.0.0.1 -m ollama/qwen3:32b"
+## pane right after start
+$ cat /private/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-vf/rerun-20261010T080047Z-25045/P5-tmux/tree/research/opencode-soma/evidence/opencode/P5-tmux/pane-start.txt
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                                                                                                                  ▄
+                                                                                 █▀▀█ █▀▀█ █▀▀█ █▀▀▄ █▀▀▀ █▀▀█ █▀▀█ █▀▀█
+                                                                                 █  █ █  █ █▀▀▀ █  █ █    █  █ █  █ █▀▀▀
+                                                                                 ▀▀▀▀ █▀▀▀ ▀▀▀▀ ▀▀▀▀ ▀▀▀▀ ▀▀▀▀ ▀▀▀▀ ▀▀▀▀
+
+
+                                                               ┃
+                                                               ┃  Ask anything... "What is the tech stack of this project?"
+                                                               ┃
+                                                               ┃  Build · Qwen3 32B (thinking off) Ollama (local)
+                                                               ╹▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀
+                                                               tab agents  ctrl+p commands
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  /private/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-vf/rerun-20261010T080047Z-25045/P5-tmux/ocsoma-pe/P5-tmux/project:main                                                        1.18.8
+
+
+[exit=0 wall=0.0s]
+
+### case short: status=ok wall=1.5s (turn-footer first seen at poll 2); server received 1 user message(s), exact text match=true
+received: ["Reply with exactly TMUX-SHORT-OK and nothing else."]
+$ cat /private/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-vf/rerun-20261010T080047Z-25045/P5-tmux/tree/research/opencode-soma/evidence/opencode/P5-tmux/pane-short.txt
+
+  ┃                                                                                                                                                             TMUX-SHORT-OK
+  ┃  Reply with exactly TMUX-SHORT-OK and nothing else.
+  ┃                                                                                                                                                             Context
+                                                                                                                                                                0 tokens
+     ▣  Build · Qwen3 32B (thinking off)                                                                                                                        0% used
+                                                                                                                                                                $0.00 spent
+
+                                                                                                                                                                LSP
+                                                                                                                                                                LSPs are disabled
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                                                                                                                                                                /private/var/folders/lp/
+  ┃                                                                                                                                                             m_0rzyhs19g7l2x5dnql4tjh0000gp/T/
+  ┃                                                                                                                                                             ocsoma-vf/rerun-20261010T080047Z-
+  ┃                                                                                                                                                             25045/P5-tmux/ocsoma-pe/P5-tmux/
+  ┃  Build · Qwen3 32B (thinking off) Ollama (local)                                                                                                            project:main
+  ╹▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀
+   ■■■■■■⬝⬝  esc interrupt                                                                                                       tab agents  ctrl+p commands    • OpenCode 1.18.8
+
+[exit=0 wall=0.0s]
+
+### case long: status=ok wall=38.0s (turn-footer first seen at poll 61); server received 1 user message(s), exact text match=true
+received: ["Here is some filler context you can ignore: The quick brown fox jumps over the lazy dog number 1. The quick brown fox jumps over the lazy dog number 2. The quick brown fox jumps over the lazy dog number 3. The quick brown fox jumps over the lazy dog number 4. The quick brown fox jumps over the lazy dog number 5. The quick brown fox jumps over the lazy dog number 6. The quick brown fox jumps over
+$ cat /private/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-vf/rerun-20261010T080047Z-25045/P5-tmux/tree/research/opencode-soma/evidence/opencode/P5-tmux/pane-long.txt
+
+  ┃                                                                                                                                                             TMUX-SHORT-OK
+  ┃  Reply with exactly TMUX-SHORT-OK and nothing else.
+  ┃                                                                                                                                                             Context
+                                                                                                                                                                7,514 tokens
+     TMUX-SHORT-OK                                                                                                                                              18% used
+                                                                                                                                                                $0.00 spent
+     ▣  Build · Qwen3 32B (thinking off) · 36.8s
+                                                                                                                                                                LSP
+  ┃                                                                                                                                                             LSPs are disabled
+  ┃  Here is some filler context you can ignore: The quick brown fox jumps over the lazy dog number 1. The quick brown fox jumps over the lazy dog number 2.
+  ┃   The quick brown fox jumps over the lazy dog number 3. The quick brown fox jumps over the lazy dog number 4. The quick brown fox jumps over the lazy
+  ┃  dog number 5. The quick brown fox jumps over the lazy dog number 6. The quick brown fox jumps over the lazy dog number 7. The quick brown fox jumps
+  ┃  over the lazy dog number 8. The quick brown fox jumps over the lazy dog number 9. The quick brown fox jumps over the lazy dog number 10. The quick
+  ┃  brown fox jumps over the lazy dog number 11. The quick brown fox jumps over the lazy dog number 12. The quick brown fox jumps over the lazy dog number
+  ┃  13. The quick brown fox jumps over the lazy dog number 14. The quick brown fox jumps over the lazy dog number 15. The quick brown fox jumps over the
+  ┃  lazy dog number 16. The quick brown fox jumps over the lazy dog number 17. The quick brown fox jumps over the lazy dog number 18. The quick brown fox
+  ┃  jumps over the lazy dog number 19. The quick brown fox jumps over the lazy dog number 20. The quick brown fox jumps over the lazy dog number 21. The
+  ┃  quick brown fox jumps over the lazy dog number 22. The quick brown fox jumps over the lazy dog number 23. The quick brown fox jumps over the lazy dog
+  ┃  number 24. The quick brown fox jumps over the lazy dog number 25. The quick brown fox jumps over the lazy dog number 26. The quick brown fox jumps
+  ┃  over the lazy dog number 27. The quick brown fox jumps over the lazy dog number 28. The quick brown fox jumps over the lazy dog number 29. The quick
+  ┃  brown fox jumps over the lazy dog number 30. The quick brown fox jumps over the lazy dog number 31. The quick brown fox jumps over the lazy dog number
+  ┃  32. The quick brown fox jumps over the lazy dog number 33. The quick brown fox jumps over the lazy dog number 34. The quick brown fox jumps over the
+  ┃  lazy dog number 35. The quick brown fox jumps over the lazy dog number 36. The quick brown fox jumps over the lazy dog number 37. The quick brown fox
+  ┃  jumps over the lazy dog number 38. The quick brown fox jumps over the lazy dog number 39. End of filler. Reply with exactly TMUX-LONG-OK and nothing
+  ┃  else.
+  ┃
+
+     TMUX-LONG-OK
+
+     ▣  Build · Qwen3 32B (thinking off) · 34.3s
+
+
+
+
+
+
+
+
+
+
+
+  ┃                                                                                                                                                             /private/var/folders/lp/
+  ┃                                                                                                                                                             m_0rzyhs19g7l2x5dnql4tjh0000gp/T/
+  ┃                                                                                                                                                             ocsoma-vf/rerun-20261010T080047Z-
+  ┃  Build · Qwen3 32B (thinking off) Ollama (local)                                                                                                            25045/P5-tmux/ocsoma-pe/P5-tmux/
+  ╹▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀    project:main
+   /private/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-vf/rerun-20261010T080047Z-25045/P5-tmux/ocsoma-pe/P5-tmux/     7.5K (18%) ctrl+p commands
+   project                                                                                                                                                      • OpenCode 1.18.8
+
+[exit=0 wall=0.0s]
+
+### case multiline: status=ok wall=1.4s (turn-footer first seen at poll 2); server received 1 user message(s), exact text match=true
+received: ["First line of my message.\nSecond line of my message.\nReply with exactly TMUX-MULTI-OK and nothing else."]
+$ cat /private/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-vf/rerun-20261010T080047Z-25045/P5-tmux/tree/research/opencode-soma/evidence/opencode/P5-tmux/pane-multiline.txt
+
+  ┃                                                                                                                                                             TMUX-SHORT-OK
+  ┃  Reply with exactly TMUX-SHORT-OK and nothing else.
+  ┃                                                                                                                                                             Context
+                                                                                                                                                                7,557 tokens
+     TMUX-SHORT-OK                                                                                                                                              18% used
+                                                                                                                                                                $0.00 spent
+     ▣  Build · Qwen3 32B (thinking off) · 36.8s
+                                                                                                                                                                LSP
+  ┃                                                                                                                                                             LSPs are disabled
+  ┃  Here is some filler context you can ignore: The quick brown fox jumps over the lazy dog number 1. The quick brown fox jumps over the lazy dog number 2.
+  ┃   The quick brown fox jumps over the lazy dog number 3. The quick brown fox jumps over the lazy dog number 4. The quick brown fox jumps over the lazy
+  ┃  dog number 5. The quick brown fox jumps over the lazy dog number 6. The quick brown fox jumps over the lazy dog number 7. The quick brown fox jumps
+  ┃  over the lazy dog number 8. The quick brown fox jumps over the lazy dog number 9. The quick brown fox jumps over the lazy dog number 10. The quick
+  ┃  brown fox jumps over the lazy dog number 11. The quick brown fox jumps over the lazy dog number 12. The quick brown fox jumps over the lazy dog number
+  ┃  13. The quick brown fox jumps over the lazy dog number 14. The quick brown fox jumps over the lazy dog number 15. The quick brown fox jumps over the
+  ┃  lazy dog number 16. The quick brown fox jumps over the lazy dog number 17. The quick brown fox jumps over the lazy dog number 18. The quick brown fox
+  ┃  jumps over the lazy dog number 19. The quick brown fox jumps over the lazy dog number 20. The quick brown fox jumps over the lazy dog number 21. The
+  ┃  quick brown fox jumps over the lazy dog number 22. The quick brown fox jumps over the lazy dog number 23. The quick brown fox jumps over the lazy dog
+  ┃  number 24. The quick brown fox jumps over the lazy dog number 25. The quick brown fox jumps over the lazy dog number 26. The quick brown fox jumps
+  ┃  over the lazy dog number 27. The quick brown fox jumps over the lazy dog number 28. The quick brown fox jumps over the lazy dog number 29. The quick
+  ┃  brown fox jumps over the lazy dog number 30. The quick brown fox jumps over the lazy dog number 31. The quick brown fox jumps over the lazy dog number
+  ┃  32. The quick brown fox jumps over the lazy dog number 33. The quick brown fox jumps over the lazy dog number 34. The quick brown fox jumps over the
+  ┃  lazy dog number 35. The quick brown fox jumps over the lazy dog number 36. The quick brown fox jumps over the lazy dog number 37. The quick brown fox
+  ┃  jumps over the lazy dog number 38. The quick brown fox jumps over the lazy dog number 39. End of filler. Reply with exactly TMUX-LONG-OK and nothing
+  ┃  else.
+  ┃
+
+     TMUX-LONG-OK
+
+     ▣  Build · Qwen3 32B (thinking off) · 34.3s
+
+  ┃
+  ┃  First line of my message.
+  ┃  Second line of my message.
+  ┃  Reply with exactly TMUX-MULTI-OK and nothing else.
+  ┃
+
+     TMUX-MULTI-OK
+
+     ▣  Build · Qwen3 32B (thinking off) · 817ms
+
+  ┃                                                                                                                                                             /private/var/folders/lp/
+  ┃                                                                                                                                                             m_0rzyhs19g7l2x5dnql4tjh0000gp/T/
+  ┃                                                                                                                                                             ocsoma-vf/rerun-20261010T080047Z-
+  ┃  Build · Qwen3 32B (thinking off) Ollama (local)                                                                                                            25045/P5-tmux/ocsoma-pe/P5-tmux/
+  ╹▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀    project:main
+   /private/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-vf/rerun-20261010T080047Z-25045/P5-tmux/ocsoma-pe/P5-tmux/     7.6K (18%) ctrl+p commands
+   project                                                                                                                                                      • OpenCode 1.18.8
+
+[exit=0 wall=0.0s]
+
+### case quotes: status=ok wall=1.4s (turn-footer first seen at poll 2); server received 1 user message(s), exact text match=true
+received: ["He said \"hello\" and she said 'bye'. Reply with exactly TMUX-QUOTES-OK and nothing else."]
+$ cat /private/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-vf/rerun-20261010T080047Z-25045/P5-tmux/tree/research/opencode-soma/evidence/opencode/P5-tmux/pane-quotes.txt
+
+  ┃                                                                                                                                                             TMUX-SHORT-OK
+  ┃  Here is some filler context you can ignore: The quick brown fox jumps over the lazy dog number 1. The quick brown fox jumps over the lazy dog number 2.
+  ┃   The quick brown fox jumps over the lazy dog number 3. The quick brown fox jumps over the lazy dog number 4. The quick brown fox jumps over the lazy       Context
+  ┃  dog number 5. The quick brown fox jumps over the lazy dog number 6. The quick brown fox jumps over the lazy dog number 7. The quick brown fox jumps        7,599 tokens
+  ┃  over the lazy dog number 8. The quick brown fox jumps over the lazy dog number 9. The quick brown fox jumps over the lazy dog number 10. The quick         19% used
+  ┃  brown fox jumps over the lazy dog number 11. The quick brown fox jumps over the lazy dog number 12. The quick brown fox jumps over the lazy dog number     $0.00 spent
+  ┃  13. The quick brown fox jumps over the lazy dog number 14. The quick brown fox jumps over the lazy dog number 15. The quick brown fox jumps over the
+  ┃  lazy dog number 16. The quick brown fox jumps over the lazy dog number 17. The quick brown fox jumps over the lazy dog number 18. The quick brown fox      LSP
+  ┃  jumps over the lazy dog number 19. The quick brown fox jumps over the lazy dog number 20. The quick brown fox jumps over the lazy dog number 21. The       LSPs are disabled
+  ┃  quick brown fox jumps over the lazy dog number 22. The quick brown fox jumps over the lazy dog number 23. The quick brown fox jumps over the lazy dog
+  ┃  number 24. The quick brown fox jumps over the lazy dog number 25. The quick brown fox jumps over the lazy dog number 26. The quick brown fox jumps
+  ┃  over the lazy dog number 27. The quick brown fox jumps over the lazy dog number 28. The quick brown fox jumps over the lazy dog number 29. The quick
+  ┃  brown fox jumps over the lazy dog number 30. The quick brown fox jumps over the lazy dog number 31. The quick brown fox jumps over the lazy dog number
+  ┃  32. The quick brown fox jumps over the lazy dog number 33. The quick brown fox jumps over the lazy dog number 34. The quick brown fox jumps over the
+  ┃  lazy dog number 35. The quick brown fox jumps over the lazy dog number 36. The quick brown fox jumps over the lazy dog number 37. The quick brown fox
+  ┃  jumps over the lazy dog number 38. The quick brown fox jumps over the lazy dog number 39. End of filler. Reply with exactly TMUX-LONG-OK and nothing
+  ┃  else.
+  ┃
+
+     TMUX-LONG-OK
+
+     ▣  Build · Qwen3 32B (thinking off) · 34.3s
+
+  ┃
+  ┃  First line of my message.
+  ┃  Second line of my message.
+  ┃  Reply with exactly TMUX-MULTI-OK and nothing else.
+  ┃
+
+     TMUX-MULTI-OK
+
+     ▣  Build · Qwen3 32B (thinking off) · 817ms
+
+  ┃
+  ┃  He said "hello" and she said 'bye'. Reply with exactly TMUX-QUOTES-OK and nothing else.
+  ┃
+
+     TMUX-QUOTES-OK
+
+     ▣  Build · Qwen3 32B (thinking off) · 792ms
+
+  ┃                                                                                                                                                             /private/var/folders/lp/
+  ┃                                                                                                                                                             m_0rzyhs19g7l2x5dnql4tjh0000gp/T/
+  ┃                                                                                                                                                             ocsoma-vf/rerun-20261010T080047Z-
+  ┃  Build · Qwen3 32B (thinking off) Ollama (local)                                                                                                            25045/P5-tmux/ocsoma-pe/P5-tmux/
+  ╹▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀    project:main
+   /private/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-vf/rerun-20261010T080047Z-25045/P5-tmux/ocsoma-pe/P5-tmux/     7.6K (19%) ctrl+p commands
+   project                                                                                                                                                      • OpenCode 1.18.8
+
+[exit=0 wall=0.0s]
+
+### case dollar: status=ok wall=1.4s (turn-footer first seen at poll 2); server received 1 user message(s), exact text match=true
+received: ["Price is $5 and the var is $HOME and code is `ls -la` here. Reply with exactly TMUX-DOLLAR-OK and nothing else."]
+$ cat /private/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-vf/rerun-20261010T080047Z-25045/P5-tmux/tree/research/opencode-soma/evidence/opencode/P5-tmux/pane-dollar.txt
+  ┃  lazy dog number 16. The quick brown fox jumps over the lazy dog number 17. The quick brown fox jumps over the lazy dog number 18. The quick brown fox
+  ┃  jumps over the lazy dog number 19. The quick brown fox jumps over the lazy dog number 20. The quick brown fox jumps over the lazy dog number 21. The       TMUX-SHORT-OK
+  ┃  quick brown fox jumps over the lazy dog number 22. The quick brown fox jumps over the lazy dog number 23. The quick brown fox jumps over the lazy dog
+  ┃  number 24. The quick brown fox jumps over the lazy dog number 25. The quick brown fox jumps over the lazy dog number 26. The quick brown fox jumps         Context
+  ┃  over the lazy dog number 27. The quick brown fox jumps over the lazy dog number 28. The quick brown fox jumps over the lazy dog number 29. The quick       7,650 tokens
+  ┃  brown fox jumps over the lazy dog number 30. The quick brown fox jumps over the lazy dog number 31. The quick brown fox jumps over the lazy dog number     19% used
+  ┃  32. The quick brown fox jumps over the lazy dog number 33. The quick brown fox jumps over the lazy dog number 34. The quick brown fox jumps over the       $0.00 spent
+  ┃  lazy dog number 35. The quick brown fox jumps over the lazy dog number 36. The quick brown fox jumps over the lazy dog number 37. The quick brown fox
+  ┃  jumps over the lazy dog number 38. The quick brown fox jumps over the lazy dog number 39. End of filler. Reply with exactly TMUX-LONG-OK and nothing       LSP
+  ┃  else.                                                                                                                                                      LSPs are disabled
+  ┃
+
+     TMUX-LONG-OK
+
+     ▣  Build · Qwen3 32B (thinking off) · 34.3s
+
+  ┃
+  ┃  First line of my message.
+  ┃  Second line of my message.
+  ┃  Reply with exactly TMUX-MULTI-OK and nothing else.
+  ┃
+
+     TMUX-MULTI-OK
+
+     ▣  Build · Qwen3 32B (thinking off) · 817ms
+
+  ┃
+  ┃  He said "hello" and she said 'bye'. Reply with exactly TMUX-QUOTES-OK and nothing else.
+  ┃
+
+     TMUX-QUOTES-OK
+
+     ▣  Build · Qwen3 32B (thinking off) · 792ms
+
+  ┃
+  ┃  Price is $5 and the var is $HOME and code is `ls -la` here. Reply with exactly TMUX-DOLLAR-OK and nothing else.
+  ┃
+
+     TMUX-DOLLAR-OK
+
+     ▣  Build · Qwen3 32B (thinking off) · 807ms
+
+  ┃                                                                                                                                                             /private/var/folders/lp/
+  ┃                                                                                                                                                             m_0rzyhs19g7l2x5dnql4tjh0000gp/T/
+  ┃                                                                                                                                                             ocsoma-vf/rerun-20261010T080047Z-
+  ┃  Build · Qwen3 32B (thinking off) Ollama (local)                                                                                                            25045/P5-tmux/ocsoma-pe/P5-tmux/
+  ╹▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀    project:main
+   /private/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-vf/rerun-20261010T080047Z-25045/P5-tmux/ocsoma-pe/P5-tmux/     7.7K (19%) ctrl+p commands
+   project                                                                                                                                                      • OpenCode 1.18.8
+
+[exit=0 wall=0.0s]
+
+### case longreply: status=ok wall=32.8s (turn-footer first seen at poll 2); server received 1 user message(s), exact text match=true
+received: ["Write the numbers from 1 to 70 as English words, one per line, and after the last line write TMUX-LONGREPLY-END on its own line."]
+$ cat /private/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-vf/rerun-20261010T080047Z-25045/P5-tmux/tree/research/opencode-soma/evidence/opencode/P5-tmux/pane-longreply.txt
+     thirty-three
+     thirty-four                                                                                                                                                TMUX-SHORT-OK
+     thirty-five
+     thirty-six                                                                                                                                                 Context
+     thirty-seven                                                                                                                                               7,942 tokens
+     thirty-eight                                                                                                                                               19% used
+     thirty-nine                                                                                                                                                $0.00 spent
+     forty
+     forty-one                                                                                                                                                  LSP
+     forty-two                                                                                                                                                  LSPs are disabled
+     forty-three
+     forty-four
+     forty-five
+     forty-six
+     forty-seven
+     forty-eight
+     forty-nine
+     fifty
+     fifty-one
+     fifty-two
+     fifty-three
+     fifty-four
+     fifty-five
+     fifty-six
+     fifty-seven
+     fifty-eight
+     fifty-nine
+     sixty
+     sixty-one
+     sixty-two
+     sixty-three
+     sixty-four
+     sixty-five
+     sixty-six
+     sixty-seven
+     sixty-eight
+     sixty-nine
+     seventy
+     TMUX-LONGREPLY-END
+
+     ▣  Build · Qwen3 32B (thinking off) · 32.1s
+
+  ┃                                                                                                                                                             /private/var/folders/lp/
+  ┃                                                                                                                                                             m_0rzyhs19g7l2x5dnql4tjh0000gp/T/
+  ┃                                                                                                                                                             ocsoma-vf/rerun-20261010T080047Z-
+  ┃  Build · Qwen3 32B (thinking off) Ollama (local)                                                                                                            25045/P5-tmux/ocsoma-pe/P5-tmux/
+  ╹▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀    project:main
+   /private/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-vf/rerun-20261010T080047Z-25045/P5-tmux/ocsoma-pe/P5-tmux/     7.9K (19%) ctrl+p commands
+   project                                                                                                                                                      • OpenCode 1.18.8
+
+[exit=0 wall=0.0s]
+
+## scrollback check: tmux history (-S -2000) of the alt-screen TUI for the long reply
+$ python3.12 -I - /private/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-vf/rerun-20261010T080047Z-25045/P5-tmux/tree/research/opencode-soma/evidence/opencode/P5-tmux/pane-longreply.txt /private/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-vf/rerun-20261010T080047Z-25045/P5-tmux/tree/research/opencode-soma/evidence/opencode/P5-tmux/pane-longreply-scrollback.txt
+pane-longreply.txt: 49 lines captured, 31/70 number lines visible
+pane-longreply-scrollback.txt: 50 lines captured, 31/70 number lines visible
+
+[exit=0 wall=0.0s]
+
+## what the TUI's server actually received and answered (GET /session/{id}/message on the TUI's own --port)
+TUI session: ses_edb2333fbfferBt6lniE8cwfZL
+$ sh -c curl -s 'http://127.0.0.1:47351/session/ses_edb2333fbfferBt6lniE8cwfZL/message' | jq -c '.[] | {role: .info.role, text: ([.parts[] | select(.type=="text") | .text] | join(" ") | .[0:160]), text_len: ([.parts[] | select(.type=="text") | .text] | join(" ") | length)}'
+{"role":"user","text":"Reply with exactly TMUX-SHORT-OK and nothing else.","text_len":50}
+{"role":"assistant","text":"TMUX-SHORT-OK","text_len":13}
+{"role":"user","text":"Here is some filler context you can ignore: The quick brown fox jumps over the lazy dog number 1. The quick brown fox jumps over the lazy dog number 2. The quic","text_len":2244}
+{"role":"assistant","text":"TMUX-LONG-OK","text_len":12}
+{"role":"user","text":"First line of my message.\nSecond line of my message.\nReply with exactly TMUX-MULTI-OK and nothing else.","text_len":103}
+{"role":"assistant","text":"TMUX-MULTI-OK","text_len":13}
+{"role":"user","text":"He said \"hello\" and she said 'bye'. Reply with exactly TMUX-QUOTES-OK and nothing else.","text_len":87}
+{"role":"assistant","text":"TMUX-QUOTES-OK","text_len":14}
+{"role":"user","text":"Price is $5 and the var is $HOME and code is `ls -la` here. Reply with exactly TMUX-DOLLAR-OK and nothing else.","text_len":111}
+{"role":"assistant","text":"TMUX-DOLLAR-OK","text_len":14}
+{"role":"user","text":"Write the numbers from 1 to 70 as English words, one per line, and after the last line write TMUX-LONGREPLY-END on its own line.","text_len":128}
+{"role":"assistant","text":"one  \ntwo  \nthree  \nfour  \nfive  \nsix  \nseven  \neight  \nnine  \nten  \neleven  \ntwelve  \nthirteen  \nfourteen  \nfifteen  \nsixteen  \nseventeen  \neighteen  \nnineteen","text_len":836}
+
+[exit=0 wall=0.0s]
+
+## results (scrape)
+$ cat /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-vf/rerun-20261010T080047Z-25045/P5-tmux/ocsoma-pe/P5-tmux/results.jsonl
+{"case":"short","token":"TMUX-SHORT-OK","status":"ok","wall_s":1.5,"user_msgs":1,"exact":true}
+{"case":"long","token":"TMUX-LONG-OK","status":"ok","wall_s":38.0,"user_msgs":1,"exact":true}
+{"case":"multiline","token":"TMUX-MULTI-OK","status":"ok","wall_s":1.4,"user_msgs":1,"exact":true}
+{"case":"quotes","token":"TMUX-QUOTES-OK","status":"ok","wall_s":1.4,"user_msgs":1,"exact":true}
+{"case":"dollar","token":"TMUX-DOLLAR-OK","status":"ok","wall_s":1.4,"user_msgs":1,"exact":true}
+{"case":"longreply","token":"TMUX-LONGREPLY-END","status":"ok","wall_s":32.8,"user_msgs":1,"exact":true}
+
+[exit=0 wall=0.0s]
+
+## HTTP comparison: the same cases over the TUI's own server API (new session; replies read via GET /message)
+### http case short: status=ok wall=1.0s reply_len=13 reply_head=TMUX-SHORT-OK
+### http case long: status=ok wall=5.1s reply_len=12 reply_head=TMUX-LONG-OK
+### http case multiline: status=ok wall=1.6s reply_len=13 reply_head=TMUX-MULTI-OK
+### http case quotes: status=ok wall=2.1s reply_len=14 reply_head=TMUX-QUOTES-OK
+### http case dollar: status=ok wall=2.1s reply_len=14 reply_head=TMUX-DOLLAR-OK
+### http case longreply: status=ok wall=33.4s reply_len=836 reply_head=one   two   three   four   five   six   seven   eight   nine   ten   eleven   tw
+$ cat /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-vf/rerun-20261010T080047Z-25045/P5-tmux/ocsoma-pe/P5-tmux/http-results.jsonl
+{"case":"short","status":"ok","wall_s":1.0,"reply_len":13}
+{"case":"long","status":"ok","wall_s":5.1,"reply_len":12}
+{"case":"multiline","status":"ok","wall_s":1.6,"reply_len":13}
+{"case":"quotes","status":"ok","wall_s":2.1,"reply_len":14}
+{"case":"dollar","status":"ok","wall_s":2.1,"reply_len":14}
+{"case":"longreply","status":"ok","wall_s":33.4,"reply_len":836}
+
+[exit=0 wall=0.0s]
+
+scrape success: 6/6 ; HTTP success: 6/6
+VERDICT: PASS — send-keys + capture-pane scraping got 6/6 replies (HTTP: 6/6); see per-case panes for rendering caveats.

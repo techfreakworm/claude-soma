@@ -1,0 +1,27 @@
+# P5-tmux/pane-analysis.log
+date-utc: 2026-10-10T08:12:33Z
+probe-script: research/opencode-soma/probes/opencode/P5-tmux/analyze.sh (after run.sh)
+opencode-version: 1.18.8
+model: n/a (no LLM)
+sandbox: $TMPDIR/ocsoma-pe/P5-tmux (HOME, XDG_*, TMPDIR all inside it)
+purpose: post-hoc: whole-line vs column-aware scraping of the saved TUI panes
+
+## sidebar layout: rows where transcript text and the right sidebar share a terminal line
+$ python3.12 -I - /private/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-vf/rerun-20261010T080047Z-25045/P5-tmux/tree/research/opencode-soma/evidence/opencode/P5-tmux/pane-short.txt
+row 1: '  ┃                                                                                                                                                             TMUX-SHORT-OK'
+row 2: '  ┃  Reply with exactly TMUX-SHORT-OK and nothing else.'
+
+[exit=0 wall=0.0s]
+
+$ python3.12 -I - /private/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-vf/rerun-20261010T080047Z-25045/P5-tmux/tree/research/opencode-soma/evidence/opencode/P5-tmux
+short      whole-line=ok  column-aware=MISS
+long       whole-line=ok  column-aware=ok
+multiline  whole-line=ok  column-aware=ok
+quotes     whole-line=ok  column-aware=ok
+dollar     whole-line=ok  column-aware=ok
+longreply  whole-line=ok  column-aware=ok
+whole-line 6/6, column-aware 5/6
+
+[exit=0 wall=0.0s]
+
+VERDICT: FAIL — even column-aware parsing misses replies (see table).

@@ -1,0 +1,19 @@
+# rerun P5-tmux
+date-utc: 2026-10-10T08:12:33Z
+argv: ['bash', 'research/opencode-soma/probes/opencode/P5-tmux/run.sh']
+cwd: /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-vf/rerun-20261010T080047Z-25045/P5-tmux/tree
+sandbox: /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-vf/rerun-20261010T080047Z-25045/P5-tmux
+exit: 0
+wall-s: 146.4
+tmux.log committed=['PARTIAL'] rerun=['PASS']
+pane-analysis.log committed=['PARTIAL'] rerun=['FAIL']
+result: FAIL
+P5-tmux: tmux.log VERDICT mismatch, committed=['PARTIAL'] rerun=['PASS']
+P5-tmux: pane-analysis.log VERDICT mismatch, committed=['PARTIAL'] rerun=['FAIL']
+---- stdout ----
+VERDICT: PASS — send-keys + capture-pane scraping got 6/6 replies (HTTP: 6/6); see per-case panes for rendering caveats.
+VERDICT: FAIL — even column-aware parsing misses replies (see table).
+
+---- stderr ----
+/private/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-vf/rerun-20261010T080047Z-25045/P5-tmux/tree/research/opencode-soma/probes/opencode/P5-tmux/../sandbox.sh: line 170: 59537 Terminated: 15          python3.12 -I "$OCSOMA_PROBES/ollama_log_proxy.py" --port "$port" --log "$log" >> "$SANDBOX/proxy-$port.stderr" 2>&1
+

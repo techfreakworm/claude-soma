@@ -1,0 +1,33 @@
+verifier independent isolation recheck (read-only; separate from probe-engineer's isolation.sh)
+
+method: python3.12 -I snapshot of every entry (lstat size, mtime_ns, inode, mode; sha256 for files
+<= 64 MB; symlink targets) under each opencode location, plus ~/.claude top level and its
+agents/skills/plugins/commands/hooks entries. Snapshots were stored outside the repo under
+$TMPDIR/ocsoma-vf/baseline/. No file content was copied.
+
+worktree created:            2026-10-10T05:34:23Z (task start)
+snapshot 1 (baseline):       2026-10-10T05:56:02Z
+snapshot 2 (before rerun):   2026-10-10T07:58:16Z
+snapshot 3 (after rerun):    2026-10-10T08:14:11Z
+
+check 0, at snapshot 1: entries in the opencode locations with mtime after task start: 0
+
+location                                   entries   1 -> 2      2 -> 3
+~/.config/opencode                         13784     UNCHANGED   UNCHANGED
+~/.local/share/opencode                    12688     UNCHANGED   UNCHANGED
+~/.cache/opencode                           9432     UNCHANGED   UNCHANGED
+~/.local/state/opencode                        5     UNCHANGED   UNCHANGED
+~/.opencode                                 3665     UNCHANGED   UNCHANGED
+$TMPDIR/opencode                               1     UNCHANGED   UNCHANGED
+/Library/Application Support/opencode     absent    absent      absent
+~/.claude (top + config subdirs)             147     4 changed   2 changed
+
+~/.claude changes are this Claude Code session's own housekeeping (".", backups, plugins/store,
+skills/.trash between 1 and 2; backups, skills/.trash between 2 and 3); none is opencode-related.
+
+after the verifier rerun: no ocsoma-vf-* docker container or volume and no tmux server on
+-L ocsoma-vf-tui remained.
+
+VERDICT: UNCHANGED - the operator's real opencode dirs were byte-identical from 05:56Z to 08:14Z,
+with nothing newer than task start at 05:56Z; this covers every probe run and the verifier's
+rerun.

@@ -1,0 +1,9 @@
+rerun base: /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-vf/rerun-20261010T080047Z-25045
+HEAD: a5482d43839966dcb02611c4bbbc649a5e87f2d0
+P1-resume: exit=0 wall=41s crash-run.log committed=['PASS'] rerun=['PASS'] MATCH
+P1-resume-serve: exit=0 wall=37s crash-serve.log committed=['PASS'] rerun=['PASS'] MATCH
+P2-gate: exit=0 wall=313s gate.log committed=['PASS'] rerun=['PASS'] MATCH
+P3-scoping: exit=0 wall=168s mcp.log committed=['PASS'] rerun=['PASS']; scoping.log committed=['FAIL'] rerun=['FAIL']; scoping-verdict.log committed=['PASS'] rerun=['PASS'] MATCH
+P5-tmux: exit=0 wall=146s tmux.log committed=['PARTIAL'] rerun=['PASS']; pane-analysis.log committed=['PARTIAL'] rerun=['FAIL'] FAIL
+neo4j-timing: exit=0 wall=20s dataset_sha256 matches; p50 committed=32.248 rerun=8.276 correct=1.0 MATCH
+RESULT: FAIL

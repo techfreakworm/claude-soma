@@ -1,0 +1,15 @@
+# rerun P1-resume-serve
+date-utc: 2026-10-10T08:02:05Z
+argv: ['bash', 'research/opencode-soma/probes/opencode/P1-headless/crash-serve.sh']
+cwd: /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-vf/rerun-20261010T080047Z-25045/P1-resume-serve/tree
+sandbox: /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-vf/rerun-20261010T080047Z-25045/P1-resume-serve
+exit: 0
+wall-s: 37.1
+crash-serve.log committed=['PASS'] rerun=['PASS']
+result: PASS
+---- stdout ----
+VERDICT: PASS — after kill -9 of serve mid-generation, the restarted serve returned the session and its history over HTTP (status idle, partial reply left incomplete) and continued it (MANGO-2290 recalled).
+
+---- stderr ----
+/private/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-vf/rerun-20261010T080047Z-25045/P1-resume-serve/tree/research/opencode-soma/probes/opencode/P1-headless/../sandbox.sh: line 170: 27542 Terminated: 15          python3.12 -I "$OCSOMA_PROBES/ollama_log_proxy.py" --port "$port" --log "$log" >> "$SANDBOX/proxy-$port.stderr" 2>&1
+

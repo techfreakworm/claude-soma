@@ -1,0 +1,139 @@
+# P1-headless/crash-serve.log
+date-utc: 2026-10-10T08:01:28Z
+probe-script: research/opencode-soma/probes/opencode/P1-headless/crash-serve.sh
+opencode-version: 1.18.8
+model: ollama/qwen3:32b (thinking off)
+sandbox: $TMPDIR/ocsoma-pe/P1-crashserve (HOME, XDG_*, TMPDIR all inside it)
+purpose: kill -9 opencode serve mid-generation, restart, read the session over HTTP, continue it
+
+session: ses_edb2b2c8cffeG3Jm9ZwOxguM95
+$ python3.12 -I /private/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-vf/rerun-20261010T080047Z-25045/P1-resume-serve/tree/research/opencode-soma/probes/opencode/ocdrive.py --base http://127.0.0.1:47313 turn --session ses_edb2b2c8cffeG3Jm9ZwOxguM95 --model ollama/qwen3:32b --text Remember this secret token: MANGO-2290. Reply only with the word OK.
+{
+ "session": "ses_edb2b2c8cffeG3Jm9ZwOxguM95",
+ "timeout": false,
+ "seen_busy": true,
+ "wall_s": 20.5,
+ "final_text": "OK",
+ "new_messages": [
+  {
+   "id": "msg_124d4d3cf001mRmC61blNp8nCl",
+   "role": "user",
+   "agent": "build",
+   "model": "qwen3:32b",
+   "created": 1791619290063,
+   "completed": null,
+   "tokens": null,
+   "finish": null,
+   "error": null,
+   "text": "Remember this secret token: MANGO-2290. Reply only with the word OK.",
+   "tools": []
+  },
+  {
+   "id": "msg_124d4d4a5001C4VI4jTC6DLh7m",
+   "role": "assistant",
+   "agent": "build",
+   "model": "qwen3:32b",
+   "created": 1791619290277,
+   "completed": 1791619310182,
+   "tokens": {
+    "total": 6946,
+    "input": 5050,
+    "output": 2,
+    "reasoning": 0,
+    "cache": {
+     "read": 1894,
+     "write": 0
+    }
+   },
+   "finish": "stop",
+   "error": null,
+   "text": "OK",
+   "tools": []
+  }
+ ],
+ "permissions": [],
+ "children": []
+}
+
+[exit=0 wall=20.6s]
+
+## long generation via prompt_async, kill -9 the server after 10s
+$ jcurl -o /dev/null -w prompt_async HTTP %{http_code}\n -X POST http://127.0.0.1:47313/session/ses_edb2b2c8cffeG3Jm9ZwOxguM95/prompt_async -d {"model":{"providerID":"ollama","modelID":"qwen3:32b"},"parts":[{"type":"text","text":"Count from 1 to 120, writing every number as an English word, one per line. Output only the list."}]}
+prompt_async HTTP 204
+
+[exit=0 wall=0.0s]
+
+$ curl -s http://127.0.0.1:47313/session/status
+{"ses_edb2b2c8cffeG3Jm9ZwOxguM95":{"type":"busy"}}
+[exit=0 wall=0.0s]
+
+kill -9 serve pid 27557 at 08:02:00; health now: 000
+## restart serve on the same port, read the session back
+$ curl -s http://127.0.0.1:47313/session/ses_edb2b2c8cffeG3Jm9ZwOxguM95
+{"id":"ses_edb2b2c8cffeG3Jm9ZwOxguM95","slug":"happy-panda","projectID":"5e416ba239b1e13c3a1391b4bdfc5e39b59dddbb","directory":"/private/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-vf/rerun-20261010T080047Z-25045/P1-resume-serve/ocsoma-pe/P1-crashserve/project","path":"","summary":{"additions":0,"deletions":0,"files":0},"cost":0,"tokens":{"input":5050,"output":2,"reasoning":0,"cache":{"read":1894,"write":0}},"title":"p1-serve-crash","agent":"build","model":{"id":"qwen3:32b","providerID":"ollama","variant":"default"},"version":"1.18.8","time":{"created":1791619289971,"updated":1791619310685}}
+[exit=0 wall=0.1s]
+
+$ msgs ses_edb2b2c8cffeG3Jm9ZwOxguM95
+{"id":"blNp8nCl","role":"user","created":1791619290063,"completed":null,"finish":null,"error":null,"text":"Remember this secret token: MANGO-2290. Reply only with the word OK."}
+{"id":"TC6DLh7m","role":"assistant","created":1791619290277,"completed":1791619310182,"finish":"stop","error":null,"text":"OK"}
+{"id":"01JLeCF8","role":"user","created":1791619310639,"completed":null,"finish":null,"error":null,"text":"Count from 1 to 120, writing every number as an English word, one per line. Output only the list."}
+{"id":"5huJhpUr","role":"assistant","created":1791619310643,"completed":null,"finish":null,"error":null,"text":""}
+
+[exit=0 wall=0.0s]
+
+$ curl -s http://127.0.0.1:47313/session/status
+{}
+[exit=0 wall=0.0s]
+
+## continue the session over HTTP
+$ python3.12 -I /private/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-vf/rerun-20261010T080047Z-25045/P1-resume-serve/tree/research/opencode-soma/probes/opencode/ocdrive.py --base http://127.0.0.1:47313 turn --session ses_edb2b2c8cffeG3Jm9ZwOxguM95 --model ollama/qwen3:32b --text Stop counting. What was the secret token I gave you at the very beginning? Reply with only the token.
+{
+ "session": "ses_edb2b2c8cffeG3Jm9ZwOxguM95",
+ "timeout": false,
+ "seen_busy": true,
+ "wall_s": 2.0,
+ "final_text": "MANGO-2290",
+ "new_messages": [
+  {
+   "id": "msg_124d55761001lFC1IDNusniKbj",
+   "role": "user",
+   "agent": "build",
+   "model": "qwen3:32b",
+   "created": 1791619323745,
+   "completed": null,
+   "tokens": null,
+   "finish": null,
+   "error": null,
+   "text": "Stop counting. What was the secret token I gave you at the very beginning? Reply with only the token.",
+   "tools": []
+  },
+  {
+   "id": "msg_124d5582e001urA2aI6Lo5wlJe",
+   "role": "assistant",
+   "agent": "build",
+   "model": "qwen3:32b",
+   "created": 1791619323950,
+   "completed": 1791619325557,
+   "tokens": {
+    "total": 7022,
+    "input": 45,
+    "output": 8,
+    "reasoning": 0,
+    "cache": {
+     "read": 6969,
+     "write": 0
+    }
+   },
+   "finish": "stop",
+   "error": null,
+   "text": "MANGO-2290",
+   "tools": []
+  }
+ ],
+ "permissions": [],
+ "children": []
+}
+
+[exit=0 wall=2.0s]
+
+VERDICT: PASS — after kill -9 of serve mid-generation, the restarted serve returned the session and its history over HTTP (status idle, partial reply left incomplete) and continued it (MANGO-2290 recalled).
