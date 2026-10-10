@@ -29,7 +29,7 @@ ev "session: $SID ; firing a bash tool call that needs ask, via prompt_async"
 jcurl -o /dev/null -X POST "$BASE/session/$SID/prompt_async" -d "{\"model\":$MJSON,\"parts\":[{\"type\":\"text\",\"text\":\"Use the bash tool to run exactly: touch $W/p6-reject-target   Then say DONE.\"}]}"
 ev "## poll the three permission endpoints until one lists a pending request (max 60s)"
 PID=""; SRC=""
-for i in $(seq 1 120); do
+for i in $(seq 1 360); do
   PID=$(jcurl "$BASE/permission" | jq -r '.[0].id // empty'); [ -n "$PID" ] && { SRC="GET /permission"; break; }
   PID=$(jcurl "$BASE/api/permission/request" | jq -r '(.data // .)[0].id // empty'); [ -n "$PID" ] && { SRC="GET /api/permission/request"; break; }
   PID=$(jcurl "$BASE/session/$SID/permission" | jq -r '(.data // .)[0].id // .[0].requestID // empty'); [ -n "$PID" ] && { SRC="GET /session/{id}/permission"; break; }
@@ -43,7 +43,7 @@ if [ -n "$PID" ]; then
   ev "## reject it: POST /permission/$PID/reply {reply: reject}"
   ev_run jcurl -w '\n-> HTTP %{http_code}\n' -X POST "$BASE/permission/$PID/reply" -d '{"reply":"reject","message":"operator rejected from Telegram"}'
 fi
-for i in $(seq 1 120); do st=$(curl -s "$BASE/session/status" | jq -c --arg s "$SID" '.[$s] // "idle"'); [ "$st" = '"idle"' ] && break; sleep 0.5; done
+for i in $(seq 1 360); do st=$(curl -s "$BASE/session/status" | jq -c --arg s "$SID" '.[$s] // "idle"'); [ "$st" = '"idle"' ] && break; sleep 0.5; done
 ev "session status after reject: $st"
 ev_run sh -c "curl -s '$BASE/session/$SID/message' | jq -c '.[-1] | {role: .info.role, finish: .info.finish, error: (.info.error.name // null), tools: [.parts[] | select(.type==\"tool\") | {tool, status: .state.status, err: ((.state.error // \"\")|.[0:120])}], text: ([.parts[] | select(.type==\"text\") | .text] | join(\" \") | .[0:120])}'"
 created=no; [ -e "$W/p6-reject-target" ] && created=YES

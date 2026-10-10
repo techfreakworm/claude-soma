@@ -8,3 +8,538 @@ purpose: token accounting per message/session (stats, export, HTTP, db) for olla
 
 ## workload: qwen3 session with a bash tool call + a subagent; lfm2.5-thinking session (reasoning model)
 $ python3.12 -I /Users/techfreakworm/.soma/worktrees/claude-soma/claude-soma-manager/research/opencode-soma/probes/opencode/ocdrive.py --base http://127.0.0.1:47171 turn --session ses_edb5561e5ffeILZoKRtdF3OHgi --model ollama/qwen3:32b --perm once --text Use the bash tool to run: echo P7-TOOL-OK   Then reply with its output.
+{
+ "session": "ses_edb5561e5ffeILZoKRtdF3OHgi",
+ "timeout": false,
+ "seen_busy": true,
+ "wall_s": 39.9,
+ "final_text": "P7-TOOL-OK",
+ "new_messages": [
+  {
+   "id": "msg_124aa9e6a001gKh778BrpRoo3R",
+   "role": "user",
+   "agent": "build",
+   "model": "qwen3:32b",
+   "created": 1791616523882,
+   "completed": null,
+   "tokens": null,
+   "finish": null,
+   "error": null,
+   "text": "Use the bash tool to run: echo P7-TOOL-OK   Then reply with its output.",
+   "tools": []
+  },
+  {
+   "id": "msg_124aa9f140014TXfxpY91RuQHt",
+   "role": "assistant",
+   "agent": "build",
+   "model": "qwen3:32b",
+   "created": 1791616524052,
+   "completed": 1791616561716,
+   "tokens": {
+    "total": 6903,
+    "input": 4968,
+    "output": 71,
+    "reasoning": 0,
+    "cache": {
+     "read": 1864,
+     "write": 0
+    }
+   },
+   "finish": "tool-calls",
+   "error": null,
+   "text": "",
+   "tools": [
+    {
+     "tool": "bash",
+     "callID": "call_ta6wlz1o",
+     "status": "completed",
+     "input": {
+      "command": "echo P7-TOOL-OK",
+      "workdir": "/private/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P7-usage/project"
+     },
+     "output_head": "P7-TOOL-OK\n",
+     "child_session": null,
+     "ms": 7
+    }
+   ]
+  },
+  {
+   "id": "msg_124ab3237001f6Ji5AmEBajs0V",
+   "role": "assistant",
+   "agent": "build",
+   "model": "qwen3:32b",
+   "created": 1791616561719,
+   "completed": 1791616563542,
+   "tokens": {
+    "total": 6928,
+    "input": 92,
+    "output": 8,
+    "reasoning": 0,
+    "cache": {
+     "read": 6828,
+     "write": 0
+    }
+   },
+   "finish": "stop",
+   "error": null,
+   "text": "P7-TOOL-OK",
+   "tools": []
+  }
+ ],
+ "permissions": [],
+ "children": []
+}
+
+[exit=0 wall=40.0s]
+
+$ python3.12 -I /Users/techfreakworm/.soma/worktrees/claude-soma/claude-soma-manager/research/opencode-soma/probes/opencode/ocdrive.py --base http://127.0.0.1:47171 turn --session ses_edb5561e5ffeILZoKRtdF3OHgi --model ollama/qwen3:32b --perm once --text Use the task tool with subagent_type general, description tiny job, prompt 'Reply with exactly P7-SUB-OK'. Then reply with what it returned.
+{
+ "session": "ses_edb5561e5ffeILZoKRtdF3OHgi",
+ "timeout": false,
+ "seen_busy": true,
+ "wall_s": 35.5,
+ "final_text": "P7-SUB-OK",
+ "new_messages": [
+  {
+   "id": "msg_124ab3afa001vidbkDIdry6N1w",
+   "role": "user",
+   "agent": "build",
+   "model": "qwen3:32b",
+   "created": 1791616563962,
+   "completed": null,
+   "tokens": null,
+   "finish": null,
+   "error": null,
+   "text": "Use the task tool with subagent_type general, description tiny job, prompt 'Reply with exactly P7-SUB-OK'. Then reply with what it returned.",
+   "tools": []
+  },
+  {
+   "id": "msg_124ab3b00001OMMZs2Aj22Rjhc",
+   "role": "assistant",
+   "agent": "build",
+   "model": "qwen3:32b",
+   "created": 1791616563968,
+   "completed": 1791616576944,
+   "tokens": {
+    "total": 7008,
+    "input": 151,
+    "output": 38,
+    "reasoning": 0,
+    "cache": {
+     "read": 6819,
+     "write": 0
+    }
+   },
+   "finish": "tool-calls",
+   "error": null,
+   "text": "",
+   "tools": [
+    {
+     "tool": "task",
+     "callID": "call_6fmn4e2p",
+     "status": "completed",
+     "input": {
+      "description": "tiny job",
+      "prompt": "'Reply with exactly P7-SUB-OK'",
+      "subagent_type": "general"
+     },
+     "output_head": "<task id=\"ses_edb54b03effe6hFDG4IMlyBgHH\" state=\"completed\">\n<task_result>\nP7-SUB-OK\n</task_result>\n</task>",
+     "child_session": "ses_edb54b03effe6hFDG4IMlyBgHH",
+     "ms": 7483
+    }
+   ]
+  },
+  {
+   "id": "msg_124ab6db2001npCp30HuK7Mn3l",
+   "role": "assistant",
+   "agent": "build",
+   "model": "qwen3:32b",
+   "created": 1791616576946,
+   "completed": 1791616599186,
+   "tokens": {
+    "total": 7073,
+    "input": 2882,
+    "output": 7,
+    "reasoning": 0,
+    "cache": {
+     "read": 4184,
+     "write": 0
+    }
+   },
+   "finish": "stop",
+   "error": null,
+   "text": "P7-SUB-OK",
+   "tools": []
+  }
+ ],
+ "permissions": [],
+ "children": [
+  "ses_edb54b03effe6hFDG4IMlyBgHH"
+ ]
+}
+
+[exit=0 wall=35.6s]
+
+$ python3.12 -I /Users/techfreakworm/.soma/worktrees/claude-soma/claude-soma-manager/research/opencode-soma/probes/opencode/ocdrive.py --base http://127.0.0.1:47171 turn --session ses_edb5439ddffelXZWQYuOtoEbKP --model ollama/lfm2.5-thinking --perm once --text What is 17 times 23? Think step by step, then give the number.
+{
+ "session": "ses_edb5439ddffelXZWQYuOtoEbKP",
+ "timeout": false,
+ "seen_busy": true,
+ "wall_s": 208.9,
+ "final_text": "17 \u00d7 23 = 391. \n\n\\boxed{391}",
+ "new_messages": [
+  {
+   "id": "msg_124abc66a001HzrWtgpIVdtUOh",
+   "role": "user",
+   "agent": "build",
+   "model": "lfm2.5-thinking",
+   "created": 1791616599658,
+   "completed": null,
+   "tokens": null,
+   "finish": null,
+   "error": null,
+   "text": "What is 17 times 23? Think step by step, then give the number.",
+   "tools": []
+  },
+  {
+   "id": "msg_124abc66e001TCQv8tZybi5EDN",
+   "role": "assistant",
+   "agent": "build",
+   "model": "lfm2.5-thinking",
+   "created": 1791616599662,
+   "completed": 1791616808146,
+   "tokens": {
+    "total": 8384,
+    "input": 7558,
+    "output": 826,
+    "reasoning": 0,
+    "cache": {
+     "read": 0,
+     "write": 0
+    }
+   },
+   "finish": "stop",
+   "error": null,
+   "text": "17 \u00d7 23 = 391. \n\n\\boxed{391}",
+   "tools": []
+  }
+ ],
+ "permissions": [],
+ "children": []
+}
+
+[exit=0 wall=209.0s]
+
+## 1. HTTP: per assistant message tokens (GET /session/{id}/message) and per session totals (GET /session/{id})
+$ sh -c curl -s 'http://127.0.0.1:47171/session/ses_edb5561e5ffeILZoKRtdF3OHgi/message' | jq -c '.[] | select(.info.role=="assistant") | {session: .info.sessionID[-8:], agent: .info.agent, model: .info.modelID, finish: .info.finish, cost: .info.cost, tokens: .info.tokens}'
+{"session":"tdF3OHgi","agent":"build","model":"qwen3:32b","finish":"tool-calls","cost":0,"tokens":{"total":6903,"input":4968,"output":71,"reasoning":0,"cache":{"read":1864,"write":0}}}
+{"session":"tdF3OHgi","agent":"build","model":"qwen3:32b","finish":"stop","cost":0,"tokens":{"total":6928,"input":92,"output":8,"reasoning":0,"cache":{"read":6828,"write":0}}}
+{"session":"tdF3OHgi","agent":"build","model":"qwen3:32b","finish":"tool-calls","cost":0,"tokens":{"total":7008,"input":151,"output":38,"reasoning":0,"cache":{"read":6819,"write":0}}}
+{"session":"tdF3OHgi","agent":"build","model":"qwen3:32b","finish":"stop","cost":0,"tokens":{"total":7073,"input":2882,"output":7,"reasoning":0,"cache":{"read":4184,"write":0}}}
+
+[exit=0 wall=0.1s]
+
+$ sh -c curl -s 'http://127.0.0.1:47171/session/ses_edb5561e5ffeILZoKRtdF3OHgi' | jq -c '{session: .id[-8:], parentID: .parentID, agent, cost, tokens}'
+{"session":"tdF3OHgi","parentID":null,"agent":"build","cost":0,"tokens":{"input":8093,"output":124,"reasoning":0,"cache":{"read":19695,"write":0}}}
+
+[exit=0 wall=0.1s]
+
+$ sh -c curl -s 'http://127.0.0.1:47171/session/ses_edb54b03effe6hFDG4IMlyBgHH/message' | jq -c '.[] | select(.info.role=="assistant") | {session: .info.sessionID[-8:], agent: .info.agent, model: .info.modelID, finish: .info.finish, cost: .info.cost, tokens: .info.tokens}'
+{"session":"IMlyBgHH","agent":"general","model":"qwen3:32b","finish":"stop","cost":0,"tokens":{"total":5177,"input":986,"output":7,"reasoning":0,"cache":{"read":4184,"write":0}}}
+
+[exit=0 wall=0.1s]
+
+$ sh -c curl -s 'http://127.0.0.1:47171/session/ses_edb54b03effe6hFDG4IMlyBgHH' | jq -c '{session: .id[-8:], parentID: .parentID, agent, cost, tokens}'
+{"session":"IMlyBgHH","parentID":"ses_edb5561e5ffeILZoKRtdF3OHgi","agent":"general","cost":0,"tokens":{"input":986,"output":7,"reasoning":0,"cache":{"read":4184,"write":0}}}
+
+[exit=0 wall=0.1s]
+
+$ sh -c curl -s 'http://127.0.0.1:47171/session/ses_edb5439ddffelXZWQYuOtoEbKP/message' | jq -c '.[] | select(.info.role=="assistant") | {session: .info.sessionID[-8:], agent: .info.agent, model: .info.modelID, finish: .info.finish, cost: .info.cost, tokens: .info.tokens}'
+{"session":"uOtoEbKP","agent":"build","model":"lfm2.5-thinking","finish":"stop","cost":0,"tokens":{"total":8384,"input":7558,"output":826,"reasoning":0,"cache":{"read":0,"write":0}}}
+
+[exit=0 wall=0.1s]
+
+$ sh -c curl -s 'http://127.0.0.1:47171/session/ses_edb5439ddffelXZWQYuOtoEbKP' | jq -c '{session: .id[-8:], parentID: .parentID, agent, cost, tokens}'
+{"session":"uOtoEbKP","parentID":null,"agent":"build","cost":0,"tokens":{"input":7558,"output":826,"reasoning":0,"cache":{"read":0,"write":0}}}
+
+[exit=0 wall=0.1s]
+
+## 2. opencode export <session> (per message tokens persisted)
+$ sh -c '/Users/techfreakworm/.opencode/bin/opencode' export 'ses_edb5561e5ffeILZoKRtdF3OHgi' 2>/dev/null | jq -c '.messages[] | select(.info.role=="assistant") | {model: .info.modelID, tokens: .info.tokens, cost: .info.cost}'
+{"model":"qwen3:32b","tokens":{"total":6903,"input":4968,"output":71,"reasoning":0,"cache":{"write":0,"read":1864}},"cost":0}
+{"model":"qwen3:32b","tokens":{"total":6928,"input":92,"output":8,"reasoning":0,"cache":{"write":0,"read":6828}},"cost":0}
+{"model":"qwen3:32b","tokens":{"total":7008,"input":151,"output":38,"reasoning":0,"cache":{"write":0,"read":6819}},"cost":0}
+{"model":"qwen3:32b","tokens":{"total":7073,"input":2882,"output":7,"reasoning":0,"cache":{"write":0,"read":4184}},"cost":0}
+
+[exit=0 wall=1.4s]
+
+## 3. opencode stats (all time / --models / --tools / --days 1)
+$ /Users/techfreakworm/.opencode/bin/opencode stats
+┌────────────────────────────────────────────────────────┐
+│                       OVERVIEW                         │
+├────────────────────────────────────────────────────────┤
+│Sessions                                              3 │
+│Messages                                             10 │
+│Days                                                  1 │
+└────────────────────────────────────────────────────────┘
+
+┌────────────────────────────────────────────────────────┐
+│                    COST & TOKENS                       │
+├────────────────────────────────────────────────────────┤
+│Total Cost                                        $0.00 │
+│Avg Cost/Day                                      $0.00 │
+│Avg Tokens/Session                                13.8K │
+│Median Tokens/Session                              8.4K │
+│Input                                             16.6K │
+│Output                                              957 │
+│Cache Read                                        23.9K │
+│Cache Write                                           0 │
+└────────────────────────────────────────────────────────┘
+
+
+┌────────────────────────────────────────────────────────┐
+│                      TOOL USAGE                        │
+├────────────────────────────────────────────────────────┤
+│ bash               ████████████████████   1 (50.0%)    │
+│ task               ████████████████████   1 (50.0%)    │
+└────────────────────────────────────────────────────────┘
+
+
+[exit=0 wall=1.1s]
+
+$ /Users/techfreakworm/.opencode/bin/opencode stats --models
+┌────────────────────────────────────────────────────────┐
+│                       OVERVIEW                         │
+├────────────────────────────────────────────────────────┤
+│Sessions                                              3 │
+│Messages                                             10 │
+│Days                                                  1 │
+└────────────────────────────────────────────────────────┘
+
+┌────────────────────────────────────────────────────────┐
+│                    COST & TOKENS                       │
+├────────────────────────────────────────────────────────┤
+│Total Cost                                        $0.00 │
+│Avg Cost/Day                                      $0.00 │
+│Avg Tokens/Session                                13.8K │
+│Median Tokens/Session                              8.4K │
+│Input                                             16.6K │
+│Output                                              957 │
+│Cache Read                                        23.9K │
+│Cache Write                                           0 │
+└────────────────────────────────────────────────────────┘
+
+┌────────────────────────────────────────────────────────┐
+│                      MODEL USAGE                       │
+├────────────────────────────────────────────────────────┤
+│ ollama/qwen3:32b                                       │
+│  Messages                                            5 │
+│  Input Tokens                                     9.1K │
+│  Output Tokens                                     131 │
+│  Cache Read                                      23.9K │
+│  Cache Write                                         0 │
+│  Cost                                          $0.0000 │
+├────────────────────────────────────────────────────────┤
+│ ollama/lfm2.5-thinking                                 │
+│  Messages                                            1 │
+│  Input Tokens                                     7.6K │
+│  Output Tokens                                     826 │
+│  Cache Read                                          0 │
+│  Cache Write                                         0 │
+│  Cost                                          $0.0000 │
+├────────────────────────────────────────────────────────┤
+[1A└────────────────────────────────────────────────────────┘
+
+┌────────────────────────────────────────────────────────┐
+│                      TOOL USAGE                        │
+├────────────────────────────────────────────────────────┤
+│ bash               ████████████████████   1 (50.0%)    │
+│ task               ████████████████████   1 (50.0%)    │
+└────────────────────────────────────────────────────────┘
+
+
+[exit=0 wall=1.6s]
+
+$ /Users/techfreakworm/.opencode/bin/opencode stats --tools 10
+┌────────────────────────────────────────────────────────┐
+│                       OVERVIEW                         │
+├────────────────────────────────────────────────────────┤
+│Sessions                                              3 │
+│Messages                                             10 │
+│Days                                                  1 │
+└────────────────────────────────────────────────────────┘
+
+┌────────────────────────────────────────────────────────┐
+│                    COST & TOKENS                       │
+├────────────────────────────────────────────────────────┤
+│Total Cost                                        $0.00 │
+│Avg Cost/Day                                      $0.00 │
+│Avg Tokens/Session                                13.8K │
+│Median Tokens/Session                              8.4K │
+│Input                                             16.6K │
+│Output                                              957 │
+│Cache Read                                        23.9K │
+│Cache Write                                           0 │
+└────────────────────────────────────────────────────────┘
+
+
+┌────────────────────────────────────────────────────────┐
+│                      TOOL USAGE                        │
+├────────────────────────────────────────────────────────┤
+│ bash               ████████████████████   1 (50.0%)    │
+│ task               ████████████████████   1 (50.0%)    │
+└────────────────────────────────────────────────────────┘
+
+
+[exit=0 wall=1.3s]
+
+$ /Users/techfreakworm/.opencode/bin/opencode stats --days 1
+┌────────────────────────────────────────────────────────┐
+│                       OVERVIEW                         │
+├────────────────────────────────────────────────────────┤
+│Sessions                                              3 │
+│Messages                                             10 │
+│Days                                                  1 │
+└────────────────────────────────────────────────────────┘
+
+┌────────────────────────────────────────────────────────┐
+│                    COST & TOKENS                       │
+├────────────────────────────────────────────────────────┤
+│Total Cost                                        $0.00 │
+│Avg Cost/Day                                      $0.00 │
+│Avg Tokens/Session                                13.8K │
+│Median Tokens/Session                              8.4K │
+│Input                                             16.6K │
+│Output                                              957 │
+│Cache Read                                        23.9K │
+│Cache Write                                           0 │
+└────────────────────────────────────────────────────────┘
+
+
+┌────────────────────────────────────────────────────────┐
+│                      TOOL USAGE                        │
+├────────────────────────────────────────────────────────┤
+│ bash               ████████████████████   1 (50.0%)    │
+│ task               ████████████████████   1 (50.0%)    │
+└────────────────────────────────────────────────────────┘
+
+
+[exit=0 wall=1.4s]
+
+## 4. opencode db: session token columns and per-message JSON tokens
+$ /Users/techfreakworm/.opencode/bin/opencode db path
+/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P7-usage/xdg/data/opencode/opencode.db
+
+[exit=0 wall=0.9s]
+
+$ /Users/techfreakworm/.opencode/bin/opencode db --format json SELECT id, parent_id, agent, model, cost, tokens_input, tokens_output, tokens_reasoning, tokens_cache_read, tokens_cache_write FROM session ORDER BY time_created
+[
+  {
+    "id": "ses_edb5561e5ffeILZoKRtdF3OHgi",
+    "parent_id": null,
+    "agent": "build",
+    "model": "{\"id\":\"qwen3:32b\",\"providerID\":\"ollama\",\"variant\":\"default\"}",
+    "cost": 0,
+    "tokens_input": 8093,
+    "tokens_output": 124,
+    "tokens_reasoning": 0,
+    "tokens_cache_read": 19695,
+    "tokens_cache_write": 0
+  },
+  {
+    "id": "ses_edb54b03effe6hFDG4IMlyBgHH",
+    "parent_id": "ses_edb5561e5ffeILZoKRtdF3OHgi",
+    "agent": "general",
+    "model": "{\"id\":\"qwen3:32b\",\"providerID\":\"ollama\",\"variant\":\"default\"}",
+    "cost": 0,
+    "tokens_input": 986,
+    "tokens_output": 7,
+    "tokens_reasoning": 0,
+    "tokens_cache_read": 4184,
+    "tokens_cache_write": 0
+  },
+  {
+    "id": "ses_edb5439ddffelXZWQYuOtoEbKP",
+    "parent_id": null,
+    "agent": "build",
+    "model": "{\"id\":\"lfm2.5-thinking\",\"providerID\":\"ollama\",\"variant\":\"default\"}",
+    "cost": 0,
+    "tokens_input": 7558,
+    "tokens_output": 826,
+    "tokens_reasoning": 0,
+    "tokens_cache_read": 0,
+    "tokens_cache_write": 0
+  }
+]
+
+[exit=0 wall=1.0s]
+
+$ /Users/techfreakworm/.opencode/bin/opencode db --format json SELECT json_extract(data,'$.modelID') AS model, json_extract(data,'$.agent') AS agent, count(*) AS msgs, sum(json_extract(data,'$.tokens.input')) AS input, sum(json_extract(data,'$.tokens.output')) AS output, sum(json_extract(data,'$.tokens.reasoning')) AS reasoning, sum(json_extract(data,'$.tokens.cache.read')) AS cache_read FROM message WHERE json_extract(data,'$.role')='assistant' GROUP BY 1,2
+[
+  {
+    "model": "lfm2.5-thinking",
+    "agent": "build",
+    "msgs": 1,
+    "input": 7558,
+    "output": 826,
+    "reasoning": 0,
+    "cache_read": 0
+  },
+  {
+    "model": "qwen3:32b",
+    "agent": "build",
+    "msgs": 4,
+    "input": 8093,
+    "output": 124,
+    "reasoning": 0,
+    "cache_read": 19695
+  },
+  {
+    "model": "qwen3:32b",
+    "agent": "general",
+    "msgs": 1,
+    "input": 986,
+    "output": 7,
+    "reasoning": 0,
+    "cache_read": 4184
+  }
+]
+
+[exit=0 wall=0.9s]
+
+## 5. ground truth: usage blocks ollama returned (proxy), summed per model
+$ python3.12 -I -c 
+import json,sys,collections
+agg=collections.defaultdict(collections.Counter)
+for l in open(sys.argv[1]):
+    e=json.loads(l); r=e.get("request") or {}; u=(e.get("response") or {}).get("usage") or {}
+    if not r or not u: continue
+    a=agg[r.get("model")]; a["requests"]+=1; a["prompt_tokens"]+=u.get("prompt_tokens",0); a["completion_tokens"]+=u.get("completion_tokens",0)
+    a["cached_tokens"]+=(u.get("prompt_tokens_details") or {}).get("cached_tokens",0) or 0
+    a["reasoning_chars"]+=(e.get("response") or {}).get("reasoning_chars",0)
+for m,a in agg.items(): print(m, dict(a)) /Users/techfreakworm/.soma/worktrees/claude-soma/claude-soma-manager/research/opencode-soma/evidence/opencode/P7-usage/proxy.jsonl
+qwen3:32b {'requests': 5, 'prompt_tokens': 32958, 'completion_tokens': 131, 'cached_tokens': 23879, 'reasoning_chars': 0}
+lfm2.5-thinking {'requests': 1, 'prompt_tokens': 7558, 'completion_tokens': 826, 'cached_tokens': 0, 'reasoning_chars': 3264}
+
+[exit=0 wall=0.1s]
+
+note: opencode input = prompt_tokens - cached_tokens, cache.read = cached_tokens, output = completion_tokens (compare rows above)
+## 6. rebuild a claude-soma-style daily usage table (aggregate.py over opencode db rows)
+$ python3.12 -I /Users/techfreakworm/.soma/worktrees/claude-soma/claude-soma-manager/research/opencode-soma/probes/opencode/P7-usage/aggregate.py /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P7-usage/msgrows.json /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P7-usage/usage.sqlite {"interactive": 200000, "agent": 100000}
+date       class       model                        msgs    input  output reason  c.read  cost$  used%  agents
+2026-10-10 agent       ollama/qwen3:32b                1      986       7      0    4184   0.00    5.2  general:1
+2026-10-10 interactive ollama/lfm2.5-thinking          1     7558     826      0       0   0.00    4.2  build:1
+2026-10-10 interactive ollama/qwen3:32b                4     8093     124      0   19695   0.00   14.0  build:4
+daily_usage rows written: 3
+
+[exit=0 wall=0.1s]
+
+$ sh -c python3.12 -I -c 'import sqlite3,sys; c=sqlite3.connect(sys.argv[1]); [print(r) for r in c.execute("select * from daily_usage")]' '/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P7-usage/usage.sqlite'
+('2026-10-10', 'agent', 'ollama/qwen3:32b', 1, 986, 7, 0, 4184, 0, 0.0, 5177, 100000, 5.2)
+('2026-10-10', 'interactive', 'ollama/lfm2.5-thinking', 1, 7558, 826, 0, 0, 0, 0.0, 8384, 200000, 4.2)
+('2026-10-10', 'interactive', 'ollama/qwen3:32b', 4, 8093, 124, 0, 19695, 0, 0.0, 27912, 200000, 14.0)
+
+[exit=0 wall=0.1s]
+
+summary: assistant messages with non-zero input+output=6, models with non-zero output=2, lfm2.5 reasoning tokens counted=0
+VERDICT: PASS — per-message and per-session input/output/cache tokens are recorded for both ollama models (HTTP, export, stats, db) and match ollama's usage blocks; aggregate.py rebuilt a daily usage table (reasoning tokens counted: 0).

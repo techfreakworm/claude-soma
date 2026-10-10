@@ -1,0 +1,51 @@
+# conditions.log
+date-utc: 2026-10-10T07:23:04Z
+probe-script: research/opencode-soma/probes/opencode/conditions.sh
+opencode-version: 1.18.8
+model: ollama/qwen3:32b, ollama/lfm2.5-thinking
+sandbox: $TMPDIR/ocsoma-pe/conditions (HOME, XDG_*, TMPDIR all inside it)
+purpose: test conditions + per-model LLM turn timing (tier-table evidence)
+
+$ sh -c sysctl -n machdep.cpu.brand_string; sysctl -n hw.memsize | awk '{print $1/1024/1024/1024 " GiB RAM"}'; sw_vers 2>/dev/null | tr '\n' ' '; echo
+Apple M5 Max
+128 GiB RAM
+ProductName:		macOS ProductVersion:		26.4.1 BuildVersion:		25E253 
+
+[exit=0 wall=0.2s]
+
+$ curl -s http://127.0.0.1:11434/api/version
+{"version":"0.33.3"}
+[exit=0 wall=0.2s]
+
+$ sh -c curl -s http://127.0.0.1:11434/api/tags | jq -c '.models[] | {name, size_gb: (.size/1e9|floor), params: .details.parameter_size, quant: .details.quantization_level, native_ctx: .details.context_length}'
+{"name":"lfm2.5-thinking:latest","size_gb":0,"params":"1.2B","quant":"Q4_K_M","native_ctx":128000}
+{"name":"qwen3:32b","size_gb":20,"params":"32.8B","quant":"Q4_K_M","native_ctx":40960}
+
+[exit=0 wall=0.2s]
+
+$ sh -c curl -s http://127.0.0.1:11434/api/ps | jq -c '.models[] | {name, context_length, vram_gb: (.size_vram/1e9|floor)}'
+{"name":"lfm2.5-thinking:latest","context_length":128000,"vram_gb":3}
+{"name":"qwen3:32b","context_length":40960,"vram_gb":31}
+
+[exit=0 wall=0.1s]
+
+## other ollama consumers on this machine during the probes (other teammates' benchmarks share the GPU; timings are upper bounds)
+$ sh -c ps -axo pid,etime,command | grep -E 'run_bench|research/opencode-soma/probes/(memory|platform)' | grep -v grep | cut -c1-160 || true
+19474       11:58 /bin/zsh -c source /Users/techfreakworm/.claude/shell-snapshots/snapshot-zsh-1791611211290-vd7l2x.sh 2>/dev/null || true && setopt NO_EXTENDED
+19481       11:58 /opt/homebrew/Cellar/python@3.12/3.12.10_1/Frameworks/Python.framework/Versions/3.12/Resources/Python.app/Contents/MacOS/Python research/openc
+32220       08:13 /bin/zsh -c source /Users/techfreakworm/.claude/shell-snapshots/snapshot-zsh-1791611211290-vd7l2x.sh 2>/dev/null || true && setopt NO_EXTENDED
+32227       08:13 bash research/opencode-soma/probes/memory/run_bench.sh
+40446       06:14 /opt/homebrew/Cellar/python@3.12/3.12.10_1/Frameworks/Python.framework/Versions/3.12/Resources/Python.app/Contents/MacOS/Python /Users/techfre
+
+[exit=0 wall=0.4s]
+
+## per-model LLM turn timing across all opencode probes (turn_timing.py over evidence/opencode/**/proxy*.jsonl)
+$ python3.12 -I /Users/techfreakworm/.soma/worktrees/claude-soma/claude-soma-manager/research/opencode-soma/probes/opencode/turn_timing.py /Users/techfreakworm/.soma/worktrees/claude-soma/claude-soma-manager/research/opencode-soma/evidence/opencode
+model                 n wall p50 wall p90 ttfb p50 decode tok/s p50 prefill tok/s p50 prompt tok p50 max prompt
+lfm2.5-thinking       2      4.1    208.2      3.1            158.5                37           7368       7558
+qwen3:32b           184      7.5     49.8      5.8              8.2               106           6836      14786
+(requests cut by a client kill are excluded; decode rate only from replies >= 20 tokens)
+
+[exit=0 wall=0.2s]
+
+VERDICT: PASS — conditions and per-model turn timing recorded.

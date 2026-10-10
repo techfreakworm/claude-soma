@@ -1,0 +1,107 @@
+# P6-permissions/reject-retest.log
+date-utc: 2026-10-10T07:23:36Z
+probe-script: research/opencode-soma/probes/opencode/P6-permissions/reject-retest.sh
+opencode-version: 1.18.8
+model: ollama/qwen3:32b (thinking off)
+sandbox: $TMPDIR/ocsoma-pe/P6-reject (HOME, XDG_*, TMPDIR all inside it)
+purpose: reject a pending permission over HTTP; which endpoint lists it
+
+session: ses_edb4dd783ffefG4v5dvFmnhta2 ; firing a bash tool call that needs ask, via prompt_async
+## poll the three permission endpoints until one lists a pending request (max 60s)
+found pending permission id via: GET /permission after ~14.5s
+$ jcurl http://127.0.0.1:47168/permission
+[{"id":"per_124b27d60001iXpNiFNpBKzYeT","sessionID":"ses_edb4dd783ffefG4v5dvFmnhta2","permission":"external_directory","patterns":["/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P6-reject/project/p6work/*"],"metadata":{"command":"touch /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P6-reject/project/p6work/p6-reject-target","directories":["/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P6-reject/project/p6work"],"patterns":["/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P6-reject/project/p6work/*"]},"always":["/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P6-reject/project/p6work/*"],"tool":{"messageID":"msg_124b23042001xI3Z3aM4vHKjso","callID":"call_g56unabw"}}]
+[exit=0 wall=0.1s]
+
+$ jcurl http://127.0.0.1:47168/session/ses_edb4dd783ffefG4v5dvFmnhta2/permission
+<!doctype html>
+<html lang="en" style="background-color: var(--v2-background-bg-deep, #fafafa)">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, interactive-widget=resizes-content, viewport-fit=cover"
+    />
+    <title>OpenCode</title>
+    <link rel="icon" type="image/png" href="/favicon-96x96-v3.png" sizes="96x96" />
+    <link rel="icon" type="image/svg+xml" href="/favicon-v3.svg" />
+    <link rel="shortcut icon" href="/favicon-v3.ico" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon-v3.png" />
+    <link rel="manifest" href="/site.webmanifest" />
+    <meta name="theme-color" content="#fafafa" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta property="og:image" content="/social-share.png" />
+    <meta property="twitter:image" content="/social-share.png" />
+    <script id="oc-theme-preload-script">;(function () {
+  var key = "opencode-theme-id"
+  var themeId = localStorage.getItem(key) || "oc-2"
+
+  if (themeId === "oc-1") {
+    themeId = "oc-2"
+    localStorage.setItem(key, themeId)
+    localStorage.removeItem("opencode-theme-css-light")
+    localStorage.removeItem("opencode-theme-css-dark")
+  }
+
+  var scheme = localStorage.getItem("opencode-color-scheme") || "system"
+  var isDark = scheme === "dark" || (scheme === "system" && matchMedia("(prefers-color-scheme: dark)").matches)
+  var mode = isDark ? "dark" : "light"
+
+  document.documentElement.dataset.theme = themeId
+  document.documentElement.dataset.colorScheme = mode
+  document.documentElement.style.backgroundColor = isDark ? "#080808" : "#fafafa"
+
+  // Update theme-color meta tag to match app color scheme
+  var metas = document.querySelectorAll("meta[name='theme-color']")
+  if (metas.length > 0) metas[0].setAttribute("content", isDark ? "#080808" : "#fafafa")
+
+  if (themeId === "oc-2") return
+
+  var css = localStorage.getItem("opencode-theme-css-" + mode)
+  if (css) {
+    var style = document.createElement("style")
+    style.id = "oc-theme-preload"
+    style.textContent =
+      ":root{color-scheme:" +
+      mode +
+      ";--text-mix-blend-mode:" +
+      (isDark ? "plus-lighter" : "multiply") +
+      ";" +
+      css +
+      "}"
+    document.head.appendChild(style)
+  }
+})()
+</script>
+    <script type="module" crossorigin src="/assets/index-PBx0gfQA.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-CqBlEoSU.css">
+  </head>
+  <body class="antialiased overscroll-none text-12-regular overflow-hidden bg-v2-background-bg-deep">
+    <noscript>You need to enable JavaScript to run this app.</noscript>
+    <div id="root" class="flex flex-col h-dvh bg-v2-background-bg-deep p-px"></div>
+  </body>
+</html>
+
+[exit=0 wall=0.1s]
+
+$ curl -s http://127.0.0.1:47168/session/status
+{"ses_edb4dd783ffefG4v5dvFmnhta2":{"type":"busy"}}
+[exit=0 wall=0.1s]
+
+## reject it: POST /permission/per_124b27d60001iXpNiFNpBKzYeT/reply {reply: reject}
+$ jcurl -w \n-> HTTP %{http_code}\n -X POST http://127.0.0.1:47168/permission/per_124b27d60001iXpNiFNpBKzYeT/reply -d {"reply":"reject","message":"operator rejected from Telegram"}
+true
+-> HTTP 200
+
+[exit=0 wall=0.1s]
+
+session status after reject: "idle"
+$ sh -c curl -s 'http://127.0.0.1:47168/session/ses_edb4dd783ffefG4v5dvFmnhta2/message' | jq -c '.[-1] | {role: .info.role, finish: .info.finish, error: (.info.error.name // null), tools: [.parts[] | select(.type=="tool") | {tool, status: .state.status, err: ((.state.error // "")|.[0:120])}], text: ([.parts[] | select(.type=="text") | .text] | join(" ") | .[0:120])}'
+{"role":"assistant","finish":"stop","error":null,"tools":[],"text":"DONE"}
+
+[exit=0 wall=0.1s]
+
+target file created (must be no): no
+VERDICT: PASS — a pending permission is listed via GET /permission and rejected over HTTP with POST /permission/{id}/reply {reply:reject}; the tool call did not run (target absent).
