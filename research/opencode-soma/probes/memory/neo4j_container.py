@@ -73,6 +73,14 @@ def hub_compressed_size() -> int | None:
 
 
 def main() -> int:
+    try:
+        return run()
+    finally:
+        B.sh(["docker", "rm", "-f", B.CONTAINER], check=False)
+        B.sh(["docker", "volume", "rm", B.VOLUME], check=False)
+
+
+def run() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--data", required=True)
     ap.add_argument("--cold-runs", type=int, default=3)
@@ -118,14 +126,9 @@ def main() -> int:
         res["load_50k_s"] = round(t["load_s"], 2)
         res["after_load_50k"] = settle_mem(5)
         res["disk_50k_kb_before_checkpoint"] = disk_breakdown()
-        d = B.neo4j_driver()
-        with d.session() as s:
-            s.run("CALL db.checkpoint()").consume()
-        d.close()
-        res["disk_50k_kb"] = disk_breakdown()
         log(fh, f"loaded {SCALE_FOR_LOAD} facts in {t['load_s']:.2f}s; mem {json.dumps(res['after_load_50k'])}; "
-                f"disk before checkpoint {json.dumps(res['disk_50k_kb_before_checkpoint'])}; "
-                f"after CALL db.checkpoint() {json.dumps(res['disk_50k_kb'])}")
+                f"disk before any checkpoint {json.dumps(res['disk_50k_kb_before_checkpoint'])} "
+                f"(db.checkpoint() is not available in Community; the clean restarts below checkpoint the store)")
         restarts = []
         ent = truth["Q1"][0]["params"]["entity"]
         for i in range(a.cold_runs):
@@ -137,6 +140,8 @@ def main() -> int:
             restarts.append({"restart_to_bolt_s": round(ready, 2), "first_query_ms": fq})
             log(fh, f"restart {i + 1} with 50k facts: docker restart -> bolt in {ready:.2f}s, first Q1 {fq} ms")
         res["restart_with_50k"] = restarts
+        res["disk_50k_kb"] = disk_breakdown()
+        log(fh, f"disk with 50k facts after clean restarts (checkpointed store): {json.dumps(res['disk_50k_kb'])}")
         res["idle_50k_after_restart"] = settle_mem()
         log(fh, f"idle after restart with 50k facts: {json.dumps(res['idle_50k_after_restart'])}")
 

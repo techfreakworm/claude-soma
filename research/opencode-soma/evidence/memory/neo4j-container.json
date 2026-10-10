@@ -1,0 +1,198 @@
+{
+ "after_load_50k": {
+  "docker_stats_mb": 1171.5,
+  "java_vmrss_mb": 1112.2
+ },
+ "bolt": "127.0.0.1:47287",
+ "cold_start_fresh_s": [
+  13.57,
+  10.94,
+  11.5
+ ],
+ "disk_50k_kb": {
+  "/data": 571764,
+  "/data/databases/neo4j": 44136,
+  "/data/databases/system": 1260,
+  "/data/transactions/neo4j": 263172,
+  "/data/transactions/system": 263172
+ },
+ "disk_50k_kb_before_checkpoint": {
+  "/data": 528368,
+  "/data/databases/neo4j": 996,
+  "/data/databases/system": 1004,
+  "/data/transactions/neo4j": 263172,
+  "/data/transactions/system": 263172
+ },
+ "disk_empty_kb": {
+  "/data": 528108,
+  "/data/databases/neo4j": 736,
+  "/data/databases/system": 1004,
+  "/data/transactions/neo4j": 263172,
+  "/data/transactions/system": 263172
+ },
+ "heap_ladder_50k": [
+  {
+   "correct": "36/36",
+   "heap": "512m",
+   "java_vmrss_mb_end": 1152.3,
+   "load_s": 13.77,
+   "median_ms": {
+    "Q1": 24.68,
+    "Q3": 41.49,
+    "Q4": 7.82,
+    "Q5": 301.3,
+    "Q6": 10.5,
+    "Q7a": 13.69,
+    "Q8": 18.14,
+    "W1": 83.97
+   },
+   "mem": {
+    "max_mb": 1214.4,
+    "median_mb": 1132.8,
+    "n_samples": 10
+   },
+   "pagecache": "256m",
+   "start_s": 12.02,
+   "status": "ok"
+  },
+  {
+   "correct": "36/36",
+   "heap": "256m",
+   "java_vmrss_mb_end": 912.9,
+   "load_s": 15.77,
+   "median_ms": {
+    "Q1": 30.04,
+    "Q3": 50.44,
+    "Q4": 9.18,
+    "Q5": 342.41,
+    "Q6": 11.69,
+    "Q7a": 12.96,
+    "Q8": 16.88,
+    "W1": 68.97
+   },
+   "mem": {
+    "max_mb": 963.5,
+    "median_mb": 869.1,
+    "n_samples": 10
+   },
+   "pagecache": "128m",
+   "start_s": 9.13,
+   "status": "ok"
+  },
+  {
+   "correct": "36/36",
+   "heap": "256m",
+   "java_vmrss_mb_end": 939.7,
+   "load_s": 15.68,
+   "median_ms": {
+    "Q1": 30.83,
+    "Q3": 53.67,
+    "Q4": 13.05,
+    "Q5": 457.15,
+    "Q6": 16.8,
+    "Q7a": 16.65,
+    "Q8": 18.96,
+    "W1": 148.08
+   },
+   "mem": {
+    "max_mb": 991.6,
+    "median_mb": 911.5,
+    "n_samples": 11
+   },
+   "pagecache": "64m",
+   "start_s": 11.35,
+   "status": "ok"
+  },
+  {
+   "correct": "36/36",
+   "heap": "128m",
+   "java_vmrss_mb_end": 742.4,
+   "load_s": 11.82,
+   "median_ms": {
+    "Q1": 22.93,
+    "Q3": 45.55,
+    "Q4": 7.3,
+    "Q5": 302.04,
+    "Q6": 7.75,
+    "Q7a": 9.39,
+    "Q8": 11.12,
+    "W1": 49.17
+   },
+   "mem": {
+    "max_mb": 784.6,
+    "median_mb": 711.8,
+    "n_samples": 8
+   },
+   "pagecache": "32m",
+   "start_s": 7.66,
+   "status": "ok"
+  },
+  {
+   "correct": "36/36",
+   "heap": "96m",
+   "java_vmrss_mb_end": 714.2,
+   "load_s": 14.0,
+   "median_ms": {
+    "Q1": 34.83,
+    "Q3": 50.47,
+    "Q4": 6.81,
+    "Q5": 739.11,
+    "Q6": 10.41,
+    "Q7a": 11.11,
+    "Q8": 13.79,
+    "W1": 48.68
+   },
+   "mem": {
+    "max_mb": 753.8,
+    "median_mb": 667.9,
+    "n_samples": 9
+   },
+   "pagecache": "16m",
+   "start_s": 8.84,
+   "status": "ok"
+  },
+  {
+   "container_log_tail": "2026-10-10 06:48:57.753+0000 INFO  X-Forward header processing enabled with security controls\n2026-10-10 06:48:57.753+0000 WARN  SECURITY WARNING: X-Forward headers accepted from any source - configure allow_proxies\n2026-10-10 06:48:57.753+0000 WARN  SECURITY WARNING: X-Forward headers accept any hostname - configure allow_hosts\n2026-10-10 06:48:58.836+0000 INFO  Anonymous Usage Data is being sent to Neo4j, see https://neo4j.com/docs/usage-data/\n2026-10-10 06:48:59.605+0000 INFO  Bolt enabled on 0.0.0.0:7687.\n2026-10-10 06:48:59.616+0000 INFO  Fleet discovery broadcasts have been enabled for 1 network: 172.17.255.255\n2026-10-10 06:48:59.838+0000 INFO  This server has built-in support for online monitoring through Fleet Manager. Visit https://console.neo4j.io to get started!\n2026-10-10 06:49:01.274+0000 INFO  HTTP enabled on 0.0.0.0:7474.\n2026-10-10 06:49:01.276+0000 INFO  Remote interface available at http://localhost:7474/\n2026-10-10 06:49:01.279+0000 INFO  id: 83FD89D786F44D71C22B0964567A2079193813C41454D1E8EE4BA21EEA17F841\n2026-10-10 06:49:01.280+0000 INFO  name: system\n2026-10-10 06:49:01.280+0000 INFO  creationDate: 2026-10-10T06:48:58.202Z\n2026-10-10 06:49:01.280+0000 INFO  Started.\n",
+   "heap": "64m",
+   "java_vmrss_mb_end": 640.2,
+   "mem": {
+    "max_mb": 674.9,
+    "median_mb": 634.1,
+    "n_samples": 9
+   },
+   "pagecache": "8m",
+   "start_s": 9.25,
+   "status": "failed: TransientError: {neo4j_code: Neo.TransientError.General.OutOfMemoryError} {message: Java heap space} {gql_status: 51N59} {gql_status_description: error: system configuration or operation exception - internal resource exhaustion. The DBMS is unable to handle the request, please retry later or contact the system oper"
+  }
+ ],
+ "idle_50k_after_restart": {
+  "docker_stats_mb": 953.7,
+  "java_vmrss_mb": 917.7
+ },
+ "idle_empty_db_heap512_pc256": {
+  "docker_stats_mb": 910.7,
+  "java_vmrss_mb": 866.1
+ },
+ "image": "neo4j:2026.09.0-community",
+ "image_compressed_arm64_mb": 406.3,
+ "image_size_mb": 1122.4,
+ "java_in_image": "openjdk version \"25.0.4.1\" 2026-08-18 LTS",
+ "load_50k_s": 18.69,
+ "neo4j_version": "2026.09.0",
+ "password": "random, kept in scratch, redacted",
+ "pull_wall_seconds_first_pull": 12.2,
+ "restart_with_50k": [
+  {
+   "first_query_ms": 610.6,
+   "restart_to_bolt_s": 10.19
+  },
+  {
+   "first_query_ms": 655.6,
+   "restart_to_bolt_s": 12.03
+  },
+  {
+   "first_query_ms": 682.4,
+   "restart_to_bolt_s": 12.38
+  }
+ ]
+}
