@@ -76,8 +76,8 @@ C10 (--rerun) runs every pinned RERUN_LIST entry from its own clean `git archive
     VERDICT words (first word after `VERDICT:`) must equal HEAD's. The Neo4j entry instead needs
     HEAD gen.log's dataset_sha256 for 50000 facts, correct = 1.0, and a Q1 p50 within 10x of HEAD's
     neo4j/Q1/50000 row. Leftover ocsoma-vf-* containers or volumes fail the entry. Transcripts and
-    produced logs go to evidence/verify/rerun/. Pinned: P1-resume (P1-headless/crash-run.sh),
-    P2-gate (P2-hooks run.sh then analyze.sh; gate.log), P3-scoping (P3-mcp/run.sh; mcp, scoping
+    produced logs go to evidence/verify/rerun/. Pinned: P1-resume (P1-headless/crash-run.sh and
+    crash-serve.sh), P2-gate (P2-hooks run.sh then analyze.sh; gate.log), P3-scoping (P3-mcp/run.sh; mcp, scoping
     and scoping-verdict logs), P5-tmux (P5-tmux/run.sh; tmux and pane-analysis logs), neo4j-timing
     (gen_memory.py + bench.py, Q1 at 50000 facts). With an empty list it FAILs "rerun list not yet
     pinned".
@@ -174,6 +174,9 @@ RERUN_LIST: list[dict[str, Any]] = [
     {"id": "P1-resume", "tags": ["P1-resume"], "timeout": 1800, "env": OC_ENV,
      "argv": ["bash", f"{OCP}/P1-headless/crash-run.sh"], "rewrite": [PROXY_GUARD],
      "compare": [f"{OCE}/P1-headless/crash-run.log"]},
+    {"id": "P1-resume-serve", "tags": ["P1-resume"], "timeout": 1800, "env": OC_ENV,
+     "argv": ["bash", f"{OCP}/P1-headless/crash-serve.sh"], "rewrite": [PROXY_GUARD],
+     "compare": [f"{OCE}/P1-headless/crash-serve.log"]},
     {"id": "P2-gate", "tags": ["P2-gate"], "timeout": 2400, "env": OC_ENV,
      "argv": ["bash", "-c", f"bash {OCP}/P2-hooks/run.sh; bash {OCP}/P2-hooks/analyze.sh"],
      "rewrite": [PROXY_GUARD], "compare": [f"{OCE}/P2-hooks/gate.log"]},
