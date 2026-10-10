@@ -1,5 +1,5 @@
 # start-here reproduce
-date-utc: 2026-10-10T08:13:30Z
+date-utc: 2026-10-10T08:37:52Z
 purpose: literal commands from START-HERE.md run verbatim; each prints a key result
 
 $ python3.12 -I research/opencode-soma/probes/check_dod.py
@@ -7,13 +7,13 @@ PASS C1: 7 deliverables committed, mermaid block present, probes/ and evidence/ 
 PASS C2: verdict paragraph ok; 12 rows valid (PARITY 0, DEGRADED 5, NEEDS-BUILD 7, IMPOSSIBLE 0)
 PASS C3: qualifying logs per group P1:8 P2:8 P3:3 P4:6 P5:3 P6:5 P7:1
 PASS C4: 44 neo4j bench row(s) with timings; container cold-start and RSS present
-PASS C5: P0 acceptance command at ROADMAP.md:38
-PASS C6: 12 ranked risks, each with a cheapest early test
+PASS C5: P0 acceptance command at ROADMAP.md:39
+PASS C6: 13 ranked risks, each with a cheapest early test
 FAIL C7: no committed *.log under evidence/start-here/
 FAIL C8: 1 uncommitted path(s): research/opencode-soma/evidence/start-here/reproduce.log (M)
-PASS C9: real dirs unchanged; 41 opencode log(s) inside the window
+FAIL C9: research/opencode-soma/evidence/opencode/P5-tmux/pane-analysis.log ran at 2026-10-10T08:36:11Z, outside the isolation window [2026-10-10T05:48:44Z, 2026-10-10T08:17:59Z]; research/opencode-soma/evidence/opencode/P5-tmux/tmux.log ran at 2026-10-10T08:34:32Z, outside the isolation window [2026-10-10T05:48:44Z, 2026-10-10T08:17:59Z]
 SKIP C10: re-runs only with --rerun (the final gate uses --rerun)
-PASS C11: 239 files scanned, no credential-shaped strings
+PASS C11: 242 files scanned, no credential-shaped strings
 GATE: FAIL
 
 $ bash research/opencode-soma/probes/opencode/P2-hooks/analyze.sh
@@ -23,7 +23,7 @@ VERDICT: PASS — tool.execute.before blocked the primary's bash call before exe
 VERDICT: PASS — every executed tool call in every session of the tree (built-in, MCP, task, the subagent's own calls) is in the activity log with args, session, parent session, agent, duration and result head; the gate-blocked attempt is on record in the gate's own log (later plugins never see a call an earlier plugin rejects).
 
 $ bash research/opencode-soma/probes/opencode/P5-tmux/analyze.sh
-VERDICT: PARTIAL — every message was delivered intact and every reply reached the screen, but only column-aware parsing finds them all (the sidebar shares rows) and long replies are cut to the visible screen (alt-screen, no tmux scrollback).
+VERDICT: PARTIAL — these are the committed round-1 panes (a single sample); the authoritative scrape reliability is the multi-round aggregate in tmux.log. On these panes whole-line parsing and column-aware parsing differ (the sidebar shares rows, so whole-line can miss or match the wrong column), and long replies are cut to the visible screen (alt-screen, no tmux scrollback). Separately, tmux.log shows the old whole-line checker also false-positives mid-turn on the sidebar auto-title before any reply exists. Net: pane scraping is lossy and can false-positive; the HTTP API supersedes it.
 
 $ python3.12 research/opencode-soma/probes/memory/gen_memory.py --n-facts 5000 --out "$TMPDIR/sh-mem-5k"
 {
@@ -172,14 +172,14 @@ $ python3.12 -I research/opencode-soma/probes/opencode/sqlite_mem_bench.py --dat
 sqlite-only memory bench: n_facts=5000 entities=251
   build (facts + fact_entity + FTS5, in-memory): 13 ms
   Q1 entity-recall queries: 10
-  query latency ms: p50=0.415 p95=0.479 max=0.479
+  query latency ms: p50=0.395 p95=0.444 max=0.444
   recall=1.000 precision=1.000 vs the generated oracle
 VERDICT: PASS - SQLite entity recall at n=5000 is exact (recall=1.000 precision=1.000); full multi-backend matrix is in evidence/memory/bench-results.json
 
 $ python3.12 -I research/opencode-soma/probes/opencode/turn_timing.py research/opencode-soma/evidence/opencode
 model                 n wall p50 wall p90 ttfb p50 decode tok/s p50 prefill tok/s p50 prompt tok p50 max prompt
 lfm2.5-thinking       2      4.1    208.2      3.1            158.5                37           7368       7558
-qwen3:32b           184      7.5     49.8      5.8              8.2               106           6836      14786
+qwen3:32b           190      7.2     45.2      5.3              8.2               106           6870      14786
 (requests cut by a client kill are excluded; decode rate only from replies >= 20 tokens)
 
 $ bash research/opencode-soma/probes/opencode/isolation.sh verify

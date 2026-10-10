@@ -1,5 +1,5 @@
 # P5-tmux/pane-analysis.log
-date-utc: 2026-10-10T08:36:11Z
+date-utc: 2026-10-10T08:37:54Z
 probe-script: research/opencode-soma/probes/opencode/P5-tmux/analyze.sh (after run.sh)
 opencode-version: 1.18.8
 model: n/a (no LLM)
