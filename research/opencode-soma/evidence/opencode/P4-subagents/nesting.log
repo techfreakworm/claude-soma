@@ -1,0 +1,10 @@
+# P4-subagents/nesting.log
+date-utc: 2026-10-10T07:09:40Z
+probe-script: research/opencode-soma/probes/opencode/P4-subagents/run.sh
+opencode-version: 1.18.8
+model: ollama/qwen3:32b (thinking off)
+sandbox: $TMPDIR/ocsoma-pe/P4-subagents (HOME, XDG_*, TMPDIR all inside it)
+purpose: can a subagent spawn its own subagent? default config vs subagent_depth=2
+
+## b1. default (subagent_depth=1): primary -> nester -> researcher
+$ python3.12 -I /Users/techfreakworm/.soma/worktrees/claude-soma/claude-soma-manager/research/opencode-soma/probes/opencode/ocdrive.py --base http://127.0.0.1:47141 turn --session ses_edb5a9caaffezHRDDvtO3T5yY8 --model ollama/qwen3:32b --perm once --text Use the task tool with subagent_type nester, description nest test, prompt go. Then reply with exactly what it returned.

@@ -48,3 +48,367 @@ DONE
 file created: YES
 ## 2c. opencode run --yolo (hidden alias)
 $ run_bounded 150 /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P6-permissions/2c.txt /Users/techfreakworm/.opencode/bin/opencode run --yolo -m ollama/qwen3:32b Use the bash tool to run exactly: touch /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P6-permissions/project/p6work/p6-run-yolo   Then say DONE.
+exited rc=0 after ~106s
+
+[exit=0 wall=107.2s]
+
+$ cat /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P6-permissions/2c.txt
+[0m
+> build · qwen3:32b
+[0m
+[0m$ [0mtouch /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P6-permissions/project/p6work/p6-run-yolo
+(no output)
+[0m
+DONE
+
+[exit=0 wall=0.0s]
+
+file created: YES
+## 2d. OPENCODE_PERMISSION='{"bash":"deny"}' + run --auto (explicit deny must win over --auto)
+$ run_bounded 150 /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P6-permissions/2d.txt env OPENCODE_PERMISSION={"bash":"deny"} /Users/techfreakworm/.opencode/bin/opencode run --auto -m ollama/qwen3:32b Use the bash tool to run exactly: touch /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P6-permissions/project/p6work/p6-run-envdeny   Then say DONE.
+exited rc=0 after ~30s
+
+[exit=0 wall=30.3s]
+
+$ cat /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P6-permissions/2d.txt
+[0m
+> build · qwen3:32b
+[0m
+
+[exit=0 wall=0.0s]
+
+file created: no
+## 2e. opencode serve, bash=ask, nobody answers for 40s
+$ python3.12 -I /Users/techfreakworm/.soma/worktrees/claude-soma/claude-soma-manager/research/opencode-soma/probes/opencode/ocdrive.py --base http://127.0.0.1:47161 turn --session ses_edb62bf1effe7KF7OoKcJ6QVBn --model ollama/qwen3:32b --perm none --timeout 40 --text Use the bash tool to run exactly: touch /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P6-permissions/project/p6work/p6-serve-reject   Then say DONE.
+{
+ "session": "ses_edb62bf1effe7KF7OoKcJ6QVBn",
+ "timeout": true,
+ "wall_s": 40.4,
+ "last_status": {
+  "type": "busy"
+ },
+ "pending_permissions": [],
+ "permissions": [],
+ "messages": [
+  {
+   "id": "msg_1249d4143001uXTGyPDX3K7ru3",
+   "role": "user",
+   "agent": "build",
+   "model": "qwen3:32b",
+   "created": 1791615648067,
+   "completed": null,
+   "tokens": null,
+   "finish": null,
+   "error": null,
+   "text": "Use the bash tool to run exactly: touch /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P6-permissions/project/p6work/p6-serve-reject   Then say DONE.",
+   "tools": []
+  },
+  {
+   "id": "msg_1249d4213001lsTkMRk2VoxKLB",
+   "role": "assistant",
+   "agent": "build",
+   "model": "qwen3:32b",
+   "created": 1791615648275,
+   "completed": null,
+   "tokens": {
+    "input": 0,
+    "output": 0,
+    "reasoning": 0,
+    "cache": {
+     "read": 0,
+     "write": 0
+    }
+   },
+   "finish": null,
+   "error": null,
+   "text": "",
+   "tools": []
+  }
+ ]
+}
+
+[exit=0 wall=40.5s]
+
+$ curl -s http://127.0.0.1:47161/permission
+[]
+[exit=0 wall=0.0s]
+
+$ curl -s http://127.0.0.1:47161/session/status
+{"ses_edb62bf1effe7KF7OoKcJ6QVBn":{"type":"busy"}}
+[exit=0 wall=0.0s]
+
+## 2f. answer it over HTTP: POST /permission//reply {reply: reject, message}
+$ curl -s -H content-type: application/json -X POST http://127.0.0.1:47161/permission//reply -d {"reply":"reject","message":"The operator rejected this command from Telegram."}
+<!doctype html>
+<html lang="en" style="background-color: var(--v2-background-bg-deep, #fafafa)">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, interactive-widget=resizes-content, viewport-fit=cover"
+    />
+    <title>OpenCode</title>
+    <link rel="icon" type="image/png" href="/favicon-96x96-v3.png" sizes="96x96" />
+    <link rel="icon" type="image/svg+xml" href="/favicon-v3.svg" />
+    <link rel="shortcut icon" href="/favicon-v3.ico" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon-v3.png" />
+    <link rel="manifest" href="/site.webmanifest" />
+    <meta name="theme-color" content="#fafafa" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta property="og:image" content="/social-share.png" />
+    <meta property="twitter:image" content="/social-share.png" />
+    <script id="oc-theme-preload-script">;(function () {
+  var key = "opencode-theme-id"
+  var themeId = localStorage.getItem(key) || "oc-2"
+
+  if (themeId === "oc-1") {
+    themeId = "oc-2"
+    localStorage.setItem(key, themeId)
+    localStorage.removeItem("opencode-theme-css-light")
+    localStorage.removeItem("opencode-theme-css-dark")
+  }
+
+  var scheme = localStorage.getItem("opencode-color-scheme") || "system"
+  var isDark = scheme === "dark" || (scheme === "system" && matchMedia("(prefers-color-scheme: dark)").matches)
+  var mode = isDark ? "dark" : "light"
+
+  document.documentElement.dataset.theme = themeId
+  document.documentElement.dataset.colorScheme = mode
+  document.documentElement.style.backgroundColor = isDark ? "#080808" : "#fafafa"
+
+  // Update theme-color meta tag to match app color scheme
+  var metas = document.querySelectorAll("meta[name='theme-color']")
+  if (metas.length > 0) metas[0].setAttribute("content", isDark ? "#080808" : "#fafafa")
+
+  if (themeId === "oc-2") return
+
+  var css = localStorage.getItem("opencode-theme-css-" + mode)
+  if (css) {
+    var style = document.createElement("style")
+    style.id = "oc-theme-preload"
+    style.textContent =
+      ":root{color-scheme:" +
+      mode +
+      ";--text-mix-blend-mode:" +
+      (isDark ? "plus-lighter" : "multiply") +
+      ";" +
+      css +
+      "}"
+    document.head.appendChild(style)
+  }
+})()
+</script>
+    <script type="module" crossorigin src="/assets/index-PBx0gfQA.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-CqBlEoSU.css">
+  </head>
+  <body class="antialiased overscroll-none text-12-regular overflow-hidden bg-v2-background-bg-deep">
+    <noscript>You need to enable JavaScript to run this app.</noscript>
+    <div id="root" class="flex flex-col h-dvh bg-v2-background-bg-deep p-px"></div>
+  </body>
+</html>
+
+[exit=0 wall=0.0s]
+
+$ sh -c curl -s 'http://127.0.0.1:47161/session/ses_edb62bf1effe7KF7OoKcJ6QVBn/message' | jq -c '.[-1] | {role: .info.role, finish: .info.finish, text: ([.parts[] | select(.type=="text") | .text] | join(" ") | .[0:300]), tools: [.parts[] | select(.type=="tool") | {tool, status: .state.status, err: (.state.error // null)}]}'
+{"role":"assistant","finish":null,"text":"","tools":[{"tool":"bash","status":"running","err":null}]}
+
+[exit=0 wall=0.0s]
+
+file created: no
+## 2g. same again, the driver answers once
+$ python3.12 -I /Users/techfreakworm/.soma/worktrees/claude-soma/claude-soma-manager/research/opencode-soma/probes/opencode/ocdrive.py --base http://127.0.0.1:47161 turn --session ses_edb62bf1effe7KF7OoKcJ6QVBn --model ollama/qwen3:32b --perm once --timeout 200 --text Use the bash tool to run exactly: touch /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P6-permissions/project/p6work/p6-serve-once   Then say DONE.
+{
+ "session": "ses_edb62bf1effe7KF7OoKcJ6QVBn",
+ "timeout": false,
+ "seen_busy": true,
+ "wall_s": 40.6,
+ "final_text": "DONE.",
+ "new_messages": [
+  {
+   "id": "msg_1249fcbb4001NEQs3t5gqvwYbI",
+   "role": "user",
+   "agent": "build",
+   "model": "qwen3:32b",
+   "created": 1791615814580,
+   "completed": null,
+   "tokens": null,
+   "finish": null,
+   "error": null,
+   "text": "Use the bash tool to run exactly: touch /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P6-permissions/project/p6work/p6-serve-once   Then say DONE.",
+   "tools": []
+  },
+  {
+   "id": "msg_1249fce90001siUgbNj3f9ZU8Z",
+   "role": "assistant",
+   "agent": "build",
+   "model": "qwen3:32b",
+   "created": 1791615815312,
+   "completed": 1791615830790,
+   "tokens": {
+    "total": 7170,
+    "input": 203,
+    "output": 108,
+    "reasoning": 0,
+    "cache": {
+     "read": 6859,
+     "write": 0
+    }
+   },
+   "finish": "tool-calls",
+   "error": null,
+   "text": "",
+   "tools": [
+    {
+     "tool": "bash",
+     "callID": "call_5ijr5ttv",
+     "status": "completed",
+     "input": {
+      "workdir": "/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P6-permissions/project",
+      "command": "touch /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P6-permissions/project/p6work/p6-serve-once"
+     },
+     "output_head": "(no output)",
+     "child_session": null,
+     "ms": 30
+    }
+   ]
+  },
+  {
+   "id": "msg_124a00b07001Y2dGFzsDUrU7bE",
+   "role": "assistant",
+   "agent": "build",
+   "model": "qwen3:32b",
+   "created": 1791615830791,
+   "completed": 1791615854691,
+   "tokens": {
+    "total": 7188,
+    "input": 127,
+    "output": 3,
+    "reasoning": 0,
+    "cache": {
+     "read": 7058,
+     "write": 0
+    }
+   },
+   "finish": "stop",
+   "error": null,
+   "text": "DONE.",
+   "tools": []
+  }
+ ],
+ "permissions": [
+  {
+   "id": "per_1249de89c001ZunjLzS8JSKABa",
+   "sessionID": "ses_edb62bf1effe7KF7OoKcJ6QVBn",
+   "permission": "external_directory",
+   "patterns": [
+    "/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P6-permissions/project/p6work/*",
+    "/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P6-permissions/project/*"
+   ],
+   "metadata": {
+    "command": "touch /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P6-permissions/project/p6work/p6-serve-reject",
+    "directories": [
+     "/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P6-permissions/project/p6work",
+     "/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P6-permissions/project"
+    ],
+    "patterns": [
+     "/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P6-permissions/project/p6work/*",
+     "/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P6-permissions/project/*"
+    ]
+   },
+   "always": [
+    "/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P6-permissions/project/p6work/*",
+    "/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P6-permissions/project/*"
+   ],
+   "tool": {
+    "messageID": "msg_1249d4213001lsTkMRk2VoxKLB",
+    "callID": "call_tnaaeo51"
+   },
+   "driver_reply": "once",
+   "t_s": 0.0
+  },
+  {
+   "id": "per_1249fcbbf001Re2WIejbSTZrer",
+   "sessionID": "ses_edb62bf1effe7KF7OoKcJ6QVBn",
+   "permission": "bash",
+   "patterns": [
+    "touch /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P6-permissions/project/p6work/p6-serve-reject"
+   ],
+   "metadata": {
+    "command": "touch /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P6-permissions/project/p6work/p6-serve-reject"
+   },
+   "always": [
+    "touch *"
+   ],
+   "tool": {
+    "messageID": "msg_1249d4213001lsTkMRk2VoxKLB",
+    "callID": "call_tnaaeo51"
+   },
+   "driver_reply": "once",
+   "t_s": 0.5
+  },
+  {
+   "id": "per_124a0070b001G042FCVfpifqI2",
+   "sessionID": "ses_edb62bf1effe7KF7OoKcJ6QVBn",
+   "permission": "external_directory",
+   "patterns": [
+    "/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P6-permissions/project/p6work/*",
+    "/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P6-permissions/project/*"
+   ],
+   "metadata": {
+    "command": "touch /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P6-permissions/project/p6work/p6-serve-once",
+    "directories": [
+     "/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P6-permissions/project/p6work",
+     "/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P6-permissions/project"
+    ],
+    "patterns": [
+     "/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P6-permissions/project/p6work/*",
+     "/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P6-permissions/project/*"
+    ]
+   },
+   "always": [
+    "/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P6-permissions/project/p6work/*",
+    "/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P6-permissions/project/*"
+   ],
+   "tool": {
+    "messageID": "msg_1249fce90001siUgbNj3f9ZU8Z",
+    "callID": "call_5ijr5ttv"
+   },
+   "driver_reply": "once",
+   "t_s": 15.4
+  },
+  {
+   "id": "per_124a007ef001ypoDQr6zVnNjWB",
+   "sessionID": "ses_edb62bf1effe7KF7OoKcJ6QVBn",
+   "permission": "bash",
+   "patterns": [
+    "touch /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P6-permissions/project/p6work/p6-serve-once"
+   ],
+   "metadata": {
+    "command": "touch /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P6-permissions/project/p6work/p6-serve-once"
+   },
+   "always": [
+    "touch *"
+   ],
+   "tool": {
+    "messageID": "msg_1249fce90001siUgbNj3f9ZU8Z",
+    "callID": "call_5ijr5ttv"
+   },
+   "driver_reply": "once",
+   "t_s": 16.0
+  }
+ ],
+ "children": []
+}
+
+[exit=0 wall=40.8s]
+
+file created: YES
+VERDICT: PARTIAL — observational; per-mode outcome summarized in SUMMARY.md from the transcript above.
+
+probe-engineer note: section 2f (reject over HTTP) is INCONCLUSIVE in this run: PID1 was empty, so
+the reject POST hit /permission//reply and did nothing (the global GET /permission returned [] at
+that instant). The APPROVE-over-HTTP path IS proven by 2g (driver replied "once" -> p6-serve-once
+created) and by plugin-answer.log (a plugin replied to the permission.asked event via the SDK).
+A dedicated reject retest is in P6-permissions/reject-retest.sh / reject-retest.log.
