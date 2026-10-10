@@ -48,7 +48,7 @@ flowchart LR
     REM(["Operator away from home"])
     subgraph HOST["User's machine: home NAT, no inbound port"]
         subgraph DAEMON["soma-daemon: Python 3.12, OS user service"]
-            BR["Telegram bridge"]
+            BR["channel bridge: Telegram adapter"]
             VO["voice: whisper-cli, piper"]
             LM["lead manager"]
             EV["event bus"]
@@ -100,19 +100,25 @@ process that writes `soma.db`.
 
 One Python 3.12 asyncio process, supervised by the OS user service manager (section 5). Its parts:
 
-- **Telegram bridge.**
-  - Long-polls `getUpdates` over outbound HTTPS. A lock file stops a second opencode-soma on the
-    machine from polling the same token. An HTTP 409 means another program polls it, and the bridge
-    then stops and reports (RISKS.md item 8).
-  - Accepts updates from one chat only: the operator's, recorded at pairing (section 11). Other
-    chats are dropped and logged.
-  - Acks without the model: `sendChatAction` (typing) at once, and one "on it" line if the turn is
-    still running after about 5 s.
-  - Sends the text into the orchestrator session with `prompt_async`. That call returns at once and
-    queues behind a running turn (`evidence/opencode/P1-headless/busy.log`).
-  - Delivers the reply itself. At `session.idle` it reads the final assistant text and sends it as
-    Telegram HTML in 4096-character chunks. The model needs no tool to answer, so it cannot forget
-    to answer. claude-soma needs a Stop hook to catch that (`scripts/tg_reply_guard.py:199-306`).
+- **Channel bridge.** The bridge talks to the operator through a channel adapter.
+  - **The adapter interface** has three calls: `receive(update)`, `send(text | voice | file)` and
+    `ack()`. Telegram is the v1 adapter. Discord is the v2 adapter, for networks that block
+    Telegram (RISKS.md item 8); claude-soma already ships a Discord channel
+    (`scripts/channel-claude.sh:66-69`).
+  - **The Telegram adapter** long-polls `getUpdates` over outbound HTTPS. A lock file stops a second
+    opencode-soma on the machine from polling the same token. An HTTP 409 means another program
+    polls it, and the bridge then stops and reports (RISKS.md item 9).
+  - **One chat.** Updates are accepted from one chat only: the operator's, recorded at pairing
+    (section 11). Other chats are dropped and logged.
+  - **The ack needs no model.** For Telegram, `ack()` is `sendChatAction` (typing) at once, plus one
+    "on it" line if the turn is still running after about 5 s.
+  - **Into the orchestrator.** The text goes into the orchestrator session with `prompt_async`.
+    That call returns at once and queues behind a running turn
+    (`evidence/opencode/P1-headless/busy.log`).
+  - **The bridge delivers the reply itself.** At `session.idle` it reads the final assistant text
+    and hands it to `send()`; the Telegram adapter sends HTML in 4096-character chunks. The model
+    needs no tool to answer, so it cannot forget to answer. claude-soma needs a Stop hook to catch
+    that (`scripts/tg_reply_guard.py:199-306`).
 - **Voice.**
   - In: `getFile`, ffmpeg to 16 kHz mono, then whisper-cli. The bridge sends
     `Heard: "<transcript>"` before it prompts. whisper.cpp transcribed a Telegram-style OGG/Opus note
@@ -187,7 +193,7 @@ One Python 3.12 asyncio process, supervised by the OS user service manager (sect
   - opencode's built-in `general` subagent, for heavy work. Subagents run with parent and child
     sessions linked (`evidence/opencode/P4-subagents/basic.log`). Background subagents need
     `OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS` (`background.log`, `capabilities.log`; RISKS.md
-    item 10).
+    item 11).
   - `social`, a subagent and the only agent allowed the Playwright tools (ROADMAP.md P5).
   - `curator`, hidden, with every tool denied, used only by the memory service.
 - **Leads:** one `opencode serve` per lead, with cwd = the project.
@@ -494,9 +500,11 @@ This is MEMORY-DESIGN.md 6.2 in motion. Two kinds of evidence back it:
 3. Anything else goes to the operator, with a deadline: "hello wants to run `<command>`: reply yes
    to allow it once".
 4. The operator's answer becomes that reply call. No answer by the deadline means `reject`.
-5. The tool runs, or the model sees the rejection as the tool's result. A reply sent this way let
-   the tool run in `evidence/opencode/P6-permissions/plugin-answer.log`. A rejected call did not run
-   in `evidence/opencode/P6-permissions/reject-retest.log`.
+5. The tool runs, or the model sees the rejection as the tool's result.
+   - Approve: a `once` reply over HTTP let the tool run
+     (`evidence/opencode/P6-permissions/unattended.log`, section 2g), and so did a plugin's reply
+     through the SDK (`plugin-answer.log`).
+   - Reject: a rejected call did not run (`evidence/opencode/P6-permissions/reject-retest.log`).
 
 ## 7. Reliability rules
 
@@ -520,7 +528,7 @@ This is MEMORY-DESIGN.md 6.2 in motion. Two kinds of evidence back it:
 - **No auto-update, no sharing.** `autoupdate: false` plus `OPENCODE_DISABLE_AUTOUPDATE=1`. The
   updater runs only in the TUI, so `serve`, `run` and `attach` never update themselves (desk).
   `share: "disabled"` keeps sessions off the public share mirror.
-- **One Telegram poller.** A lock file per data dir, and a stop on HTTP 409 (RISKS.md item 8).
+- **One Telegram poller.** A lock file per data dir, and a stop on HTTP 409 (RISKS.md item 9).
 - **One model for every agent and the curator.**
   - On a default ollama (`OLLAMA_NUM_PARALLEL=1`, 0.33.3), a second model is starved, or it forces a
     20 GB reload of the first (`evidence/memory/ollama-two-models.log`; RISKS.md item 3).
@@ -535,10 +543,10 @@ This is MEMORY-DESIGN.md 6.2 in motion. Two kinds of evidence back it:
 |---|---|---|---|
 | A serve died | process exit, or `/global/health` fails | Restart it on the same data dir. The session returns idle with its history; if a turn was cut, send "continue". | `evidence/opencode/P1-headless/crash-serve.log` |
 | Busy too long | `busy` in `GET /session/status` for N minutes with no token traffic. N defaults to 10, well above the 218 s queue waits measured on one GPU slot. | `POST /session/{id}/abort` (idle again within 0.2 s), then tell the operator. | `evidence/opencode/P1-headless/busy.log`, `evidence/memory/curation-qwen3_32b-think-false.log` |
-| A pending permission | `permission.asked` on the SSE stream, or `GET /permission` | Apply the policy, or ask the operator with a deadline (6.5). | `evidence/opencode/P6-permissions/reject-retest.log`, `unattended.log`, `evidence/opencode/P2-hooks/extras.log` |
+| A pending permission | `permission.asked` on the SSE stream, or `GET /permission` | Apply the policy, or ask the operator with a deadline (6.5). | approve: `evidence/opencode/P6-permissions/unattended.log` (section 2g), `plugin-answer.log`; reject: `reject-retest.log`; the event: `evidence/opencode/P2-hooks/extras.log` |
 | A provider hang | busy with no token traffic | as for busy too long; the provider timeouts also apply (desk) | RISKS.md item 2 |
 | A dropped SSE stream | `server.heartbeat` events stop (seen in `evidence/opencode/P8-serve/sse-event.txt`) | Reconnect, then reconcile from `GET /session/status` and the latest messages (no replay, desk). | |
-| Telegram 409 | the `getUpdates` response | Stop polling, and show the bot as unhealthy on the dashboard and in `doctor`. | RISKS.md item 8 |
+| Telegram 409 | the `getUpdates` response | Stop polling, and show the bot as unhealthy on the dashboard and in `doctor`. | RISKS.md item 9 |
 
 ## 8. Security model
 
@@ -622,8 +630,8 @@ relay: away from home, the user brings the tunnel. opencode can bind beyond loop
 
 | claude-soma | Where | opencode-soma | What changes |
 |---|---|---|---|
-| Telegram channel: a persistent `claude --channels` session in tmux, with the Telegram plugin polling | `scripts/channel-claude.sh:88-96`, `systemd/claude-soma-channel.service:36-40` | orchestrator `opencode serve` plus the daemon's Telegram bridge | Polling, acks and reply delivery move from a model plugin into daemon code. |
-| Discord channel | `scripts/channel-claude.sh:66-69` | none in v1 | Out of scope for v1: Telegram only. |
+| Telegram channel: a persistent `claude --channels` session in tmux, with the Telegram plugin polling | `scripts/channel-claude.sh:88-96`, `systemd/claude-soma-channel.service:36-40` | orchestrator `opencode serve` plus the daemon's channel bridge, with its Telegram adapter | Polling, acks and reply delivery move from a model plugin into daemon code. |
+| Discord channel, and Discord-first operator DMs | `scripts/channel-claude.sh:66-69`, `src/claude_soma/operator_dm.py:1-7` | the channel adapter interface in v1; a Discord adapter in v2 | claude-soma moved operator DMs to Discord because Telegram is blocked on some networks (RISKS.md item 8). |
 | `send_tg_reply`: markdown to HTML, 4096-character chunks | `src/claude_soma/mcp_servers/hermes_api/server.py:463-522` | the bridge's sender, plus the soma MCP `send_file` for attachments | Ported. The model no longer calls a tool for a plain reply. |
 | Stop hook `tg_reply_guard.py` | `scripts/tg_reply_guard.py:199-306` | the bridge forwards the final text at `session.idle` | The "no reply sent" failure goes away. |
 | `heard_gate.py`: a send must start with `Heard:` | `scripts/heard_gate.py:157-198` | the bridge sends the `Heard:` echo itself | An enforced model habit becomes code. |
@@ -676,6 +684,7 @@ relay: away from home, the user brings the tunnel. opencode can bind beyond loop
 | voice tools | whisper-cli, ffmpeg, piper-tts and the voice models | voice off |
 | ports | a free 127.0.0.1 port for the daemon | pick another |
 | the user's own opencode and Claude Code config | `~/.config/opencode`, `~/.opencode` and `~/.claude` exist | noted and never touched. They are why instances set the switches in 2.2 (section 12). |
+| Telegram reachability | before pairing, a `getMe` with a placeholder token. Telegram's JSON 401 means the API is reachable; a connection failure means the network blocks it. This is the check `probes/platform/telegram_nat.py` makes (`evidence/platform/telegram-nat.log`). | blocked: stop before pairing, say why, and offer the Discord path, whose adapter is v2 (RISKS.md item 8) |
 | an existing install | the data dir, the service file, a held lock | the repair or upgrade path, never a second copy |
 
 The pinned install command is the one run in `evidence/platform/linux-container.log`:
@@ -688,7 +697,7 @@ curl -fsSL https://opencode.ai/install | bash -s -- --version 1.18.8 --no-modify
 
 1. The bot token, for a bot made for opencode-soma alone. Only one poller can hold a token, so a
    token that another program polls would lose updates to whichever poller asks last (RISKS.md
-   item 8). `init` checks the token with `getMe` and then `getWebhookInfo`; both calls are
+   item 9). `init` checks the token with `getMe` and then `getWebhookInfo`; both calls are
    read-only.
 2. The operator's chat, by pairing. `init` shows a one-time code and the user sends it to the bot.
    `init`'s single long poll then reads the code and records that chat id.
@@ -720,7 +729,7 @@ curl -fsSL https://opencode.ai/install | bash -s -- --version 1.18.8 --no-modify
 | a serve on a non-loopback address, or without a password | default CORS, `/global/upgrade`, and basic auth in clear text (section 8) |
 | a LAN dashboard without pairing | anyone on the LAN could drive the orchestrator |
 | a bot token with a webhook set | `getUpdates` does not work while a webhook is set (Bot API, quoted in `evidence/platform/telegram-nat.log`), and deleting the webhook could break the owner's other deployment |
-| a second poller: the lock is held, or `getUpdates` answers 409 | one consumer per token (RISKS.md item 8) |
+| a second poller: the lock is held, or `getUpdates` answers 409 | one consumer per token (RISKS.md item 9) |
 | native Windows | v1 supports WSL2 only (PLATFORM-MATRIX.md) |
 | any path inside the user's own opencode config or data dirs | the user's own opencode setup stays untouched |
 | a data dir on a network filesystem | WAL needs a local filesystem (MEMORY-DESIGN.md section 12, desk) |
@@ -753,7 +762,7 @@ This design assumes the following, and no probe has shown them yet:
 - **User-level memory caps:** `systemd-run --user --scope -p MemoryMax` without root on stock
   distros (desk; ROADMAP.md P6).
 - **Memory footprint of an idle `opencode serve`.** It was not measured, and it decides how many
-  leads fit in 16 GB (RISKS.md item 11).
+  leads fit in 16 GB (RISKS.md item 12).
 - **Cross-origin simple requests:** whether a password-protected serve executes one from an allowed
   origin when the browser holds the credentials (section 8).
 - **SSE:** no replay of missed events, and the heartbeat interval (desk).

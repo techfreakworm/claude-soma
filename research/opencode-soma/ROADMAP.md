@@ -19,7 +19,8 @@ part of its phase.
 
 - A laptop (macOS or Linux), a foreground process, ollama with qwen3:32b, and no OS service yet.
 - A Python 3.12 package `opencode-soma`. Its daemon, `opencode-soma run`:
-  - runs a Telegram long-poll bridge with a one-chat allowlist and an instant deterministic ack
+  - runs a Telegram long-poll bridge, behind the channel adapter interface (`receive`, `send`,
+    `ack`; ARCHITECTURE.md 2.1), with a one-chat allowlist and an instant deterministic ack
     (`sendChatAction` typing, plus an "on it" line if the turn passes about 5 s);
   - launches the orchestrator `opencode serve` (127.0.0.1, random port and password, isolated XDG
     dirs) with a daemon-hosted soma MCP server: `spawn_lead`, `message_lead`, `list_leads`,
@@ -225,7 +226,8 @@ asserts:
 - The contract-test suite re-run on a newer opencode (1.18.35 or later).
 - A real Windows 11 WSL2 run.
 
-**Out of scope.** Native Windows (PLATFORM-MATRIX.md decision), leads on remote hosts.
+**Out of scope.** Native Windows (PLATFORM-MATRIX.md decision), leads on remote hosts, and a
+Discord channel adapter (v2, for networks that block Telegram; RISKS.md item 8).
 
 **Acceptance:** `opencode-soma selftest --contract && opencode-soma doctor`. It asserts:
 
@@ -240,4 +242,4 @@ asserts:
   `evidence/opencode/SUMMARY.md`.
 - **Serve auth:** `evidence/opencode/P8-serve/serve.log`.
 - **The WSL2 path:** PLATFORM-MATRIX.md (desk research).
-- **Related risks:** RISKS.md items 4, 5 and 9.
+- **Related risks:** RISKS.md items 4, 5 and 10.

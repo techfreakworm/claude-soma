@@ -103,32 +103,47 @@ and the cheapest test that would show it early. "desk" marks a claim no probe ex
    Impact: missed or very late reminders, and messages lost after a day asleep.
    Cheapest early test: sleep the Mac for 15 min with a reminder due, then check it fires exactly
    once on wake.
-8. **Telegram 409 from a second poller.** Only one `getUpdates` consumer may hold a token. claude-soma
+8. **Telegram availability by jurisdiction or network.** Telegram is the only v1 channel, and it is
+   not reachable from every network.
+   - claude-soma itself sends operator DMs Discord-first because "Telegram is banned in India
+     (~2026-06) and its sendMessage returns HTTP 000" (`src/claude_soma/operator_dm.py:1-7`,
+     `scripts/notify_lib.sh:10`).
+   - From the research laptop's network, api.telegram.org did answer over outbound HTTPS at
+     06:21Z (`evidence/platform/telegram-nat.log`). Reachability depends on the network, and it can
+     change over time.
+
+   Impact: where Telegram is blocked, the assistant can neither hear nor answer the user.
+   Mitigation: the bridge is a channel adapter interface (ARCHITECTURE.md 2.1). Telegram is the v1
+   adapter and Discord the second; claude-soma already ships a Discord channel
+   (`scripts/channel-claude.sh:66-69`).
+   Cheapest early test: run `probes/platform/telegram_nat.py` from the target network before
+   installing. `opencode-soma init` repeats the check before pairing (ARCHITECTURE.md section 11).
+9. **Telegram 409 from a second poller.** Only one `getUpdates` consumer may hold a token. claude-soma
    already lost its poller this way (`docs/KNOWN_BUGS.md:14-66`; PLATFORM-MATRIX.md).
 
    Impact: the bot goes deaf while the process looks healthy.
    Cheapest early test: run `probes/platform/telegram_longpoll_e2e.py` twice at once on a throwaway
    token; the daemon must hold a lock file and refuse a second poller.
-9. **Windows unverified.** Nothing ran on Windows. Only artifact availability is known
-   (`evidence/platform/artifacts.log`), and v1 targets WSL2 only (PLATFORM-MATRIX.md).
+10. **Windows unverified.** Nothing ran on Windows. Only artifact availability is known
+    (`evidence/platform/artifacts.log`), and v1 targets WSL2 only (PLATFORM-MATRIX.md).
 
-   Impact: a stranger on Windows cannot install or keep the daemon alive.
-   Cheapest early test: one Windows 11 WSL2 install following the keep-alive recipe, then the P0
-   acceptance suite.
-10. **Experimental background subagents.** `background=true` works, but only behind an experimental
+    Impact: a stranger on Windows cannot install or keep the daemon alive.
+    Cheapest early test: one Windows 11 WSL2 install following the keep-alive recipe, then the P0
+    acceptance suite.
+11. **Experimental background subagents.** `background=true` works, but only behind an experimental
     flag (`evidence/opencode/P4-subagents/background.log`).
 
     Impact: if P4 relies on it, an upgrade can remove or change it.
     Cheapest early test: a contract test for background dispatch run on every upgrade, with a
     fallback dispatch tool.
-11. **Smaller machines.** A bare turn carries about 6.8K prompt tokens (p50 6,836, max 14,786;
+12. **Smaller machines.** A bare turn carries about 6.8K prompt tokens (p50 6,836, max 14,786;
     `evidence/opencode/conditions.log`), and qwen3:32b's cold first turn took about 31 s even on an
     M5 Max (`evidence/opencode/SUMMARY.md`).
 
     Impact: 16 GB laptops with 8B models may be too slow or too weak to orchestrate.
     Cheapest early test: run the P0 acceptance suite on a 16 GB laptop with an 8B model and record
     turn latency and correctness.
-12. **Desktop browser sessions expire or get flagged.** A persistent profile keeps cookies and
+13. **Desktop browser sessions expire or get flagged.** A persistent profile keeps cookies and
     localStorage across relaunches (`evidence/platform/playwright-persist.log`). Session lifetime
     and bot detection on real social sites were not tested (desk).
 
@@ -141,9 +156,16 @@ and the cheapest test that would show it early. "desk" marks a claim no probe ex
 - **One GPU slot moved above opencode churn** (item 3, the lead's draft had it fourth). Its cost is
   measured and hits every user interaction: up to 218 s waiting for a 6 s job, and minutes for a
   model switch. Churn is mitigated cheaply by pinning 1.18.8 and contract tests.
+- **Telegram availability placed at 8** (added after the verifier's review).
+  - Its impact is the worst of the lower items: on a network that blocks Telegram, the assistant
+    loses its only channel.
+  - Its likelihood is unmeasured: the evidence is a comment in claude-soma's own code and one probe
+    that reached Telegram.
+  - So it sits below sleep (7), which hits every laptop, and above the second poller (9), which the
+    lock file prevents.
 - **Claims the evidence does not support, re-worded here:**
   - "no default provider timeouts in 1.18.8" (not probed, marked desk);
   - "CORS for *.opencode.ai" was confirmed afterwards by probe-engineer's P8b probe
     (`evidence/opencode/P8-serve/cors.log`) and is now cited in item 5;
   - "approvals never time out" (the evidence shows a pending approval held with no server-side
-    timeout seen in 40 s);
+    timeout seen in 40 s).
