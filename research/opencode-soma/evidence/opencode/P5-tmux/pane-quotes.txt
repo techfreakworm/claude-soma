@@ -1,5 +1,5 @@
-     ▣  Build · Qwen3 32B (thinking off) · 1m 1s
-                                                                                                                                                                Tmux setup issue
+     ▣  Build · Qwen3 32B (thinking off) · 1.8s
+                                                                                                                                                                TMUX-SHORT-OK
   ┃
   ┃  Here is some filler context you can ignore: The quick brown fox jumps over the lazy dog number 1. The quick brown fox jumps over the lazy dog number 2.    Context
   ┃   The quick brown fox jumps over the lazy dog number 3. The quick brown fox jumps over the lazy dog number 4. The quick brown fox jumps over the lazy       7,494 tokens
@@ -21,7 +21,7 @@
 
      TMUX-LONG-OK
 
-     ▣  Build · Qwen3 32B (thinking off) · 5.1s
+     ▣  Build · Qwen3 32B (thinking off) · 2.2s
 
   ┃
   ┃  First line of my message.
@@ -31,7 +31,7 @@
 
      TMUX-MULTI-OK
 
-     ▣  Build · Qwen3 32B (thinking off) · 811ms
+     ▣  Build · Qwen3 32B (thinking off) · 810ms
 
   ┃
   ┃  He said "hello" and she said 'bye'. Reply with exactly TMUX-QUOTES-OK and nothing else.
@@ -39,7 +39,7 @@
 
      TMUX-QUOTES-OK
 
-     ▣  Build · Qwen3 32B (thinking off) · 817ms
+     ▣  Build · Qwen3 32B (thinking off) · 803ms
 
   ┃
   ┃                                                                                                                                                             /private/var/folders/lp/
@@ -47,3 +47,4 @@
   ┃  Build · Qwen3 32B (thinking off) Ollama (local)                                                                                                            ocsoma-pe/P5-tmux/project:main
   ╹▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀
    /private/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P5-tmux/project                                            7.5K (18%)  ctrl+p commands    • OpenCode 1.18.8
+

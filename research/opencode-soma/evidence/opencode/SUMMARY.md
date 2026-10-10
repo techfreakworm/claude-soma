@@ -36,7 +36,7 @@ opencode and ollama so "which tools each agent was offered", "what the system pr
 | P4 parallel task calls run concurrently | PASS | `P4-subagents/parallel.log` |
 | P4 background subagents + `/experimental/.../background` | PASS | `P4-subagents/background.log` |
 | P4 independent lead process spawns its own team | PASS | `P4-subagents/lead-team.log` |
-| P5 tmux send-keys + capture-pane scrape | PARTIAL | `P5-tmux/tmux.log`, `pane-analysis.log` |
+| P5 tmux send-keys + capture-pane scrape (2 rounds x 6: delivery 12/12, strict scrape 12/12, old-checker mid-turn false-positive 8/12, HTTP 6/6) | PARTIAL | `P5-tmux/tmux.log`, `pane-analysis.log` |
 | P6 permission model (rules/env/flags) | PASS | `P6-permissions/model.log` |
 | P6 unattended `ask`: `run` auto-rejects, `serve` holds | PASS/obs | `P6-permissions/unattended.log` |
 | P6 plugin answers a permission (event + SDK reply) | PASS | `P6-permissions/plugin-answer.log` |

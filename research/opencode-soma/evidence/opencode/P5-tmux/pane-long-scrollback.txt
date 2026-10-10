@@ -1,11 +1,11 @@
 
-  ┃                                                                                                                                                             Tmux setup issue
+  ┃                                                                                                                                                             TMUX-SHORT-OK
   ┃  Reply with exactly TMUX-SHORT-OK and nothing else.
   ┃                                                                                                                                                             Context
                                                                                                                                                                 7,409 tokens
      TMUX-SHORT-OK                                                                                                                                              18% used
                                                                                                                                                                 $0.00 spent
-     ▣  Build · Qwen3 32B (thinking off) · 1m 1s
+     ▣  Build · Qwen3 32B (thinking off) · 1.8s
                                                                                                                                                                 LSP
   ┃                                                                                                                                                             LSPs are disabled
   ┃  Here is some filler context you can ignore: The quick brown fox jumps over the lazy dog number 1. The quick brown fox jumps over the lazy dog number 2.
@@ -28,7 +28,7 @@
 
      TMUX-LONG-OK
 
-     ▣  Build · Qwen3 32B (thinking off) · 5.1s
+     ▣  Build · Qwen3 32B (thinking off) · 2.2s
 
 
 

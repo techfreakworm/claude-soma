@@ -1,11 +1,11 @@
 
-  ┃                                                                                                                                                             Tmux setup issue
+  ┃                                                                                                                                                             TMUX-SHORT-OK
   ┃  Reply with exactly TMUX-SHORT-OK and nothing else.
   ┃                                                                                                                                                             Context
                                                                                                                                                                 7,452 tokens
      TMUX-SHORT-OK                                                                                                                                              18% used
                                                                                                                                                                 $0.00 spent
-     ▣  Build · Qwen3 32B (thinking off) · 1m 1s
+     ▣  Build · Qwen3 32B (thinking off) · 1.8s
                                                                                                                                                                 LSP
   ┃                                                                                                                                                             LSPs are disabled
   ┃  Here is some filler context you can ignore: The quick brown fox jumps over the lazy dog number 1. The quick brown fox jumps over the lazy dog number 2.
@@ -28,7 +28,7 @@
 
      TMUX-LONG-OK
 
-     ▣  Build · Qwen3 32B (thinking off) · 5.1s
+     ▣  Build · Qwen3 32B (thinking off) · 2.2s
 
   ┃
   ┃  First line of my message.
@@ -38,7 +38,7 @@
 
      TMUX-MULTI-OK
 
-     ▣  Build · Qwen3 32B (thinking off) · 811ms
+     ▣  Build · Qwen3 32B (thinking off) · 810ms
 
 
   ┃
@@ -47,3 +47,4 @@
   ┃  Build · Qwen3 32B (thinking off) Ollama (local)                                                                                                            ocsoma-pe/P5-tmux/project:main
   ╹▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀
    /private/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P5-tmux/project                                            7.5K (18%)  ctrl+p commands    • OpenCode 1.18.8
+

@@ -1,11 +1,11 @@
 
-  ┃                                                                                                                                                             Tmux setup issue
+  ┃                                                                                                                                                             TMUX-SHORT-OK
   ┃  Reply with exactly TMUX-SHORT-OK and nothing else.
   ┃                                                                                                                                                             Context
                                                                                                                                                                 6,830 tokens
      TMUX-SHORT-OK                                                                                                                                              17% used
                                                                                                                                                                 $0.00 spent
-     ▣  Build · Qwen3 32B (thinking off) · 1m 1s
+     ▣  Build · Qwen3 32B (thinking off) · 1.8s
                                                                                                                                                                 LSP
                                                                                                                                                                 LSPs are disabled
 

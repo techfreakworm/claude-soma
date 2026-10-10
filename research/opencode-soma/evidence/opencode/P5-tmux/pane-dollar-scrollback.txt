@@ -1,5 +1,5 @@
   ┃  13. The quick brown fox jumps over the lazy dog number 14. The quick brown fox jumps over the lazy dog number 15. The quick brown fox jumps over the
-  ┃  lazy dog number 16. The quick brown fox jumps over the lazy dog number 17. The quick brown fox jumps over the lazy dog number 18. The quick brown fox      Tmux setup issue
+  ┃  lazy dog number 16. The quick brown fox jumps over the lazy dog number 17. The quick brown fox jumps over the lazy dog number 18. The quick brown fox      TMUX-SHORT-OK
   ┃  jumps over the lazy dog number 19. The quick brown fox jumps over the lazy dog number 20. The quick brown fox jumps over the lazy dog number 21. The
   ┃  quick brown fox jumps over the lazy dog number 22. The quick brown fox jumps over the lazy dog number 23. The quick brown fox jumps over the lazy dog      Context
   ┃  number 24. The quick brown fox jumps over the lazy dog number 25. The quick brown fox jumps over the lazy dog number 26. The quick brown fox jumps         7,545 tokens
@@ -13,7 +13,7 @@
 
      TMUX-LONG-OK
 
-     ▣  Build · Qwen3 32B (thinking off) · 5.1s
+     ▣  Build · Qwen3 32B (thinking off) · 2.2s
 
   ┃
   ┃  First line of my message.
@@ -23,7 +23,7 @@
 
      TMUX-MULTI-OK
 
-     ▣  Build · Qwen3 32B (thinking off) · 811ms
+     ▣  Build · Qwen3 32B (thinking off) · 810ms
 
   ┃
   ┃  He said "hello" and she said 'bye'. Reply with exactly TMUX-QUOTES-OK and nothing else.
@@ -31,7 +31,7 @@
 
      TMUX-QUOTES-OK
 
-     ▣  Build · Qwen3 32B (thinking off) · 817ms
+     ▣  Build · Qwen3 32B (thinking off) · 803ms
 
   ┃
   ┃  Price is $5 and the var is $HOME and code is `ls -la` here. Reply with exactly TMUX-DOLLAR-OK and nothing else.
@@ -39,7 +39,7 @@
 
      TMUX-DOLLAR-OK
 
-     ▣  Build · Qwen3 32B (thinking off) · 825ms
+     ▣  Build · Qwen3 32B (thinking off) · 809ms
 
   ┃
   ┃                                                                                                                                                             /private/var/folders/lp/

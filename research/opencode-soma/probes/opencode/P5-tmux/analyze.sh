@@ -35,7 +35,7 @@ print(f"whole-line {whole}/6, column-aware {col}/6")
 PY
 ok=$(grep -c 'column-aware 6/6' "$EV_LOG")
 if [ "$ok" = 1 ]; then
-  ev_verdict PARTIAL "every message was delivered intact and every reply reached the screen, but only column-aware parsing finds them all (the sidebar shares rows) and long replies are cut to the visible screen (alt-screen, no tmux scrollback)."
+  ev_verdict PARTIAL "these are the committed round-1 panes (a single sample); the authoritative scrape reliability is the multi-round aggregate in tmux.log. On these panes whole-line parsing and column-aware parsing differ (the sidebar shares rows, so whole-line can miss or match the wrong column), and long replies are cut to the visible screen (alt-screen, no tmux scrollback). Separately, tmux.log shows the old whole-line checker also false-positives mid-turn on the sidebar auto-title before any reply exists. Net: pane scraping is lossy and can false-positive; the HTTP API supersedes it."
 else
   ev_verdict FAIL "even column-aware parsing misses replies (see table)."
 fi

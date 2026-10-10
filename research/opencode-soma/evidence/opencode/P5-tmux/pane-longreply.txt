@@ -1,14 +1,13 @@
-     thirty-two
-     thirty-three                                                                                                                                               Tmux setup issue
-     thirty-four
-     thirty-five                                                                                                                                                Context
-     thirty-six                                                                                                                                                 7,837 tokens
-     thirty-seven                                                                                                                                               19% used
-     thirty-eight                                                                                                                                               $0.00 spent
-     thirty-nine
-     forty                                                                                                                                                      LSP
-     forty-one                                                                                                                                                  LSPs are disabled
-     forty-two
+     thirty-three
+     thirty-four                                                                                                                                                TMUX-SHORT-OK
+     thirty-five
+     thirty-six                                                                                                                                                 Context
+     thirty-seven                                                                                                                                               7,837 tokens
+     thirty-eight                                                                                                                                               19% used
+     thirty-nine                                                                                                                                                $0.00 spent
+     forty
+     forty-one                                                                                                                                                  LSP
+     forty-two                                                                                                                                                  LSPs are disabled
      forty-three
      forty-four
      forty-five
@@ -37,13 +36,15 @@
      sixty-eight
      sixty-nine
      seventy
+
      TMUX-LONGREPLY-END
 
-     ▣  Build · Qwen3 32B (thinking off)
+     ▣  Build · Qwen3 32B (thinking off) · 13.1s
 
   ┃
   ┃                                                                                                                                                             /private/var/folders/lp/
   ┃                                                                                                                                                             m_0rzyhs19g7l2x5dnql4tjh0000gp/T/
   ┃  Build · Qwen3 32B (thinking off) Ollama (local)                                                                                                            ocsoma-pe/P5-tmux/project:main
   ╹▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀
-   ⬝⬝⬝⬝⬝⬝⬝⬝  esc interrupt                                                                                                       7.8K (19%)  ctrl+p commands    • OpenCode 1.18.8
+   /private/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P5-tmux/project                                            7.8K (19%)  ctrl+p commands    • OpenCode 1.18.8
+

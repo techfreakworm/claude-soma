@@ -6,7 +6,7 @@
 #  read what the server actually received (mangling check) and, afterwards, send the same
 #  messages over the HTTP API for comparison.
 set -u
-export OCSOMA_PROBE_SCRIPT="research/opencode-soma/probes/opencode/P5-tmux/run.sh"
+export OCSOMA_PROBE_SCRIPT="research/opencode-soma/probes/opencode/P5-tmux/run1-singlesample.sh (archived single-sample run; superseded by run.sh multi-round)"
 HERE="$(cd "$(dirname "$0")" && pwd)"
 PROXY_PORT=$(( ${OCSOMA_PORT_BASE:-47100} + 55 )); TUI_PORT=$(( ${OCSOMA_PORT_BASE:-47100} + 51 ))
 PROBE_ID=P5-tmux; SANDBOX_FRESH=1; OC_BASEURL="http://127.0.0.1:$PROXY_PORT/v1"
