@@ -1,0 +1,16 @@
+# final DoD gate run: python3.12 -I research/opencode-soma/probes/check_dod.py --rerun -v
+# started 2026-10-10T08:40:07Z at HEAD 9ec322a (rerun archive); exit code 0
+# copied verbatim from $TMPDIR/ocsoma-vf/gate-rerun-final-20261010T141006.out
+
+PASS C1: 7 deliverables committed, mermaid block present, probes/ and evidence/ populated
+PASS C2: verdict paragraph ok; 12 rows valid (PARITY 0, DEGRADED 5, NEEDS-BUILD 7, IMPOSSIBLE 0)
+PASS C3: qualifying logs per group P1:8 P2:8 P3:3 P4:6 P5:3 P6:5 P7:1
+PASS C4: 44 neo4j bench row(s) with timings; container cold-start and RSS present
+PASS C5: P0 acceptance command at ROADMAP.md:39
+PASS C6: 13 ranked risks, each with a cheapest early test
+PASS C7: 7 commands all found in 1 start-here log(s)
+PASS C8: 70 commit(s), 242 path(s) all under research/opencode-soma/, clean trailers, single author, clean tree
+PASS C9: real dirs unchanged; 42 opencode log(s) inside the window
+PASS C10: 6 pinned probe(s) re-run from clean copies; all match HEAD (evidence/verify/rerun/)
+PASS C11: 243 files scanned, no credential-shaped strings
+GATE: PASS
