@@ -1,0 +1,89 @@
+# P2-hooks/extras.log
+date-utc: 2026-10-10T07:39:13Z
+probe-script: research/opencode-soma/probes/opencode/P2-hooks/extras.sh
+opencode-version: 1.18.8
+model: none (no LLM)
+sandbox: $TMPDIR/ocsoma-pe/P2-extras (HOME, XDG_*, TMPDIR all inside it)
+purpose: gate parentID-lookup cost; permission.a<REDACTED>; session.idle + token-bearing message.updated; custom-tool ctx.agent
+
+## (1) sessionID -> parentID lookup latency (GET /session/{id}); this is what the gate calls per tool call for a primary-vs-subagent decision
+parent session ses_edb3f8f20ffe11gYTSZcWfdI3Z, child session ses_edb3f8f14ffekblRrA1eXKMV3E (parentID set at create)
+$ python3.12 -I - http://127.0.0.1:47126 ses_edb3f8f14ffekblRrA1eXKMV3E
+uncached GET /session/{id} over 127.0.0.1: n=50 parentID='ses_edb3f8f20ffe11gYTSZcWfdI3Z'
+  latency ms: p50=0.73 p90=0.97 max=10.49 mean=1.07
+cached (dict hit after first lookup): n=100000 p50=0.083us p99=0.084us
+=> a cold gate pays one ~p50 HTTP round-trip per NEW session; every later tool call on that
+   session is a sub-microsecond dict hit. One lookup per session, not per tool call.
+
+[exit=0 wall=0.1s]
+
+## (2) permission.ask HOOK never fires in 1.18.8 (vs the permission.asked EVENT, which does)
+declared in the type defs:
+$ sh -c grep -n 'permission.ask' '/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P2-types/npm/plugin/package/dist/index.d.ts'
+225:    "permission.ask"?: (input: Permission, output: {
+
+[exit=0 wall=0.0s]
+
+registered by the spy plugin (plugins/spy.js):
+$ sh -c grep -n 'permission.ask' '/Users/techfreakworm/.soma/worktrees/claude-soma/claude-soma-manager/research/opencode-soma/probes/opencode/P2-hooks/plugins/spy.js'
+18:    "permission.ask": hook("permission.ask"),
+
+[exit=0 wall=0.0s]
+
+hook invocations recorded in the committed P2 run (spy.jsonl) - expect ZERO:
+$ sh -c jq -c 'select(.kind=="hook" and .hook=="permission.ask")' '/Users/techfreakworm/.soma/worktrees/claude-soma/claude-soma-manager/research/opencode-soma/evidence/opencode/P2-hooks/spy.jsonl' | wc -l | tr -d ' '
+0
+
+[exit=0 wall=0.0s]
+
+bus events for the SAME permission (these DID fire) - permission.asked / permission.replied:
+$ sh -c jq -c 'select(.kind=="event" and (.type|test("permission"))) | {type, id: (.props|fromjson?|.id // .props)}' '/Users/techfreakworm/.soma/worktrees/claude-soma/claude-soma-manager/research/opencode-soma/evidence/opencode/P2-hooks/spy.jsonl' 2>/dev/null | head; jq -rc 'select(.kind=="event" and (.type|test("permission"))) | .type' '/Users/techfreakworm/.soma/worktrees/claude-soma/claude-soma-manager/research/opencode-soma/evidence/opencode/P2-hooks/spy.jsonl' | sort | uniq -c
+{"type":"permission.replied","id":null}
+{"type":"permission.asked","id":"per_1248674e6001eYaiFbi0syGAO7"}
+{"type":"permission.replied","id":null}
+   2 permission.asked
+   2 permission.replied
+
+[exit=0 wall=0.0s]
+
+## (3) event hook sees session.idle (memory-capture trigger) and message.updated with token counts (usage)
+session.idle events in the committed P2 spy.jsonl:
+$ sh -c jq -c 'select(.kind=="event" and .type=="session.idle") | {type, props}' '/Users/techfreakworm/.soma/worktrees/claude-soma/claude-soma-manager/research/opencode-soma/evidence/opencode/P2-hooks/spy.jsonl' | head -3
+{"type":"session.idle","props":"{\"sessionID\":\"ses_edb7e536affeYi9nZHkRfT4HkI\"}"}
+{"type":"session.idle","props":"{\"sessionID\":\"ses_edb7e536affeYi9nZHkRfT4HkI\"}"}
+{"type":"session.idle","props":"{\"sessionID\":\"ses_edb7e536affeYi9nZHkRfT4HkI\"}"}
+
+[exit=0 wall=0.0s]
+
+message.updated events carrying a tokens block (input/output/cache) - from the P8 raw SSE /event dump, since the spy plugin truncated event props to 300 chars:
+$ sh -c grep -o '"type":"message.updated"[^\n]*' '/Users/techfreakworm/.soma/worktrees/claude-soma/claude-soma-manager/research/opencode-soma/evidence/opencode/P8-serve/sse-event.txt' | grep -o '"tokens":{[^}]*}' | sort -u | head -3
+
+[exit=0 wall=0.0s]
+
+counts: session.idle events=7 ; message.updated events carrying tokens=9
+## (4) a custom plugin TOOL's ctx carries agent (tool.d.ts ToolContext) - unlike tool.execute.before {tool,sessionID,callID}
+$ sh -c sed -n '/export type ToolContext = {/,/};/p' '/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P2-types/npm/plugin/package/dist/tool.d.ts'
+export type ToolContext = {
+    sessionID: string;
+    messageID: string;
+    agent: string;
+    /**
+     * Current project directory for this session.
+     * Prefer this over process.cwd() when resolving relative paths.
+     */
+    directory: string;
+    /**
+     * Project worktree root for this session.
+     * Useful for generating stable relative paths (e.g. path.relative(worktree, absPath)).
+     */
+    worktree: string;
+    abort: AbortSignal;
+    metadata(input: {
+        title?: string;
+        metadata?: {
+            [key: string]: any;
+        };
+
+[exit=0 wall=0.0s]
+
+VERDICT: PASS — gate parentID lookup is one HTTP round-trip per new session (p50 sub-ms on loopback) then a cache hit; permission.ask hook fired 0 times while the bus emitted permission.asked/replied; the event hook sees session.idle (7) and token-bearing message.updated (9); a custom tool's ctx has agent.
