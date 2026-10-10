@@ -13,8 +13,11 @@ stored 0 secrets even with the secret scrub off (recall 1.0, 0 leaks with the pr
 1.2B lfm2.5 stored 5 secrets from 4 of 5 secret-bearing chats among 16 dangerous outcomes, and a
 hosted frontier model was not tested. The single biggest risk is unattended 24/7 reliability on a local model — silent judgement
 errors plus opencode's hang classes: the second-writer session wedge, pending approvals with no
-server-side timeout, and no default provider timeouts in 1.18.8 (desk). Seven of the twelve surfaces
-are NEEDS-BUILD (the daemon is the product), five are DEGRADED, and none is full PARITY.
+server-side timeout, and no default provider timeouts in 1.18.8 (desk). The concrete DEGRADED losses
+are: no anywhere-access like Claude's Remote Control (LAN/tunnel only), single-host leads (claude-soma's
+multi-VPS leads are dropped), the Claude Max subscription path is gone (Anthropic is API-key only, desk),
+and Windows is WSL2-only and unverified. Seven of the twelve surfaces are NEEDS-BUILD (the daemon is
+the product), five are DEGRADED, and none is full PARITY.
 
 | # | Feature | claude-soma mechanism | opencode mechanism | Verdict | Evidence |
 |---|---|---|---|---|---|
@@ -67,7 +70,9 @@ scrape (`src/claude_soma/mcp_servers/project_orchestrator/server.py:193-230`, dr
 opencode directly over 2 rounds x 6 messages (`evidence/opencode/P5-tmux/tmux.log`): `send-keys`
 DELIVERY was 12/12 verbatim (short, long, multi-line, quotes, `$`/backticks, long-reply), and once
 the turn completes a sidebar-excluded, completion-gated STRICT scrape read the reply 12/12 (so did a
-plain whole-line scrape, 12/12, post-completion). But the scrape is fragile: the naive whole-line
+plain whole-line scrape, 12/12, post-completion) - but that completion signal itself came from the
+HTTP API (the server's turn-complete status), so scraping ALONE cannot tell when a turn has ended.
+And the scrape is fragile: the naive whole-line
 checker FALSE-POSITIVED mid-turn on 8/12, matching the TUI's auto-generated session title before any
 reply existed (a single-sample run flipped on exactly this in the verifier's C10 rerun), and long
 replies are truncated to the visible screen (alt-screen, no tmux scrollback). `opencode attach`

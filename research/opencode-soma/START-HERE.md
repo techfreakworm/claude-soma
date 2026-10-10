@@ -40,28 +40,32 @@ daemon to build, not capabilities that ship out of the box.
 
 ## Reproduce the key evidence
 
-Run from the worktree root. Each command is deterministic and touches no model: the DoD gate and the
-P2/P5 `analyze.sh` re-derive verdicts from saved artifacts, the memory bench builds a SQLite index
-over a freshly generated 5k corpus in `$TMPDIR`, the timing table recomputes from the committed proxy
-logs, and the isolation verify confirms nothing touched the operator's real opencode/claude dirs. The
-full transcript is in `evidence/start-here/reproduce.log`; `probes/opencode/run-all.sh` re-runs every
-opencode probe from scratch (~1h on qwen3:32b, which the verifier's rerun uses).
+Run from the worktree root, in order (it leaves the committed repo untouched). The first command is
+the read-only DoD gate. The second extracts a throwaway clean copy of the committed tree into
+`$TMPDIR/ocsoma-repro`, and every re-derivation then runs INSIDE that copy, so the `analyze.sh` /
+`isolation.sh` scripts (which overwrite their own evidence logs) write into the copy, never the repo;
+the two `grep` lines compare each re-derived VERDICT (copy, first line) against the committed one
+(repo, second line). The full transcript is in `evidence/start-here/reproduce.log`.
 
 ```bash
 python3.12 -I research/opencode-soma/probes/check_dod.py
-bash research/opencode-soma/probes/opencode/P2-hooks/analyze.sh
-bash research/opencode-soma/probes/opencode/P5-tmux/analyze.sh
-python3.12 research/opencode-soma/probes/memory/gen_memory.py --n-facts 5000 --out "$TMPDIR/sh-mem-5k"
-python3.12 -I research/opencode-soma/probes/opencode/sqlite_mem_bench.py --data "$TMPDIR/sh-mem-5k" --n-facts 5000
-python3.12 -I research/opencode-soma/probes/opencode/turn_timing.py research/opencode-soma/evidence/opencode
-bash research/opencode-soma/probes/opencode/isolation.sh verify
+rm -rf "$TMPDIR/ocsoma-repro" && mkdir -p "$TMPDIR/ocsoma-repro" && git archive HEAD research/opencode-soma | tar -x -C "$TMPDIR/ocsoma-repro"
+bash "$TMPDIR/ocsoma-repro/research/opencode-soma/probes/opencode/P5-tmux/analyze.sh"
+grep -h "^VERDICT" "$TMPDIR/ocsoma-repro/research/opencode-soma/evidence/opencode/P5-tmux/pane-analysis.log" research/opencode-soma/evidence/opencode/P5-tmux/pane-analysis.log
+python3.12 -I "$TMPDIR/ocsoma-repro/research/opencode-soma/probes/opencode/turn_timing.py" "$TMPDIR/ocsoma-repro/research/opencode-soma/evidence/opencode"
+python3.12 "$TMPDIR/ocsoma-repro/research/opencode-soma/probes/memory/gen_memory.py" --n-facts 5000 --out "$TMPDIR/ocsoma-repro-mem"
+python3.12 -I "$TMPDIR/ocsoma-repro/research/opencode-soma/probes/opencode/sqlite_mem_bench.py" --data "$TMPDIR/ocsoma-repro-mem" --n-facts 5000
+bash "$TMPDIR/ocsoma-repro/research/opencode-soma/probes/opencode/isolation.sh" verify
+grep -h "^VERDICT" "$TMPDIR/ocsoma-repro/research/opencode-soma/evidence/opencode/isolation-check.log" research/opencode-soma/evidence/opencode/isolation-check.log
 ```
 
-Note: the last command rewrites the committed `evidence/opencode/isolation-check.log` and compares
-against this machine's `$TMPDIR/ocsoma-pe/isolation` snapshot taken before the probes, so it exits 2
-on a machine without that snapshot; it is the probe author's closing check, not a portable one. The
-other commands are fully portable and read-only except the SQLite bench, which writes only to
-`$TMPDIR`.
+Portability: the DoD gate is read-only on the repo; the SQLite bench writes only under `$TMPDIR`; and
+everything else runs inside the `$TMPDIR/ocsoma-repro` copy. The P2 `analyze.sh` is deliberately not
+in this block because it needs private per-run sandbox artifacts that are not committed; the verifier's
+independent clean-copy reruns of P1/P2/P3/P5 are in `evidence/verify/rerun/`. The `isolation.sh verify`
+step is machine-specific: it reads this machine's `$TMPDIR/ocsoma-pe/isolation` snapshot (taken before
+the probes) and exits 2 on a machine that lacks it; here it writes only the copy's log.
+`probes/opencode/run-all.sh` re-runs every opencode probe from scratch (~1h on qwen3:32b).
 
 ## Operator decisions needed
 
