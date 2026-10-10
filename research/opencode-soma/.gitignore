@@ -1,0 +1,4 @@
+# Re-include evidence logs under this tree: the repo root .gitignore has a blanket *.log
+# (line 32) that would otherwise drop every probe transcript. Everything here is research
+# evidence, never runtime logs.
+!*.log
