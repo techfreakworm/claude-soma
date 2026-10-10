@@ -1,5 +1,5 @@
 # P9-compat/fakehome.log
-date-utc: 2026-10-10T08:16:11Z
+date-utc: 2026-10-10T08:17:42Z
 probe-script: research/opencode-soma/probes/opencode/P9-compat/fakehome.sh
 opencode-version: 1.18.8
 model: none (no LLM)
@@ -2318,8 +2318,10 @@ recorded and skipped, not worked around. From opencode's own built-in config ref
 ~/.agents/skills (HOME-anchored), toggled off by OPENCODE_DISABLE_CLAUDE_CODE_SKILLS=1 /
 OPENCODE_DISABLE_EXTERNAL_SKILLS=1. So with HOME = the user's own home, those DO leak unless the
 daemon sets those env vars or points HOME at a dedicated soma home.
-## findings
-~/.config/opencode username sentinel in A (XDG redirected)=0, in B (XDG default to $HOME/.config)=1
-~/.config/opencode/agent sentinel in A=0, in B=3
-~/.opencode/agent (HOME-anchored) seen anywhere=13 (config reference says ~/.opencode is NOT a config/agent source)
-VERDICT: PASS — redirecting XDG_CONFIG_HOME fully isolates opencode's global config (the fake ~/.config/opencode sentinel is invisible in A), but with no XDG redirect it defaults to $HOME/.config and the user's ~/.config/opencode LEAKS (visible in B). A soma daemon must redirect XDG_CONFIG_HOME (or point HOME at a dedicated soma home); ~/.claude|~/.agents skills leak too (documented, hook-skipped).
+## findings (agent 'loaded' = shown by 'agent list' in that run)
+~/.config/opencode (global config, XDG-anchored): username sentinel in A=0, in B=1; ~/.config/opencode/agent loaded in A=0, in B=1
+~/.opencode/agent (HOME-anchored, NOT via XDG): loaded in A=1, in B=1
+=> ~/.config/opencode is isolated by an XDG_CONFIG_HOME redirect (invisible in A, leaks in B).
+=> ~/.opencode/agent leaks REGARDLESS of the XDG redirect (loaded in BOTH A and B); only a HOME
+   redirect (a dedicated soma home) isolates it. The sandbox.sh the probes use does redirect HOME.
+VERDICT: PASS — two distinct leak vectors when HOME is the user's own: (1) ~/.config/opencode (config + its agents) leaks only without an XDG_CONFIG_HOME redirect - isolated in A, visible in B; (2) ~/.opencode/agent is HOME-anchored and loads even with XDG redirected (A and B), so redirecting XDG alone is NOT enough - a soma instance must run under a dedicated HOME (as sandbox.sh does) or clear these. ~/.claude|~/.agents external skills also leak (documented from opencode's config reference; hook-skipped here).

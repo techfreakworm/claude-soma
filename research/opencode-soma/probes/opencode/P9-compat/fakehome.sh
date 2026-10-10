@@ -61,19 +61,25 @@ ev "~/.agents/skills (HOME-anchored), toggled off by OPENCODE_DISABLE_CLAUDE_COD
 ev "OPENCODE_DISABLE_EXTERNAL_SKILLS=1. So with HOME = the user's own home, those DO leak unless the"
 ev "daemon sets those env vars or points HOME at a dedicated soma home."
 
-# analysis: did the sentinels appear in A (redirected) vs B (HOME-anchored)?
-a_cfg=$(awk '/### A1 default/,/### B1 default/' "$EV_LOG" | grep -c 'P9B-CONFIG-LEAK')
-b_cfg=$(awk '/### B1 default/,/### B2 /' "$EV_LOG" | grep -c 'P9B-CONFIG-LEAK')
-a_agent=$(awk '/### A1 default/,/### B1 default/' "$EV_LOG" | grep -c 'p9b-config-agent')
-b_agent=$(awk '/### B1 default/,/### B2 /' "$EV_LOG" | grep -c 'p9b-config-agent')
-home_oc=$(grep -c 'p9b-home-agent\|P9B-HOME-OPENCODE-LEAK' "$EV_LOG")
-ev "## findings"
-ev "~/.config/opencode username sentinel in A (XDG redirected)=$a_cfg, in B (XDG default to \$HOME/.config)=$b_cfg"
-ev "~/.config/opencode/agent sentinel in A=$a_agent, in B=$b_agent"
-ev "~/.opencode/agent (HOME-anchored) seen anywhere=$home_oc (config reference says ~/.opencode is NOT a config/agent source)"
-if [ "$a_cfg" = 0 ] && [ "$b_cfg" -ge 1 ]; then
-  ev_verdict PASS "redirecting XDG_CONFIG_HOME fully isolates opencode's global config (the fake ~/.config/opencode sentinel is invisible in A), but with no XDG redirect it defaults to \$HOME/.config and the user's ~/.config/opencode LEAKS (visible in B). A soma daemon must redirect XDG_CONFIG_HOME (or point HOME at a dedicated soma home); ~/.claude|~/.agents skills leak too (documented, hook-skipped)."
+# analysis: which seeded config loaded in run A (XDG redirected) vs run B (XDG default to $HOME/.config)?
+# "loaded" = the agent appears in that run's `agent list` output, or the username in `debug config`.
+secA="$(awk '/^### A1 default/{p=1} /^### B1 default/{p=0} p' "$EV_LOG")"
+secB="$(awk '/^### B1 default/{p=1} /^### B2 /{p=0} p' "$EV_LOG")"
+a_cfg_user=$(printf '%s' "$secA" | grep -c 'P9B-CONFIG-LEAK')
+b_cfg_user=$(printf '%s' "$secB" | grep -c 'P9B-CONFIG-LEAK')
+a_cfg_agent=$(printf '%s' "$secA" | grep -c 'p9b-config-agent (primary)')
+b_cfg_agent=$(printf '%s' "$secB" | grep -c 'p9b-config-agent (primary)')
+a_home_agent=$(printf '%s' "$secA" | grep -c 'p9b-home-agent (primary)')
+b_home_agent=$(printf '%s' "$secB" | grep -c 'p9b-home-agent (primary)')
+ev "## findings (agent 'loaded' = shown by 'agent list' in that run)"
+ev "~/.config/opencode (global config, XDG-anchored): username sentinel in A=$a_cfg_user, in B=$b_cfg_user; ~/.config/opencode/agent loaded in A=$a_cfg_agent, in B=$b_cfg_agent"
+ev "~/.opencode/agent (HOME-anchored, NOT via XDG): loaded in A=$a_home_agent, in B=$b_home_agent"
+ev "=> ~/.config/opencode is isolated by an XDG_CONFIG_HOME redirect (invisible in A, leaks in B)."
+ev "=> ~/.opencode/agent leaks REGARDLESS of the XDG redirect (loaded in BOTH A and B); only a HOME"
+ev "   redirect (a dedicated soma home) isolates it. The sandbox.sh the probes use does redirect HOME."
+if [ "$a_cfg_agent" = 0 ] && [ "$b_cfg_agent" -ge 1 ] && [ "$a_home_agent" -ge 1 ]; then
+  ev_verdict PASS "two distinct leak vectors when HOME is the user's own: (1) ~/.config/opencode (config + its agents) leaks only without an XDG_CONFIG_HOME redirect - isolated in A, visible in B; (2) ~/.opencode/agent is HOME-anchored and loads even with XDG redirected (A and B), so redirecting XDG alone is NOT enough - a soma instance must run under a dedicated HOME (as sandbox.sh does) or clear these. ~/.claude|~/.agents external skills also leak (documented from opencode's config reference; hook-skipped here)."
 else
-  ev_verdict PARTIAL "config-leak result: A(redirected)=$a_cfg B(home-anchored)=$b_cfg; see transcript."
+  ev_verdict PARTIAL "leak result: cfg-agent A=$a_cfg_agent B=$b_cfg_agent, home-agent A=$a_home_agent B=$b_home_agent; see transcript."
 fi
 tail -1 "$EV_LOG"
