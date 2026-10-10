@@ -1,0 +1,11 @@
+date_utc: 2026-10-10T06:40:01Z
+command: python3.12 sqlite_tuning.py --db <bench db dir> --truth truth-50000.json --dataset dataset-50000.json
+sqlite 3.53.4; fresh copy of the bench schema loaded from the dataset in 0.6s (50000 facts)
+Q4 baseline (bench.py query): {"first_ms": 5.22, "p50_ms": 4.232, "p95_ms": 5.41, "correct": 1.0}
+  plan: ['COMPOUND QUERY', 'LEFT-MOST SUBQUERY', 'MATERIALIZE up', 'SETUP', 'SCAN CONSTANT ROW', 'RECURSIVE STEP', 'SCAN up', 'SEARCH d USING PRIMARY KEY (fact_id=?)', 'SCAN up', 'UNION ALL', 'CO-ROUTINE src', 'SETUP', 'SCAN f', 'BLOOM FILTER ON up (fid=?)', 'SEARCH up USING AUTOMATIC COVERING INDEX (fid=?)', 'RECURSIVE STEP', 'SCAN src', 'SEARCH s USING INDEX sqlite_autoindex_sources_1 (id=?)', 'SCAN src']
+Q4 tuned (CROSS JOIN order): {"first_ms": 0.119, "p50_ms": 0.017, "p95_ms": 0.056, "correct": 1.0}
+  plan: ['COMPOUND QUERY', 'LEFT-MOST SUBQUERY', 'MATERIALIZE up', 'SETUP', 'SCAN CONSTANT ROW', 'RECURSIVE STEP', 'SCAN up', 'SEARCH d USING PRIMARY KEY (fact_id=?)', 'SCAN up', 'UNION ALL', 'CO-ROUTINE src', 'SETUP', 'SCAN up', 'SEARCH f USING INDEX sqlite_autoindex_facts_1 (id=?)', 'RECURSIVE STEP', 'SCAN src', 'SEARCH s USING INDEX sqlite_autoindex_sources_1 (id=?)', 'SCAN src']
+Q6 baseline (bench.py query, per-candidate COUNT): {"first_ms": 4.361, "p50_ms": 8.275, "p95_ms": 104.818, "correct": 1.0}
+entity_degree materialized in 91 ms (2172 entities); on write it is +1/-1 per mention
+Q6 tuned (entity_degree table): {"first_ms": 0.348, "p50_ms": 0.267, "p95_ms": 7.579, "correct": 1.0}
+VERDICT: PASS — at 50,000 facts the tuned SQLite Q4/Q6 return the oracle answers on every run (timings above)

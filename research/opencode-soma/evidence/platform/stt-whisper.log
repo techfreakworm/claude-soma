@@ -1,0 +1,19 @@
+date_utc: 2026-10-10T06:37:29Z
+command: python3.12 stt_whisper.py
+concurrent GPU load: ollama models resident = ['qwen3:32b'] (a resident model may be generating for another client; latencies are then upper bounds)
+host: Darwin 25.4.0 arm64 (macOS 26.4.1)
+whisper-cli: /opt/homebrew/bin/whisper-cli (whisper-cpp 1.8.4)
+ffmpeg: ffmpeg version 7.1.1 Copyright (c) 2000-2025 the FFmpeg developers
+model: /Users/techfreakworm/.cache/hyperframes/whisper/models/ggml-small.en.bin (found locally, 487.6 MB, sha256 c6138d6d58ecc832...)
+reference text: Remind me to call Asha about the invoice on Thursday afternoon, and move the Lisbon trip to April.
+say -> aiff: rc=0 1.37s
+ffmpeg aiff -> 16k mono wav: rc=0 0.58s
+ffmpeg aiff -> ogg/opus voice note: rc=0 0.14s
+ffprobe voice.ogg: {"programs": [], "stream_groups": [], "streams": [{"codec_name": "opus", "sample_rate": "48000", "channels": 1}], "format": {"format_name": "ogg", "duration": "5.551771"}}
+whisper wav cold: rc=0 1.83s WER=0.000 text='Remind me to call Asha about the invoice on Thursday afternoon, and move the Lisbon trip to April.'
+whisper wav warm 1: rc=0 3.23s WER=0.000 text='Remind me to call Asha about the invoice on Thursday afternoon, and move the Lisbon trip to April.'
+whisper wav warm 2: rc=0 3.15s WER=0.000 text='Remind me to call Asha about the invoice on Thursday afternoon, and move the Lisbon trip to April.'
+whisper wav warm 3: rc=0 3.64s WER=0.000 text='Remind me to call Asha about the invoice on Thursday afternoon, and move the Lisbon trip to April.'
+ogg voice note, claude-soma path (ffmpeg 0.10s + whisper 3.18s = 3.27s): rc=0 WER=0.000 text='Remind me to call Asha about the invoice on Thursday afternoon, and move the Lisbon trip to April.'
+whisper-cli directly on .ogg (no ffmpeg): rc=0 0.62s text='' stderr_tail="or: failed to read audio data as wav (Unknown error)\nerror: failed to read audio file '/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-me/stt/voice.ogg'"
+VERDICT: PASS — whisper-cli (ggml-small.en.bin) transcribed a 5.6s clip in 3.15-3.64s warm (cold 1.83s) and the Telegram-style OGG/Opus note in 3.27s end to end; worst WER 0.000

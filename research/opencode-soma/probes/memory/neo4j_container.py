@@ -117,9 +117,15 @@ def main() -> int:
         t = be.load(ds)
         res["load_50k_s"] = round(t["load_s"], 2)
         res["after_load_50k"] = settle_mem(5)
+        res["disk_50k_kb_before_checkpoint"] = disk_breakdown()
+        d = B.neo4j_driver()
+        with d.session() as s:
+            s.run("CALL db.checkpoint()").consume()
+        d.close()
         res["disk_50k_kb"] = disk_breakdown()
         log(fh, f"loaded {SCALE_FOR_LOAD} facts in {t['load_s']:.2f}s; mem {json.dumps(res['after_load_50k'])}; "
-                f"disk {json.dumps(res['disk_50k_kb'])}")
+                f"disk before checkpoint {json.dumps(res['disk_50k_kb_before_checkpoint'])}; "
+                f"after CALL db.checkpoint() {json.dumps(res['disk_50k_kb'])}")
         restarts = []
         ent = truth["Q1"][0]["params"]["entity"]
         for i in range(a.cold_runs):

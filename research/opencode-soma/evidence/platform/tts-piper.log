@@ -1,0 +1,25 @@
+date_utc: 2026-10-10T06:35:31Z
+command: python3.12 tts_piper.py
+concurrent GPU load: ollama models resident = ['qwen3:32b'] (a resident model may be generating for another client; latencies are then upper bounds)
+host: Darwin 25.4.0 arm64 (macOS 26.4.1), python 3.12.10
+PyPI piper-tts 1.8.0 files (platform coverage):
+  piper_tts-1.8.0-cp39-abi3-macosx_10_9_x86_64.whl  34.1 MB
+  piper_tts-1.8.0-cp39-abi3-macosx_11_0_arm64.whl  34.1 MB
+  piper_tts-1.8.0-cp39-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.manylinux_2_28_aarch64.whl  34.1 MB
+  piper_tts-1.8.0-cp39-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.manylinux_2_28_x86_64.whl  34.1 MB
+  piper_tts-1.8.0-cp39-abi3-win_amd64.whl  34.1 MB
+  piper_tts-1.8.0.tar.gz  24.3 MB
+venv created in 2.0s
+pip install piper-tts==1.8.0: rc=0 7.3s 
+venv packages: numpy==2.5.3, onnxruntime==1.31.0, pathvalidate==3.3.1, piper-tts==1.8.0
+venv site-packages size: 176 MB
+downloaded en_US-ryan-medium.onnx (63.2 MB) in 2.4s
+downloaded en_US-ryan-medium.onnx.json (0.0 MB) in 0.3s
+piper CLI synth run 1 (new process, loads the model each time): rc=0 3.54s ''
+piper CLI synth run 2 (new process, loads the model each time): rc=0 1.39s ''
+piper CLI synth run 3 (new process, loads the model each time): rc=0 1.35s ''
+python API (model loaded once): rc=0 in-process synth 1: 0.122s | in-process synth 2: 0.100s | in-process synth 3: 0.101s | model load: 1.033s
+ffmpeg wav -> opus (claude-soma args): rc=0 0.22s
+ffprobe reply.opus: {"programs": [], "stream_groups": [], "streams": [{"codec_name": "opus", "sample_rate": "48000", "channels": 1}], "format": {"format_name": "ogg", "duration": "5.043375", "bit_rate": "49060"}}
+round trip: opus -> whisper (ggml-small.en.bin, found locally) 1.78s WER=0.000 text='Your nightly backup finished. Two projects need your review, and the Lisbon trip is now in April.'
+VERDICT: PASS — piper-tts 1.8.0 (PyPI wheel, macOS arm64) synthesized 5.0s of speech in 1.35-3.54s per CLI call; ffmpeg produced a valid Ogg/Opus voice note (Telegram sendVoice format); whisper round-trip WER 0.000

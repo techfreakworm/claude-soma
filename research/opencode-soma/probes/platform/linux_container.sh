@@ -12,7 +12,8 @@ ROOT="$(cd "$HERE/../.." && pwd)"
 LOG="$ROOT/evidence/platform/linux-container.log"
 NAME=ocsoma-me-linux
 OC_VERSION="${OC_VERSION:-1.18.8}"
-MODEL="${MODEL:-qwen3:32b}"
+MODEL="${MODEL:-lfm2.5-thinking}"
+if [[ "$MODEL" == *thinking* ]]; then REASONING=true; MOPTS="{}"; else REASONING=false; MOPTS="{ \"reasoningEffort\": \"none\" }"; fi
 mkdir -p "$(dirname "$LOG")"
 now() { python3.12 -c 'import time; print(time.time())'; }
 dx() { docker exec "$NAME" bash -lc "$1"; }
@@ -47,8 +48,8 @@ dx() { docker exec "$NAME" bash -lc "$1"; }
       \"npm\": \"@ai-sdk/openai-compatible\",
       \"name\": \"Ollama on the host\",
       \"options\": { \"baseURL\": \"http://host.docker.internal:11434/v1\" },
-      \"models\": { \"$MODEL\": { \"name\": \"$MODEL\", \"tool_call\": true, \"reasoning\": false,
-                    \"options\": { \"reasoningEffort\": \"none\" }, \"limit\": { \"context\": 40960, \"output\": 4096 } } }
+      \"models\": { \"$MODEL\": { \"name\": \"$MODEL\", \"tool_call\": true, \"reasoning\": $REASONING,
+                    \"options\": $MOPTS, \"limit\": { \"context\": 32768, \"output\": 4096 } } }
     }
   }
 }
@@ -56,7 +57,7 @@ JSON
 cat ~/.config/opencode/opencode.json | head -8"
   echo "host ollama reachable from the container: $(dx 'curl -s --max-time 5 http://host.docker.internal:11434/api/version')"
   t0=$(now)
-  dx "cd ~/proj && OPENCODE_DISABLE_AUTOUPDATE=1 OPENCODE_DISABLE_SHARE=1 timeout 600 ~/.opencode/bin/opencode run --model ollama/$MODEL 'Reply with exactly the word PONG and nothing else. Do not use any tools.' 2>&1 | sed 's/\x1b\[[0-9;]*m//g' | tail -15; echo opencode-run-rc=\${PIPESTATUS[0]}"
+  dx "cd ~/proj && OPENCODE_DISABLE_AUTOUPDATE=1 OPENCODE_DISABLE_SHARE=1 setsid -w timeout 900 ~/.opencode/bin/opencode run --print-logs --log-level WARN --model ollama/$MODEL 'Reply with exactly the word PONG and nothing else. Do not use any tools.' > /tmp/oc-run.out 2>&1; echo opencode-run-rc=\$?; sed 's/\x1b\[[0-9;]*m//g' /tmp/oc-run.out | grep -v '^\s*$' | tail -25"
   echo "opencode run wall: $(python3.12 -c "print(round($(now)-$t0,1))")s"
   echo "== tmux inside the container"
   dx 'tmux -V; tmux -L ocsoma-me-t new-session -d -s lead1 "bash --norc"; tmux -L ocsoma-me-t send-keys -t lead1 "echo hello-from-tmux-\$((6*7))" Enter; sleep 1; tmux -L ocsoma-me-t ls; tmux -L ocsoma-me-t capture-pane -p -t lead1 | grep -m1 "hello-from-tmux-42" && echo tmux-roundtrip=ok; tmux -L ocsoma-me-t kill-server'

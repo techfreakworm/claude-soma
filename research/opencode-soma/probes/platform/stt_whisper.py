@@ -93,6 +93,12 @@ def main() -> int:
     out("command: python3.12 " + " ".join([Path(sys.argv[0]).name] + sys.argv[1:]))
     brew = subprocess.run(["brew", "list", "--versions", "whisper-cpp"], capture_output=True, text=True).stdout.strip()
     ff = subprocess.run(["ffmpeg", "-version"], capture_output=True, text=True).stdout.splitlines()[0]
+    try:
+        ps = json.load(urllib.request.urlopen("http://127.0.0.1:11434/api/ps", timeout=5))["models"]
+        out(f"concurrent GPU load: ollama models resident = {[m['name'] for m in ps] or 'none'} "
+            "(a resident model may be generating for another client; latencies are then upper bounds)")
+    except Exception:  # noqa: BLE001 - ollama is optional here
+        out("concurrent GPU load: ollama not reachable")
     out(f"host: {platform.system()} {platform.release()} {platform.machine()} (macOS {platform.mac_ver()[0]})")
     out(f"whisper-cli: {shutil.which('whisper-cli')} ({brew or 'version unknown'})")
     out(f"ffmpeg: {ff}")
