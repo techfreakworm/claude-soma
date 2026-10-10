@@ -122,3 +122,6 @@ else
 fi
 ev_redact "$EV_LOG"
 tail -1 "$EV_LOG"
+
+# post-hoc column-aware re-check of the saved panes (separate log, no LLM)
+bash "$HERE/analyze.sh"

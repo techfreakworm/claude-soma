@@ -1,0 +1,50 @@
+
+  ┃                                                                                                                                                             Tmux setup issue
+  ┃  Reply with exactly TMUX-SHORT-OK and nothing else.
+  ┃                                                                                                                                                             Context
+                                                                                                                                                                7,409 tokens
+     TMUX-SHORT-OK                                                                                                                                              18% used
+                                                                                                                                                                $0.00 spent
+     ▣  Build · Qwen3 32B (thinking off) · 1m 1s
+                                                                                                                                                                LSP
+  ┃                                                                                                                                                             LSPs are disabled
+  ┃  Here is some filler context you can ignore: The quick brown fox jumps over the lazy dog number 1. The quick brown fox jumps over the lazy dog number 2.
+  ┃   The quick brown fox jumps over the lazy dog number 3. The quick brown fox jumps over the lazy dog number 4. The quick brown fox jumps over the lazy
+  ┃  dog number 5. The quick brown fox jumps over the lazy dog number 6. The quick brown fox jumps over the lazy dog number 7. The quick brown fox jumps
+  ┃  over the lazy dog number 8. The quick brown fox jumps over the lazy dog number 9. The quick brown fox jumps over the lazy dog number 10. The quick
+  ┃  brown fox jumps over the lazy dog number 11. The quick brown fox jumps over the lazy dog number 12. The quick brown fox jumps over the lazy dog number
+  ┃  13. The quick brown fox jumps over the lazy dog number 14. The quick brown fox jumps over the lazy dog number 15. The quick brown fox jumps over the
+  ┃  lazy dog number 16. The quick brown fox jumps over the lazy dog number 17. The quick brown fox jumps over the lazy dog number 18. The quick brown fox
+  ┃  jumps over the lazy dog number 19. The quick brown fox jumps over the lazy dog number 20. The quick brown fox jumps over the lazy dog number 21. The
+  ┃  quick brown fox jumps over the lazy dog number 22. The quick brown fox jumps over the lazy dog number 23. The quick brown fox jumps over the lazy dog
+  ┃  number 24. The quick brown fox jumps over the lazy dog number 25. The quick brown fox jumps over the lazy dog number 26. The quick brown fox jumps
+  ┃  over the lazy dog number 27. The quick brown fox jumps over the lazy dog number 28. The quick brown fox jumps over the lazy dog number 29. The quick
+  ┃  brown fox jumps over the lazy dog number 30. The quick brown fox jumps over the lazy dog number 31. The quick brown fox jumps over the lazy dog number
+  ┃  32. The quick brown fox jumps over the lazy dog number 33. The quick brown fox jumps over the lazy dog number 34. The quick brown fox jumps over the
+  ┃  lazy dog number 35. The quick brown fox jumps over the lazy dog number 36. The quick brown fox jumps over the lazy dog number 37. The quick brown fox
+  ┃  jumps over the lazy dog number 38. The quick brown fox jumps over the lazy dog number 39. End of filler. Reply with exactly TMUX-LONG-OK and nothing
+  ┃  else.
+  ┃
+
+     TMUX-LONG-OK
+
+     ▣  Build · Qwen3 32B (thinking off) · 5.1s
+
+
+
+
+
+
+
+
+
+
+
+
+  ┃
+  ┃                                                                                                                                                             /private/var/folders/lp/
+  ┃                                                                                                                                                             m_0rzyhs19g7l2x5dnql4tjh0000gp/T/
+  ┃  Build · Qwen3 32B (thinking off) Ollama (local)                                                                                                            ocsoma-pe/P5-tmux/project:main
+  ╹▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀
+   /private/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P5-tmux/project                                            7.4K (18%)  ctrl+p commands    • OpenCode 1.18.8
+

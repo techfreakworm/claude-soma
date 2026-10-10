@@ -1,0 +1,71 @@
+# P3-mcp/mcp.log
+date-utc: 2026-10-10T06:52:44Z
+probe-script: research/opencode-soma/probes/opencode/P3-mcp/run.sh
+opencode-version: 1.18.8
+model: ollama/qwen3:32b (thinking off)
+sandbox: $TMPDIR/ocsoma-pe/P3-mcp (HOME, XDG_*, TMPDIR all inside it)
+purpose: stdio + streamable-HTTP MCP servers callable from opencode run; opencode mcp list
+
+$ cat /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P3-mcp/project/opencode.json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "probe-stdio": { "type": "local", "command": ["python3.12", "-I", "/Users/techfreakworm/.soma/worktrees/claude-soma/claude-soma-manager/research/opencode-soma/probes/opencode/P3-mcp/mini_mcp.py", "--transport", "stdio", "--kind", "echo-stdio", "--log", "/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P3-mcp/p3/mcp-stdio.jsonl"], "enabled": true },
+    "probe-http": { "type": "remote", "url": "http://127.0.0.1:47132/mcp", "enabled": true, "oauth": false },
+    "telegram": { "type": "local", "command": ["python3.12", "-I", "/Users/techfreakworm/.soma/worktrees/claude-soma/claude-soma-manager/research/opencode-soma/probes/opencode/P3-mcp/mini_mcp.py", "--transport", "stdio", "--kind", "telegram", "--log", "/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P3-mcp/p3/mcp-telegram.jsonl", "--outbox", "/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P3-mcp/p3/telegram-outbox.jsonl"], "enabled": true }
+  },
+  "agent": {
+    "orchestrator": {
+      "mode": "primary",
+      "description": "Telegram-facing orchestrator (may use the telegram MCP).",
+      "prompt": "You are the orchestrator. You talk to the operator through the telegram send_message tool."
+    },
+    "lead": {
+      "mode": "primary",
+      "description": "Per-workstream lead: every MCP except telegram (permission deny).",
+      "prompt": "You are a project lead. You never talk to the operator directly.",
+      "permission": { "telegram_*": "deny" }
+    },
+    "lead-tools": {
+      "mode": "primary",
+      "description": "Lead variant scoped with the legacy tools map instead of permission.",
+      "prompt": "You are a project lead. You never talk to the operator directly.",
+      "tools": { "telegram_*": false }
+    }
+  }
+}
+
+[exit=0 wall=0.0s]
+
+## opencode mcp list
+$ /Users/techfreakworm/.opencode/bin/opencode mcp list
+[0m
+┌  MCP Servers
+│
+●  ✓ probe-stdio [90mconnected
+│      [90mpython3.12 -I /Users/techfreakworm/.soma/worktrees/claude-soma/claude-soma-manager/research/opencode-soma/probes/opencode/P3-mcp/mini_mcp.py --transport stdio --kind echo-stdio --log /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P3-mcp/p3/mcp-stdio.jsonl
+│
+●  ✓ probe-http [90mconnected
+│      [90mhttp://127.0.0.1:47132/mcp
+│
+●  ✓ telegram [90mconnected
+│      [90mpython3.12 -I /Users/techfreakworm/.soma/worktrees/claude-soma/claude-soma-manager/research/opencode-soma/probes/opencode/P3-mcp/mini_mcp.py --transport stdio --kind telegram --log /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P3-mcp/p3/mcp-telegram.jsonl --outbox /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P3-mcp/p3/telegram-outbox.jsonl
+│
+└  3 server(s)
+
+
+[exit=0 wall=0.8s]
+
+## stdio MCP tool from opencode run
+$ /Users/techfreakworm/.opencode/bin/opencode run -m ollama/qwen3:32b --format json Call the stdio_echo tool with text P3-STDIO and reply with exactly what it returned.
+{"type":"step_start","timestamp":1791615201584,"sessionID":"ses_edb6a16f3ffeNwyM0vVDJZeDEg","part":{"id":"prt_124967127001EcUZPwPK7agtAw","messageID":"msg_12495e9cf001Du5kkvGpvKluNj","sessionID":"ses_edb6a16f3ffeNwyM0vVDJZeDEg","snapshot":"8c5aace74fd451b54a905c2830667f14cce2d921","type":"step-start"}}
+{"type":"tool_use","timestamp":1791615201587,"sessionID":"ses_edb6a16f3ffeNwyM0vVDJZeDEg","part":{"type":"tool","tool":"probe-stdio_stdio_echo","callID":"call_3hfihpur","state":{"status":"completed","input":{"text":"P3-STDIO"},"output":"STDIO-MCP-OK:P3-STDIO","metadata":{"truncated":false},"title":"","time":{"start":1791615201582,"end":1791615201586}},"id":"prt_1249671290012HtavrIYLJFL3c","sessionID":"ses_edb6a16f3ffeNwyM0vVDJZeDEg","messageID":"msg_12495e9cf001Du5kkvGpvKluNj"}}
+{"type":"step_finish","timestamp":1791615201811,"sessionID":"ses_edb6a16f3ffeNwyM0vVDJZeDEg","part":{"id":"prt_124967210001YrusyT0hNDck90","reason":"tool-calls","snapshot":"8c5aace74fd451b54a905c2830667f14cce2d921","messageID":"msg_12495e9cf001Du5kkvGpvKluNj","sessionID":"ses_edb6a16f3ffeNwyM0vVDJZeDEg","type":"step-finish","tokens":{"total":6728,"input":6696,"output":27,"reasoning":0,"cache":{"write":0,"read":5}},"cost":0}}
+{"type":"step_start","timestamp":1791615203944,"sessionID":"ses_edb6a16f3ffeNwyM0vVDJZeDEg","part":{"id":"prt_124967a65001FEOteCuJiC5lxv","messageID":"msg_12496723a001ScuKLpLBNWwBGj","sessionID":"ses_edb6a16f3ffeNwyM0vVDJZeDEg","snapshot":"8c5aace74fd451b54a905c2830667f14cce2d921","type":"step-start"}}
+{"type":"text","timestamp":1791615204784,"sessionID":"ses_edb6a16f3ffeNwyM0vVDJZeDEg","part":{"id":"prt_124967a67001aBckEhSk2Ozzx9","messageID":"msg_12496723a001ScuKLpLBNWwBGj","sessionID":"ses_edb6a16f3ffeNwyM0vVDJZeDEg","type":"text","text":"STDIO-MCP-OK:P3-STDIO","time":{"start":1791615203943,"end":1791615204782}}}
+{"type":"step_finish","timestamp":1791615204835,"sessionID":"ses_edb6a16f3ffeNwyM0vVDJZeDEg","part":{"id":"prt_124967de0001xdnBranp7m5ykq","reason":"stop","snapshot":"8c5aace74fd451b54a905c2830667f14cce2d921","messageID":"msg_12496723a001ScuKLpLBNWwBGj","sessionID":"ses_edb6a16f3ffeNwyM0vVDJZeDEg","type":"step-finish","tokens":{"total":6763,"input":54,"output":12,"reasoning":0,"cache":{"write":0,"read":6697}},"cost":0}}
+
+[exit=0 wall=38.7s]
+
+## streamable-HTTP MCP tool from opencode run
+$ /Users/techfreakworm/.opencode/bin/opencode run -m ollama/qwen3:32b --format json Call the http_echo tool with text P3-HTTP and reply with exactly what it returned.

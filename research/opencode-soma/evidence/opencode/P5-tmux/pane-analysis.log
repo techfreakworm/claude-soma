@@ -1,0 +1,27 @@
+# P5-tmux/pane-analysis.log
+date-utc: 2026-10-10T06:53:21Z
+probe-script: research/opencode-soma/probes/opencode/P5-tmux/analyze.sh (after run.sh)
+opencode-version: 1.18.8
+model: n/a (no LLM)
+sandbox: $TMPDIR/ocsoma-pe/P5-tmux (HOME, XDG_*, TMPDIR all inside it)
+purpose: post-hoc: whole-line vs column-aware scraping of the saved TUI panes
+
+## sidebar layout: rows where transcript text and the right sidebar share a terminal line
+$ python3.12 -I - /Users/techfreakworm/.soma/worktrees/claude-soma/claude-soma-manager/research/opencode-soma/evidence/opencode/P5-tmux/pane-short.txt
+row 2: '  ┃  Reply with exactly TMUX-SHORT-OK and nothing else.'
+row 5: '     TMUX-SHORT-OK                                                                                                                                              17% used'
+
+[exit=0 wall=0.0s]
+
+$ python3.12 -I - /Users/techfreakworm/.soma/worktrees/claude-soma/claude-soma-manager/research/opencode-soma/evidence/opencode/P5-tmux
+short      whole-line=MISS  column-aware=ok
+long       whole-line=ok  column-aware=ok
+multiline  whole-line=ok  column-aware=ok
+quotes     whole-line=ok  column-aware=ok
+dollar     whole-line=ok  column-aware=ok
+longreply  whole-line=ok  column-aware=ok
+whole-line 5/6, column-aware 6/6
+
+[exit=0 wall=0.0s]
+
+VERDICT: PARTIAL — every message was delivered intact and every reply reached the screen, but only column-aware parsing finds them all (the sidebar shares rows) and long replies are cut to the visible screen (alt-screen, no tmux scrollback).
