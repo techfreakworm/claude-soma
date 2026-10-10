@@ -1,0 +1,64 @@
+date_utc: 2026-10-10T07:12:44Z
+command: PYTHONHASHSEED=0 python neo4j_fairness.py --data /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-me/data
+image neo4j:2026.09.0-community, driver 6.4.0, container ocsoma-me-neo4j (bolt 127.0.0.1:47287), heap 512m / pagecache 256m, 50000 facts
+== A. as benchmarked
+  [A] {"labelsOrTypes": ["Entity"], "name": "ent_id", "properties": ["id"], "type": "NODE_PROPERTY_UNIQUENESS"}
+  [A] {"labelsOrTypes": ["Fact"], "name": "fact_id", "properties": ["id"], "type": "NODE_PROPERTY_UNIQUENESS"}
+  [A] {"labelsOrTypes": ["Source"], "name": "src_id", "properties": ["id"], "type": "NODE_PROPERTY_UNIQUENESS"}
+  [A] {"labelsOrTypes": ["Entity"], "name": "ent_id", "properties": ["id"], "state": "ONLINE", "type": "RANGE"}
+  [A] {"labelsOrTypes": ["Fact"], "name": "fact_id", "properties": ["id"], "state": "ONLINE", "type": "RANGE"}
+  [A] {"labelsOrTypes": ["Fact"], "name": "fact_key", "properties": ["scope", "subject", "attribute"], "state": "ONLINE", "type": "RANGE"}
+  [A] {"labelsOrTypes": ["Fact"], "name": "fact_scope", "properties": ["scope", "visibility"], "state": "ONLINE", "type": "RANGE"}
+  [A] {"labelsOrTypes": ["Fact"], "name": "fact_text", "properties": ["text"], "state": "ONLINE", "type": "FULLTEXT"}
+  [A] {"labelsOrTypes": null, "name": "index_1b9dcc97", "properties": null, "state": "ONLINE", "type": "LOOKUP"}
+  [A] {"labelsOrTypes": null, "name": "index_460996c0", "properties": null, "state": "ONLINE", "type": "LOOKUP"}
+  [A] {"labelsOrTypes": ["Source"], "name": "src_id", "properties": ["id"], "state": "ONLINE", "type": "RANGE"}
+  [A] PROFILE Q1: db hits 4176; operators ProduceResults > Sort > Projection > Filter > Expand(All) > NodeUniqueIndexSeek
+  [A] PROFILE Q3: db hits 107059; operators ProduceResults > Projection > Top > CacheProperties > Distinct > Union > Filter > NodeByLabelScan > NodeIndexSeek
+  [A] PROFILE Q7a: db hits 787; operators ProduceResults > Sort > Projection > Filter > NodeIndexSeek
+  [A] PROFILE Q7b: db hits 2749; operators ProduceResults > Sort > Projection > Filter > NodeIndexSeek
+  [A] PROFILE Q8: db hits 146; operators ProduceResults > Sort > Projection > Filter > ProcedureCall
+  [A] Q1: {"first_ms": 74.38, "p50_ms": 14.02, "p95_ms": 22.7, "correct": 1.0}
+  [A] Q3: {"first_ms": 106.08, "p50_ms": 22.74, "p95_ms": 31.27, "correct": 1.0}
+  [A] Q7a: {"first_ms": 21.71, "p50_ms": 3.68, "p95_ms": 4.48, "correct": 1.0}
+  [A] Q7b: {"first_ms": 28.35, "p50_ms": 8.22, "p95_ms": 10.35, "correct": 1.0}
+  [A] Q8: {"first_ms": 27.98, "p50_ms": 3.43, "p95_ms": 7.0, "correct": 1.0}
+== B. plus Fact(scope), Fact(created_at), Entity(name) indexes
+  [B] {"labelsOrTypes": ["Entity"], "name": "ent_id", "properties": ["id"], "type": "NODE_PROPERTY_UNIQUENESS"}
+  [B] {"labelsOrTypes": ["Fact"], "name": "fact_id", "properties": ["id"], "type": "NODE_PROPERTY_UNIQUENESS"}
+  [B] {"labelsOrTypes": ["Source"], "name": "src_id", "properties": ["id"], "type": "NODE_PROPERTY_UNIQUENESS"}
+  [B] {"labelsOrTypes": ["Entity"], "name": "ent_id", "properties": ["id"], "state": "ONLINE", "type": "RANGE"}
+  [B] {"labelsOrTypes": ["Entity"], "name": "entity_name", "properties": ["name"], "state": "ONLINE", "type": "RANGE"}
+  [B] {"labelsOrTypes": ["Fact"], "name": "fact_created", "properties": ["created_at"], "state": "ONLINE", "type": "RANGE"}
+  [B] {"labelsOrTypes": ["Fact"], "name": "fact_id", "properties": ["id"], "state": "ONLINE", "type": "RANGE"}
+  [B] {"labelsOrTypes": ["Fact"], "name": "fact_key", "properties": ["scope", "subject", "attribute"], "state": "ONLINE", "type": "RANGE"}
+  [B] {"labelsOrTypes": ["Fact"], "name": "fact_scope", "properties": ["scope", "visibility"], "state": "ONLINE", "type": "RANGE"}
+  [B] {"labelsOrTypes": ["Fact"], "name": "fact_scope_only", "properties": ["scope"], "state": "ONLINE", "type": "RANGE"}
+  [B] {"labelsOrTypes": ["Fact"], "name": "fact_text", "properties": ["text"], "state": "ONLINE", "type": "FULLTEXT"}
+  [B] {"labelsOrTypes": null, "name": "index_1b9dcc97", "properties": null, "state": "ONLINE", "type": "LOOKUP"}
+  [B] {"labelsOrTypes": null, "name": "index_460996c0", "properties": null, "state": "ONLINE", "type": "LOOKUP"}
+  [B] {"labelsOrTypes": ["Source"], "name": "src_id", "properties": ["id"], "state": "ONLINE", "type": "RANGE"}
+  [B] PROFILE Q1: db hits 4176; operators ProduceResults > Sort > Projection > Filter > Expand(All) > NodeUniqueIndexSeek
+  [B] PROFILE Q3: db hits 7405; operators ProduceResults > Top > Projection > CacheProperties > Distinct > Union > Filter > NodeIndexSeek
+  [B] PROFILE Q7a: db hits 787; operators ProduceResults > Sort > Projection > Filter > NodeIndexSeek
+  [B] PROFILE Q7b: db hits 2749; operators ProduceResults > Sort > Projection > Filter > NodeIndexSeek
+  [B] PROFILE Q8: db hits 146; operators ProduceResults > Sort > Projection > Filter > ProcedureCall
+  [B] Q1: {"first_ms": 34.89, "p50_ms": 7.99, "p95_ms": 12.52, "correct": 1.0}
+  [B] Q3: {"first_ms": 44.56, "p50_ms": 3.07, "p95_ms": 3.83, "correct": 1.0}
+  [B] Q7a: {"first_ms": 22.65, "p50_ms": 3.43, "p95_ms": 4.24, "correct": 1.0}
+  [B] Q7b: {"first_ms": 26.04, "p50_ms": 7.92, "p95_ms": 10.28, "correct": 1.0}
+  [B] Q8: {"first_ms": 22.96, "p50_ms": 2.81, "p95_ms": 4.99, "correct": 1.0}
+== C. plus :Active label on non-superseded facts and UNION for the visibility OR
+  [C] labelled 44875 facts :Active (a real system would add/remove the label in the upsert)
+  [C] PROFILE Q1: db hits 4176; operators ProduceResults > Sort > Projection > Filter > Expand(All) > NodeUniqueIndexSeek
+  [C] PROFILE Q3: db hits 7403; operators ProduceResults > Projection > Top > CacheProperties > Distinct > Union > Filter > NodeIndexSeek
+  [C] PROFILE Q7a: db hits 787; operators ProduceResults > Sort > Projection > Filter > NodeIndexSeek
+  [C] PROFILE Q7b: db hits 2749; operators ProduceResults > Sort > Projection > Filter > NodeIndexSeek
+  [C] PROFILE Q8: db hits 146; operators ProduceResults > Sort > Projection > Filter > ProcedureCall
+  [C] Q1: {"first_ms": 37.61, "p50_ms": 8.3, "p95_ms": 12.22, "correct": 1.0}
+  [C] Q3: {"first_ms": 54.03, "p50_ms": 2.45, "p95_ms": 3.17, "correct": 1.0}
+  [C] Q7a: {"first_ms": 20.5, "p50_ms": 3.09, "p95_ms": 4.48, "correct": 1.0}
+  [C] Q7b: {"first_ms": 25.44, "p50_ms": 7.45, "p95_ms": 8.32, "correct": 1.0}
+  [C] Q8: {"first_ms": 20.6, "p50_ms": 2.65, "p95_ms": 4.74, "correct": 1.0}
+summary p50 ms (A as benchmarked / B +indexes / C +Active label & UNION): Q1 14.02 / 7.99 / 8.3; Q3 22.74 / 3.07 / 2.45; Q7a 3.68 / 3.43 / 3.09; Q7b 8.22 / 7.92 / 7.45; Q8 3.43 / 2.81 / 2.65
+VERDICT: PASS — every variant matched the oracle on every run: True; best Neo4j p50 at 50k: Q1 7.99 ms, Q3 2.45 ms, Q7a 3.09 ms, Q7b 7.45 ms, Q8 2.65 ms (bench SQLite: Q1 2.75, Q3 1.86, Q7a 0.39, Q7b 1.12, Q8 1.34 ms)

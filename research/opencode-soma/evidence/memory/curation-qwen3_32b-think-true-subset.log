@@ -1,0 +1,21 @@
+date_utc: 2026-10-10T07:03:42Z
+command: python3.12 curate_bench.py --model qwen3:32b --think true --tasks dup,con --cases D05,D08,D10,D12,D14,C02,C04,C10,C16,C22
+ollama: 0.33.3  model: qwen3:32b (32.8B Q4_K_M, digest 030ee887880f)  options: temperature 0, seed 7, num_ctx = server default (not overridden, so a shared runner is never reloaded), think=true, format=<json schema>
+models resident at start: [('qwen3:32b', 40960)]
+warm-up call: wall 33.262s, load 0.001s, error None
+models resident after warm-up: [('qwen3:32b', 40960)]
+dup D05: label=none {"valid": true, "pred": "none", "correct": true, "false_merge": false, "missed": false} wall=72.324s compute=40.285s
+dup D08: label=c1 {"valid": true, "pred": "c1", "correct": true, "false_merge": false, "missed": false} wall=53.286s compute=36.101s
+dup D10: label=none {"valid": true, "pred": "c1", "correct": false, "false_merge": true, "missed": false} wall=58.529s compute=39.479s
+dup D12: label=none {"valid": true, "pred": "none", "correct": true, "false_merge": false, "missed": false} wall=42.245s compute=29.027s
+dup D14: label=none {"valid": true, "pred": "none", "correct": true, "false_merge": false, "missed": false} wall=67.942s compute=27.314s
+
+run stopped before completion (stopped at 07:09Z when the shared qwen3 slot ended); completed 5 of 10 planned cases: D05, D08, D10, D12, D14; not run: C02, C04, C10, C16, C22
+per case (this run vs the reference run on the same case):
+  D05: qwen3_32b-think-true-subset correct=True pred=none compute=40.285s | qwen3_32b-think-false correct=True pred=none compute=5.147s
+  D08: qwen3_32b-think-true-subset correct=True pred=c1 compute=36.101s | qwen3_32b-think-false correct=False pred=none compute=3.727s
+  D10: qwen3_32b-think-true-subset correct=False pred=c1 compute=39.479s | qwen3_32b-think-false correct=False pred=c1 compute=4.542s
+  D12: qwen3_32b-think-true-subset correct=True pred=none compute=29.027s | qwen3_32b-think-false correct=False pred=c1 compute=5.815s
+  D14: qwen3_32b-think-true-subset correct=True pred=none compute=27.314s | qwen3_32b-think-false correct=True pred=none compute=3.994s
+summary: {"partial": true, "note": "stopped at 07:09Z when the shared qwen3 slot ended", "completed_cases": ["D05", "D08", "D10", "D12", "D14"], "planned_cases": ["D05", "D08", "D10", "D12", "D14", "C02", "C04", "C10", "C16", "C22"], "correct": 4, "correct_ref_same_cases": 2, "destructive": 1, "destructive_ref_same_cases": 2, "compute_median_s": 36.1, "compute_median_ref_s": 4.54}
+VERDICT: PARTIAL — stopped at slot end after 5/10 cases: 4/5 correct with thinking vs 2/5 without on the same cases; destructive calls 1 vs 2; median compute 36.1 s vs 4.54 s

@@ -301,6 +301,7 @@ def main() -> int:
                 out(f"extract {c['id']}: {json.dumps(s)} wall={o.get('wall_s')}s compute={o.get('compute_s')}s")
                 jl.write(redact(json.dumps({"task": "extract", "id": c["id"], "score": s, "raw": o.get("raw"),
                                             "error": o.get("error")}), secrets) + "\n")
+                jl.flush()
         if "dup" in tasks:
             rows["dup"] = []
             for c in pick(C.DUPLICATES):
@@ -310,6 +311,7 @@ def main() -> int:
                 rows["dup"].append({"id": c["id"], "out": o, "score": s})
                 out(f"dup {c['id']}: label={c['label']} {json.dumps(s)} wall={o.get('wall_s')}s compute={o.get('compute_s')}s")
                 jl.write(json.dumps({"task": "dup", "id": c["id"], "score": s, "raw": o.get("raw"), "error": o.get("error")}) + "\n")
+                jl.flush()
         if "con" in tasks:
             rows["con"] = []
             for c in pick(C.CONTRADICTIONS):
@@ -319,6 +321,7 @@ def main() -> int:
                 rows["con"].append({"id": c["id"], "out": o, "score": s})
                 out(f"con {c['id']}: label={c['supersede']} {json.dumps(s)} wall={o.get('wall_s')}s compute={o.get('compute_s')}s")
                 jl.write(json.dumps({"task": "con", "id": c["id"], "score": s, "raw": o.get("raw"), "error": o.get("error")}) + "\n")
+                jl.flush()
         if "rem" in tasks:
             rows["rem"] = []
             for c in pick(C.REMEMBER):
@@ -328,6 +331,7 @@ def main() -> int:
                 out(f"rem {c['id']}: label={c['remember']} {json.dumps(s)} wall={o.get('wall_s')}s compute={o.get('compute_s')}s")
                 jl.write(redact(json.dumps({"task": "rem", "id": c["id"], "score": s, "raw": o.get("raw"),
                                             "error": o.get("error")}), secrets) + "\n")
+                jl.flush()
 
         summ: dict = {"model": a.model, "think": a.think, "ollama": ver, "prescrub": a.prescrub,
                       "cases_filter": sorted(only) if only else "all",

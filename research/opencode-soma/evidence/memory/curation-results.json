@@ -142,5 +142,44 @@
    "wall_p95_s": 3.9
   },
   "think": "false"
+ },
+ "qwen3_32b-think-true-subset": {
+  "cases_filter": [
+   "D05",
+   "D08",
+   "D10",
+   "D12",
+   "D14"
+  ],
+  "completed_cases": [
+   "D05",
+   "D08",
+   "D10",
+   "D12",
+   "D14"
+  ],
+  "compute_median_ref_s": 4.54,
+  "compute_median_s": 36.1,
+  "correct": 4,
+  "correct_ref_same_cases": 2,
+  "destructive": 1,
+  "destructive_ref_same_cases": 2,
+  "model": "qwen3:32b",
+  "note": "stopped at 07:09Z when the shared qwen3 slot ended",
+  "ollama": "0.33.3",
+  "partial": true,
+  "planned_cases": [
+   "D05",
+   "D08",
+   "D10",
+   "D12",
+   "D14",
+   "C02",
+   "C04",
+   "C10",
+   "C16",
+   "C22"
+  ],
+  "think": "true"
  }
 }

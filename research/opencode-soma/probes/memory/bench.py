@@ -40,11 +40,11 @@ RESEARCH = HERE.parent.parent
 EVID = RESEARCH / "evidence" / "memory"
 SCRATCH = Path(os.environ.get("OCSOMA_SCRATCH", Path(tempfile.gettempdir()) / "ocsoma-me"))
 RG = shutil.which("rg") or "/opt/homebrew/bin/rg"
-CONTAINER = "ocsoma-me-neo4j"
-VOLUME = "ocsoma-me-neo4j-data"
+CONTAINER = os.environ.get("OCSOMA_NEO4J_NAME", "ocsoma-me-neo4j")
+VOLUME = os.environ.get("OCSOMA_NEO4J_VOLUME", f"{CONTAINER}-data")
 IMAGE = os.environ.get("NEO4J_IMAGE", "neo4j:2026.09.0-community")
-BOLT_PORT = 47287
-HTTP_PORT = 47274
+BOLT_PORT = int(os.environ.get("OCSOMA_NEO4J_BOLT_PORT", "47287"))
+HTTP_PORT = int(os.environ.get("OCSOMA_NEO4J_HTTP_PORT", "47274"))
 QUERIES = ["Q1", "Q2", "Q3", "Q4", "Q5", "Q6", "Q7a", "Q7b", "Q8", "W1"]
 HALF = {"user": 180.0, "feedback": 120.0, "project": 30.0, "reference": 90.0}
 
@@ -561,6 +561,9 @@ class Neo4jBackend:
                 "CREATE CONSTRAINT ent_id IF NOT EXISTS FOR (e:Entity) REQUIRE e.id IS UNIQUE",
                 "CREATE CONSTRAINT src_id IF NOT EXISTS FOR (s:Source) REQUIRE s.id IS UNIQUE",
                 "CREATE INDEX fact_scope IF NOT EXISTS FOR (f:Fact) ON (f.scope, f.visibility)",
+                "CREATE INDEX fact_scope_only IF NOT EXISTS FOR (f:Fact) ON (f.scope)",
+                "CREATE INDEX fact_created IF NOT EXISTS FOR (f:Fact) ON (f.created_at)",
+                "CREATE INDEX entity_name IF NOT EXISTS FOR (e:Entity) ON (e.name)",
                 "CREATE INDEX fact_key IF NOT EXISTS FOR (f:Fact) ON (f.scope, f.subject, f.attribute)",
                 "CREATE FULLTEXT INDEX fact_text IF NOT EXISTS FOR (f:Fact) ON EACH [f.text] "
                 "OPTIONS {indexConfig: {`fulltext.analyzer`: 'standard-no-stop-words'}}",
@@ -730,7 +733,8 @@ def prf(got: list[str], exp: list[str]) -> tuple[float, float]:
     return (tp / len(g) if g else 1.0, tp / len(e) if e else 1.0)
 
 
-def bench_backend(be, truth: dict, n_facts: int, runs: int, hub: int, log, queries: list[str]) -> list[dict]:
+def bench_backend(be, truth: dict, n_facts: int, runs: int, hub: int, log, queries: list[str],
+                  warmup: int = 30, mem_probe=None) -> list[dict]:
     rows = []
     for q in queries:
         inst = truth[q]
@@ -755,15 +759,22 @@ def bench_backend(be, truth: dict, n_facts: int, runs: int, hub: int, log, queri
                 recs.append(r)
             if i == 0:
                 first_ms = dt
+                if q != "W1":
+                    for j in range(warmup):
+                        call(be, q, inst[(j + 1) % len(inst)]["params"], hub)
             else:
                 times.append(dt)
             if not good and be.name != "naive":
                 print(f"  MISMATCH {be.name} {q} instance {i % len(inst)} params={json.dumps(item['params'])[:160]}",
                       file=log, flush=True)
         be.close()
+        mem_after = mem_probe() if mem_probe else None
         row = {"backend": be.name, "query": q, "n_facts": n_facts, "p50_ms": round(statistics.median(times), 3),
                "p95_ms": round(pct(times, 95), 3), "first_ms": round(first_ms, 3), "correct": round(ok / n_total, 4),
                "runs": n_total, "warm_runs": len(times), "instances": len(inst), "connect_ms": round(connect_ms, 3)}
+        if mem_after is not None:
+            row["mem_mb_after_batch"] = mem_after
+        row["untimed_warmup_runs"] = warmup if q != "W1" else 0
         if precs:
             row["mean_precision"] = round(statistics.mean(precs), 4)
             row["mean_recall"] = round(statistics.mean(recs), 4)
@@ -798,12 +809,18 @@ def main() -> int:
     ap.add_argument("--heap", default="512m")
     ap.add_argument("--pagecache", default="256m")
     ap.add_argument("--keep-neo4j", action="store_true")
+    ap.add_argument("--warmup", type=int, default=30, help="untimed runs after the first run, before the timed warm runs")
+    ap.add_argument("--queries", default=",".join(QUERIES), help="comma-separated subset of " + ",".join(QUERIES))
+    ap.add_argument("--out-tag", default="", help="write bench-<n>-<tag>.log and bench-results-<tag>.json instead of "
+                                                   "the committed evidence files (use for verification reruns)")
     a = ap.parse_args()
+    wanted = [q for q in QUERIES if q in a.queries.split(",")]
+    sfx = f"-{a.out_tag}" if a.out_tag else ""
     ds = json.loads(Path(a.data, f"dataset-{a.n_facts}.json").read_text())
     truth = json.loads(Path(a.data, f"truth-{a.n_facts}.json").read_text())
     hub = ds["meta"]["hub_degree"]
     EVID.mkdir(parents=True, exist_ok=True)
-    log_path = EVID / f"bench-{a.n_facts}.log"
+    log_path = EVID / f"bench-{a.n_facts}{sfx}.log"
     work = SCRATCH / f"bench-{a.n_facts}"
     work.mkdir(parents=True, exist_ok=True)
     backends = a.backends.split(",")
@@ -813,7 +830,8 @@ def main() -> int:
         print(f"command: PYTHONHASHSEED={os.environ.get('PYTHONHASHSEED')} python bench.py " + " ".join(sys.argv[1:]), file=log)
         print(f"python: {sys.version.split()[0]}  sqlite: {sqlite3.sqlite_version}  ripgrep: "
               f"{sh([RG, '--version']).splitlines()[0]}  neo4j-driver: {neo4j_pkg.__version__}  image: {IMAGE}", file=log)
-        print(f"host: {os.uname().sysname} {os.uname().release} {os.uname().machine}", file=log)
+        print(f"host: {os.uname().sysname} {os.uname().release} {os.uname().machine}  neo4j container: {CONTAINER} "
+              f"(volume {VOLUME}, bolt 127.0.0.1:{BOLT_PORT}, http 127.0.0.1:{HTTP_PORT})", file=log)
         print(f"dataset: n_facts={len(ds['facts'])} entities={len(ds['entities'])} sources={len(ds['sources'])} "
               f"scopes={len(ds['scopes'])} planted={json.dumps(ds['meta']['planted'])}", file=log)
         loc_now = loc_table()
@@ -838,14 +856,15 @@ def main() -> int:
             info.update(extra)
             if b == "neo4j":
                 info["mem_mb_after_load"] = round(docker_mem_mb(), 1)
-                sampler = MemSampler()
-                sampler.start()
             loads[b] = {k: (round(v, 3) if isinstance(v, float) else v) for k, v in info.items()}
             print(f"load: {json.dumps(loads[b])}", file=log, flush=True)
-            qs = ["Q1"] if b == "naive" else QUERIES
-            rows = bench_backend(be, truth, a.n_facts, a.runs, hub, log, qs)
+            qs = [q for q in (["Q1"] if b == "naive" else QUERIES) if q in wanted]
+            rows = bench_backend(be, truth, a.n_facts, a.runs, hub, log, qs, a.warmup,
+                                 (lambda: round(docker_mem_mb(), 1)) if b == "neo4j" else None)
             if b == "neo4j":
-                mem = sampler.stop()
+                mems = [r["mem_mb_after_batch"] for r in rows if "mem_mb_after_batch" in r]
+                mem = {"max_mb_between_batches": max(mems) if mems else None,
+                       "note": "docker stats sampled after each query batch, never during timed runs"}
                 loads[b]["mem_during_bench"] = mem
                 loads[b]["disk_kb_after_bench"] = int(sh(["docker", "exec", CONTAINER, "du", "-sk", "/data"]).split()[0])
                 print(f"neo4j mem during bench: {json.dumps(mem)}", file=log, flush=True)
@@ -855,15 +874,18 @@ def main() -> int:
             if b == "files":
                 loads[b]["disk_kb_after_bench"] = du_kb(files_root)
             all_rows += rows
-        res_path = EVID / "bench-results.json"
+        res_path = EVID / f"bench-results{sfx}.json"
         existing = json.loads(res_path.read_text()) if res_path.exists() else {"rows": [], "loads": {}, "loc": {}}
-        existing["rows"] = [r for r in existing["rows"] if not (r["n_facts"] == a.n_facts and r["backend"] in backends)] + all_rows
+        existing["rows"] = [r for r in existing["rows"] if not (r["n_facts"] == a.n_facts and r["backend"] in backends
+                                                                and r["query"] in wanted)] + all_rows
         existing["rows"].sort(key=lambda r: (r["n_facts"], r["backend"], QUERIES.index(r["query"])))
         existing.setdefault("loads", {}).setdefault(str(a.n_facts), {}).update(loads)
         existing["loc"] = loc_now
-        existing["notes"] = ("first_ms = first execution on a fresh client; p50/p95 over warm runs cycling the truth "
-                             "instances; correct = share of all runs equal to the oracle answer; W1 mutates the store "
-                             "and runs last; naive = files without entity metadata (Q1 only, precision/recall given)")
+        existing["notes"] = ("first_ms = first execution on a fresh client; then --warmup untimed runs (JIT/plan/page "
+                             "caches), then p50/p95 over --runs timed runs cycling the truth instances; correct = share "
+                             "of all timed runs equal to the oracle answer; W1 mutates the store and runs last (no "
+                             "warm-up); naive = files without entity metadata (Q1 only, precision/recall given); Neo4j "
+                             "memory is sampled between query batches, never during timed runs")
         res_path.write_text(json.dumps(existing, indent=1, sort_keys=True))
         bad = [r for r in all_rows if r["correct"] < 1.0 and r["backend"] != "naive"]
         print("summary (backend query p50_ms p95_ms first_ms correct):", file=log)

@@ -8,8 +8,9 @@ a probe exercised them.
 
 ## 1. Decision
 
-- **Default store: one SQLite file per user** (WAL, FTS5, recursive CTEs), opened in-process with
-  `bun:sqlite` by the opencode plugin and by the opencode-soma daemon.
+- **Default store: one SQLite file per user** (WAL, FTS5, recursive CTEs). The opencode-soma daemon
+  is its only writer. Each opencode plugin reads it through a read-only `bun:sqlite` connection for
+  per-prompt recall (section 12).
 - **Flat files are an export, not the store.** opencode-soma writes a Claude Code-style mirror
   (`MEMORY.md` index plus one markdown file per fact) so people can read and diff memory and the
   existing dashboard view keeps working. Queries never read the mirror.
@@ -27,16 +28,28 @@ JVM, Docker or open port. Neo4j was faster on three of the ten operations:
 
 ## 2. What claude-soma does today, and what opencode lacks
 
-claude-soma implements no memory of its own. It inherits Claude Code auto-memory: per working
-directory, `~/.claude/projects/<cwd with / replaced by ->/memory/` holds `MEMORY.md` (one line per
-memory: `- [Title](file.md) — hook`) and one markdown file per fact. Each fact file has YAML
-frontmatter `name`, `description`, `type: user|feedback|project|reference`, a body (often
-**Why:** / **How to apply:**) and `[[links]]` to other facts. The orchestrator bot (cwd
-`/opt/claude-soma`) and each lead (its own cwd) get separate directories, so isolation comes free
-but nothing is shared. The dashboard only ever reads `MEMORY.md`:
-`src/claude_soma/mcp_servers/hermes_api/claude_state.py:65` (`read_memory`, which tries the
-registry cwd slug, the project slug and two `/home/ubuntu` fallbacks) and
-`src/claude_soma/api/routes/memory.py:15-24`.
+**The memory addon is a capability claude-soma never built.** claude-soma writes no memory at
+all. Every `MEMORY.md` reference in the repo is a read, and it inherits whatever Claude Code
+auto-memory does:
+
+- per working directory, `~/.claude/projects/<cwd with / replaced by ->/memory/` holds `MEMORY.md`
+  (one line per memory: `- [Title](file.md) — hook`) and one markdown file per fact;
+- each fact file has YAML frontmatter (`name`, `description`, `type: user|feedback|project|reference`),
+  a body (often **Why:** / **How to apply:**) and `[[links]]` to other facts.
+
+What exists around it is read-only and partial:
+
+- `read_memory` (`src/claude_soma/mcp_servers/hermes_api/claude_state.py:69`) tries the registry cwd
+  slug, the project slug and two `/home/ubuntu` fallbacks (`:81-88`), behind the authed
+  `GET /api/memory/{project}` (`src/claude_soma/api/routes/memory.py:15-24`).
+- The dashboard page is labelled "Read-only view. Edit via Telegram or the /memory slash…"
+  (`frontend/app/admin/memory/page.tsx:51`).
+- Its `default` candidate is `-home-ubuntu`. The orchestrator itself runs in `/opt/claude-soma`
+  (`systemd/claude-soma-channel.service:40`), so the orchestrator's own memory (slug
+  `-opt-claude-soma`) never appears on the default tab.
+- A lead on a remote host keeps its memory on that host, because `read_memory` reads only the local
+  filesystem.
+- There is no cross-lead memory sharing: the orchestrator and each lead get separate directories.
 
 What auto-memory does not do: link facts across projects, find contradictions, record provenance,
 decay old facts, or let the orchestrator see a lead's memory in a structured way. It is also
@@ -112,6 +125,8 @@ CREATE TABLE entity_degree   (entity_id TEXT PRIMARY KEY, d INTEGER NOT NULL);  
 CREATE TABLE conflicts (id INTEGER PRIMARY KEY, scope TEXT, subject TEXT, attribute TEXT,
                         fact_ids TEXT NOT NULL, opened_at INTEGER NOT NULL, resolved_at INTEGER, resolution TEXT);
 CREATE TABLE capture_cursor (session_id TEXT PRIMARY KEY, last_message_id TEXT, updated_at INTEGER NOT NULL);
+CREATE TABLE fact_observations (fact_id TEXT NOT NULL REFERENCES facts(id), source_id TEXT REFERENCES sources(id),
+                                text TEXT NOT NULL, observed_at INTEGER NOT NULL, curator TEXT NOT NULL);  -- restatements a merge kept
 CREATE INDEX fe_entity   ON fact_entity(entity_id, fact_id);
 CREATE INDEX facts_scope ON facts(scope, visibility, superseded_by);
 CREATE INDEX facts_key   ON facts(scope, subject, attribute);
@@ -120,7 +135,7 @@ PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL; PRAGMA busy_timeout = 50
 ```
 
 The benchmark schema (`probes/memory/bench.py`, `SCHEMA`) is this without the operational columns
-(`deleted_at`, `curator`, recall stats) and without the `conflicts` / `capture_cursor` tables. The
+(`deleted_at`, `curator`, recall stats) and without the `conflicts` / `capture_cursor` / `fact_observations` tables. The
 `entity_degree` table is measured separately (`sqlite-tuning-*.log`).
 
 ## 5. Scopes and visibility
@@ -158,18 +173,39 @@ at every scale, so no fact leaked across leads.
 ### 6.1 Explicit
 
 `memory_save(text, subject?, attribute?, value?, type?, visibility?)`,
-`memory_forget(query | id)` and `memory_search(query)` are exposed as plugin tools (or as an MCP
-server, if one implementation should also serve Claude Code). "Remember X" in Telegram routes to
-`memory_save` with `curator='explicit'`. Explicit facts outrank model-captured ones in conflicts
-(6.4).
+`memory_forget(query | id)` and `memory_search(query)` are plugin `tool` definitions (catalogued).
 
-### 6.2 Auto-capture
+- They do not write the database themselves: `memory_save` and `memory_forget` forward to the
+  daemon over localhost (section 12), and `memory_search` reads through the plugin's read-only
+  connection.
+- "Remember X" from Telegram goes straight to the daemon, which owns the Telegram long-poll, and is
+  written with `curator='explicit'`. Explicit facts outrank model-captured ones (6.4).
 
-Trigger: the plugin's `event` hook sees `session.idle` (verified), debounced about 30 s. It reads
-the messages added since `capture_cursor` for that session (plugin `client` / `opencode serve`
-API). `experimental.session.compacting` is a second, opportunistic trigger: capture what is about
-to be summarized, and push the top memories into `output.context` so they survive compaction.
-It is catalogued but not exercised.
+### 6.2 Auto-capture (a daemon job)
+
+**Trigger.** The plugin's `event` hook sees `session.idle` (verified) and tells the daemon that the
+session is idle. The daemon debounces about 30 s, then runs capture on the messages added since
+that session's `capture_cursor`, read over the owning `opencode serve` API (verified).
+`experimental.session.compacting` is a second, opportunistic trigger: capture what is about to be
+summarized, and push the top memories into `output.context` so they survive compaction. It is
+catalogued but not exercised.
+
+**The curator call** (desk-research-only):
+
+- The daemon runs extraction through a hidden `curator` agent session (no tools) on the
+  `opencode serve` that owns the lead.
+- It uses `POST /session/{id}/message` with `format: {type: "json_schema", schema}`, which the
+  1.18.8 OpenAPI exposes (`evidence/opencode/P8-serve/openapi.json`).
+- This reuses opencode's provider auth and the agent's own model, so the daemon holds no API keys
+  for hosted models. It asks for the same JSON-schema-constrained output that Track B measured
+  through ollama's `/api/chat`.
+- Structured output through that endpoint was not probed (section 15).
+
+**User turns win.** Curation runs on the same model and GPU as the conversation. The daemon aborts
+an in-flight curation call the moment a Telegram message or a lead prompt arrives, and retries
+later from the same `capture_cursor`. The acknowledge-and-answer path never waits on curation.
+Track B measured why: under a concurrent opencode workload on the same ollama, curation calls that
+needed about 6 s of compute waited up to 218 s in the queue (6.5).
 
 The pipeline runs in this order. The two deterministic steps never depend on the model:
 
@@ -183,7 +219,7 @@ The pipeline runs in this order. The two deterministic steps never depend on the
 4. **Deterministic upsert** (6.3) when subject and attribute resolve to an existing key.
 5. **Model judgement only on a candidate set**: FTS5 + entity recall returns at most 5 nearby active
    facts, and the model answers "duplicate of?" and "which does this supersede?" over those only.
-6. **Policy gate** (6.4), then write with provenance (session id, message ids, tool callIDs).
+6. **Policy gate** (6.4), then a **non-destructive write** with provenance (session id, message ids, tool callIDs).
 
 Cost: one curator call per idle session (about 1–3k tokens in), plus at most two candidate
 judgements.
@@ -209,14 +245,28 @@ Measured p50 at 50k facts: SQLite 0.23 ms, Neo4j 22 ms, flat files 24 ms. At 500
 All matched the oracle on all 36 planted writes per scale (12 duplicates, 12 changed values, 12 new
 keys).
 
-### 6.4 What a model may decide on its own
+### 6.4 Curation is non-destructive
 
-- A model-captured fact **may supersede** another model-captured `project` or `reference` fact.
-- It **may not silently supersede** a `user` or `feedback` fact, or anything written explicitly by
-  the user. Those open a row in `conflicts` and go into the next Telegram digest as a question.
-- Hearsay, hypotheticals and temporary states are rejected at extraction (Track B planted all three).
-- Duplicate merges only skip the new fact; nothing is deleted. A wrong merge loses the new wording,
-  never the old fact.
+Track B's strongest local model made 4 destructive judgements in 100 cases (2 false merges, 2 false
+supersedes; 6.5). So no model decision may destroy information:
+
+- **Supersede is a reversible link.** The old fact gets `superseded_by` and leaves recall, but both
+  rows stay, and undoing it is one UPDATE.
+  - A model may apply a supersede by itself only when the new fact's structured key
+    `(scope, subject, attribute)` equals the old one's: the deterministic upsert (6.3).
+  - A supersede the model proposes across different keys opens a `conflicts` row instead. Track B's
+    C02 is the case in point: "Postgres 16" would have replaced "SQLite for comments".
+- **A merge keeps the original.** A "duplicate" verdict only skips the insert. The restatement goes
+  into `fact_observations` with its source, so a wrong merge (Track B's D10, D12) loses nothing
+  and can be split back out.
+- **No model ever deletes.** Deletion is user-initiated (`memory_forget`, a dashboard action) and
+  soft first (section 8).
+- **Consequential outcomes are batched for a human.** Model-applied supersedes and merges, and every
+  `conflicts` row, go into a daily digest (dashboard and Telegram) with a one-step undo.
+- **Some facts are never superseded by a model,** even on an equal key: `user` and `feedback` facts
+  and anything written explicitly. Those always open a conflict.
+- **Hearsay, hypotheticals and temporary states are rejected at extraction.** Track B planted all
+  three, and qwen3:32b stored none of them.
 
 ### 6.5 Model tiers for curation
 
@@ -424,38 +474,60 @@ queries. The extra flat-file code is parsing and cross-file link following.
 
 ## 12. Process model and concurrency
 
-- **One SQLite file per user** (for example `~/.opencode-soma/memory.sqlite`), opened in WAL mode by
-  three kinds of process:
-  - each opencode instance's plugin (the parent and every lead);
-  - the opencode-soma daemon (capture jobs, digest, export mirror);
-  - the dashboard (read-only).
-- **Concurrency.** WAL allows concurrent readers and one writer at a time. Writes are single
-  sub-millisecond transactions (W1), so contention is negligible with `busy_timeout` set. WAL needs
-  a local filesystem; it does not work on a network share. **desk-research-only**: SQLite's
-  documented WAL constraints.
+**The daemon is the single writer.** One SQLite file per user (for example
+`~/.opencode-soma/memory.sqlite`), in WAL mode:
+
+- **The opencode-soma daemon** is the only process that opens it read-write. It runs capture jobs,
+  the upsert, `memory_save` / `memory_forget` (forwarded from the plugins over localhost), the digest,
+  backups, schema migrations and the export mirror.
+- **Each opencode instance's plugin** (the parent and every lead) opens it **read-only**
+  (`new Database(path, { readonly: true })` in `bun:sqlite`). That is the per-prompt recall fast
+  path: 0.5–1.6 ms p50 at 50k facts (`bun-sqlite.log`), with no hop to the daemon.
+- **The dashboard** reads it read-only too.
+
+Why one writer:
+
+- schema migrations, backups and the export mirror live in one place;
+- the read-then-write upsert never meets cross-process `BEGIN IMMEDIATE` / `SQLITE_BUSY_SNAPSHOT`
+  races;
+- the daemon is also what sees Telegram traffic, so it can abort an in-flight curation call when a
+  user message arrives (6.2).
+
+This mirrors the "one writer per opencode database" rule probe-engineer found for opencode's own
+storage. WAL with several writers using `BEGIN IMMEDIATE` and a `busy_timeout` would also work,
+because writes are sub-millisecond (W1). It is not chosen because the single writer gets the three
+properties above for free.
+
+Platform notes:
+
+- **WAL needs a local filesystem.** WAL readers and the writer share a `-shm` file, so the database
+  must live on a local filesystem, not a network share. **desk-research-only**: SQLite's documented
+  WAL constraints.
 - **`bun:sqlite` is what a plugin gets.** opencode is a compiled Bun binary and plugins run inside
-  it. `bun:sqlite` has FTS5, recursive CTEs, JSON1, UPSERT and WAL on macOS (system SQLite 3.51.0)
-  and on Linux (Bun's bundled SQLite 3.51.2). It has **no user-defined SQL functions**
-  (`evidence/memory/bun-sqlite.log`). Run `ANALYZE` / `PRAGMA optimize` after bulk loads: without
-  it, Linux FTS recall at 50k was 18 ms; with it, 1 ms.
-- **Windows: desk-research-only.** Bun ships `bun:sqlite` there too. Not measured here (no Windows
-  host).
-- **No vector index in v1.** `sqlite-vec` is a loadable extension, and Bun's documentation says
-  macOS's system SQLite does not allow extensions without `Database.setCustomSQLite()` and a
-  separate library build. That is a packaging risk on every OS. FTS5 plus entities plus decay is the
-  v1 recall. **desk-research-only.**
+  it.
+  - `bun:sqlite` has FTS5, recursive CTEs, JSON1, UPSERT and WAL on macOS (system SQLite 3.51.0) and
+    on Linux (Bun's bundled SQLite 3.51.2), and **no user-defined SQL functions**
+    (`evidence/memory/bun-sqlite.log`).
+  - Run `ANALYZE` / `PRAGMA optimize` after bulk loads: without it, Linux FTS recall at 50k was
+    18 ms; with it, 1 ms.
+- **Windows: desk-research-only.** v1 runs inside WSL2 (see PLATFORM-MATRIX.md), so the plugin gets
+  Bun's Linux build there.
+- **No vector index in v1.** `sqlite-vec` is a loadable extension. Bun's documentation says macOS's
+  system SQLite does not allow extensions without `Database.setCustomSQLite()` and a separate
+  library build, which is a packaging risk on every OS. FTS5 plus entities plus decay is the v1
+  recall. **desk-research-only.**
 
 ## 13. Fallbacks
 
+- **The daemon is down.** Recall still works, because the plugins' read-only connections need no
+  daemon. `memory_save` / `memory_forget` fail visibly ("memory is offline") instead of writing
+  around the daemon, and auto-capture resumes from `capture_cursor` when the daemon returns.
 - **Corrupt or missing database.** WAL plus nightly `VACUUM INTO` backups; the markdown export
   mirror can rebuild facts, sources and links via the importer (section 14).
-- **No model trustworthy enough for auto-capture.** Turn auto-capture off. Explicit
-  `memory_save` / `memory_forget` still work, and so do deterministic dedupe and supersede. Tier
-  rule in 6.5.
-- **Runtime without `bun:sqlite`.** The daemon owns the database (any SQLite binding) and serves the
-  plugin over localhost MCP/HTTP. The cost is a hop per recall, not a different store.
-- **Tiny memories.** Below about 2k facts the flat-file mirror alone would work: 13–65 ms at
-  600–5k facts for entity recall. It loses contradiction detection, cross-project links and fast
+- **No model trustworthy enough for auto-capture.** Auto-capture is off for that model tier (6.5).
+  Explicit `memory_save` / `memory_forget`, deterministic dedupe and key-based supersede still work.
+- **Tiny memories.** Below about 2k facts the flat-file mirror alone would work: 13–65 ms for entity
+  recall at 600–5k facts. It loses contradiction detection, cross-project links and fast
   provenance, so it is a degraded mode, not a choice.
 
 ## 14. Migration from claude-soma
@@ -474,9 +546,13 @@ per scope, so the existing dashboard memory view keeps working until it moves to
 
 ## 15. Open items
 
-- Track B results and the model tier table (6.5).
 - `experimental.session.compacting` and plugin-defined tools are catalogued, not exercised. A
   plugin `tool` probe plus a forced compaction would close this.
+- The curator call through `opencode serve` (6.2): `POST /session/{id}/message` with
+  `format: {type: "json_schema", schema}` is in the 1.18.8 OpenAPI but was not probed. Neither was
+  aborting it mid-generation when a user message arrives.
+- The plugin's read-only `bun:sqlite` connection reading while the daemon writes (WAL), measured
+  under load.
 - A Windows run of `bun_sqlite_probe.ts`.
 - Reinforcement by recall (recall_count in the ranking), not benchmarked.
 - Semantic recall (embeddings) deferred; see the packaging risk in section 12.
