@@ -1,0 +1,2325 @@
+# P9-compat/fakehome.log
+date-utc: 2026-10-10T08:16:11Z
+probe-script: research/opencode-soma/probes/opencode/P9-compat/fakehome.sh
+opencode-version: 1.18.8
+model: none (no LLM)
+sandbox: $TMPDIR/ocsoma-pe/P9b (HOME, XDG_*, TMPDIR all inside it)
+purpose: which user-level config leaks when HOME is the user's own (fake HOME, real home untouched)
+
+fake HOME: /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/fakehome ; seeded ~/.config/opencode/opencode.json (username P9B-CONFIG-LEAK) + agent p9b-config-agent + ~/.opencode/agent p9b-home-agent
+## A. soma-style: XDG_* redirected to the empty sandbox, TMPDIR redirected (what the daemon controls)
+### A1 default
+$ env -i PATH=/Users/techfreakworm/.cargo/bin:/Users/techfreakworm/.antigravity-ide/antigravity-ide/bin:/Users/techfreakworm/.grok/bin:/Users/techfreakworm/.antigravity/antigravity/bin:/Users/techfreakworm/.opencode/bin:/Users/techfreakworm/.antigravity/antigravity/bin:/Users/techfreakworm/.codeium/windsurf/bin:/opt/homebrew/opt/openjdk@11/bin:/opt/homebrew/opt/openjdk/bin::/opt/homebrew/anaconda3/bin:/Users/techfreakworm/.gem/ruby/3.3.5/bin:/Users/techfreakworm/.rubies/ruby-3.3.5/lib/ruby/gems/3.3.0/bin:/Users/techfreakworm/.rubies/ruby-3.3.5/bin:/opt/homebrew/opt/mysql@8.4/bin:/opt/homebrew/share/google-cloud-sdk/bin:/Users/techfreakworm/.nvm/versions/node/v24.14.1/bin:/Users/techfreakworm/.antigravity-ide/antigravity-ide/bin:/Users/techfreakworm/.grok/bin:/Users/techfreakworm/.antigravity/antigravity/bin:/Users/techfreakworm/.opencode/bin:/Users/techfreakworm/.antigravity/antigravity/bin:/Users/techfreakworm/.local/bin:/Users/techfreakworm/.codeium/windsurf/bin:/opt/homebrew/opt/openjdk@11/bin:/opt/homebrew/opt/openjdk/bin::/opt/homebrew/anaconda3/bin:/opt/homebrew/opt/mysql@8.4/bin:/opt/homebrew/share/google-cloud-sdk/bin:/Users/techfreakworm/.nvm/versions/node/v20.18.2/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/opt/pkg/env/active/bin:/opt/pmk/env/global/bin:/Library/Apple/usr/bin:/Users/techfreakworm/Library/Application Support/JetBrains/Toolbox/scripts:/Users/techfreakworm/.lmstudio/bin:/Applications/Warp.app/Contents/Resources/bin:/Users/techfreakworm/.lmstudio/bin HOME=/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/fakehome TMPDIR=/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/tmp/ OPENCODE_DISABLE_AUTOUPDATE=1 XDG_CONFIG_HOME=/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/xdg/config XDG_DATA_HOME=/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/xdg/data XDG_CACHE_HOME=/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/xdg/cache XDG_STATE_HOME=/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/xdg/state /Users/techfreakworm/.opencode/bin/opencode debug paths
+home       /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/fakehome
+data       /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/xdg/data/opencode
+bin        /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/xdg/cache/opencode/bin
+log        /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/xdg/data/opencode/log
+repos      /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/xdg/data/opencode/repos
+cache      /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/xdg/cache/opencode
+config     /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/xdg/config/opencode
+state      /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/xdg/state/opencode
+tmp        /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/tmp/opencode
+
+[exit=0 wall=0.2s]
+
+$ env -i PATH=/Users/techfreakworm/.cargo/bin:/Users/techfreakworm/.antigravity-ide/antigravity-ide/bin:/Users/techfreakworm/.grok/bin:/Users/techfreakworm/.antigravity/antigravity/bin:/Users/techfreakworm/.opencode/bin:/Users/techfreakworm/.antigravity/antigravity/bin:/Users/techfreakworm/.codeium/windsurf/bin:/opt/homebrew/opt/openjdk@11/bin:/opt/homebrew/opt/openjdk/bin::/opt/homebrew/anaconda3/bin:/Users/techfreakworm/.gem/ruby/3.3.5/bin:/Users/techfreakworm/.rubies/ruby-3.3.5/lib/ruby/gems/3.3.0/bin:/Users/techfreakworm/.rubies/ruby-3.3.5/bin:/opt/homebrew/opt/mysql@8.4/bin:/opt/homebrew/share/google-cloud-sdk/bin:/Users/techfreakworm/.nvm/versions/node/v24.14.1/bin:/Users/techfreakworm/.antigravity-ide/antigravity-ide/bin:/Users/techfreakworm/.grok/bin:/Users/techfreakworm/.antigravity/antigravity/bin:/Users/techfreakworm/.opencode/bin:/Users/techfreakworm/.antigravity/antigravity/bin:/Users/techfreakworm/.local/bin:/Users/techfreakworm/.codeium/windsurf/bin:/opt/homebrew/opt/openjdk@11/bin:/opt/homebrew/opt/openjdk/bin::/opt/homebrew/anaconda3/bin:/opt/homebrew/opt/mysql@8.4/bin:/opt/homebrew/share/google-cloud-sdk/bin:/Users/techfreakworm/.nvm/versions/node/v20.18.2/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/opt/pkg/env/active/bin:/opt/pmk/env/global/bin:/Library/Apple/usr/bin:/Users/techfreakworm/Library/Application Support/JetBrains/Toolbox/scripts:/Users/techfreakworm/.lmstudio/bin:/Applications/Warp.app/Contents/Resources/bin:/Users/techfreakworm/.lmstudio/bin HOME=/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/fakehome TMPDIR=/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/tmp/ OPENCODE_DISABLE_AUTOUPDATE=1 XDG_CONFIG_HOME=/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/xdg/config XDG_DATA_HOME=/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/xdg/data XDG_CACHE_HOME=/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/xdg/cache XDG_STATE_HOME=/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/xdg/state /Users/techfreakworm/.opencode/bin/opencode debug config
+{
+  "$schema": "https://opencode.ai/config.json",
+  "autoupdate": false,
+  "share": "disabled",
+  "enabled_providers": [
+    "ollama"
+  ],
+  "model": "ollama/qwen3:32b",
+  "small_model": "ollama/qwen3:32b",
+  "provider": {
+    "ollama": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "Ollama (local)",
+      "options": {
+        "baseURL": "http://127.0.0.1:11434/v1"
+      },
+      "models": {
+        "qwen3:32b": {
+          "name": "Qwen3 32B (thinking off)",
+          "tool_call": true,
+          "reasoning": false,
+          "options": {
+            "reasoningEffort": "none"
+          },
+          "limit": {
+            "context": 40960,
+            "output": 8192
+          }
+        },
+        "lfm2.5-thinking": {
+          "name": "LFM2.5 1.2B thinking",
+          "tool_call": true,
+          "reasoning": true,
+          "limit": {
+            "context": 128000,
+            "output": 8192
+          }
+        }
+      }
+    }
+  },
+  "agent": {
+    "p9b-home-agent": {
+      "name": "p9b-home-agent",
+      "description": "P9B-HOME-OPENCODE-LEAK sentinel from ~/.opencode/agent.",
+      "mode": "primary",
+      "prompt": "sentinel",
+      "options": {},
+      "permission": {}
+    }
+  },
+  "mode": {},
+  "plugin": [],
+  "command": {},
+  "username": "unknown"
+}
+
+[exit=0 wall=0.5s]
+
+$ env -i PATH=/Users/techfreakworm/.cargo/bin:/Users/techfreakworm/.antigravity-ide/antigravity-ide/bin:/Users/techfreakworm/.grok/bin:/Users/techfreakworm/.antigravity/antigravity/bin:/Users/techfreakworm/.opencode/bin:/Users/techfreakworm/.antigravity/antigravity/bin:/Users/techfreakworm/.codeium/windsurf/bin:/opt/homebrew/opt/openjdk@11/bin:/opt/homebrew/opt/openjdk/bin::/opt/homebrew/anaconda3/bin:/Users/techfreakworm/.gem/ruby/3.3.5/bin:/Users/techfreakworm/.rubies/ruby-3.3.5/lib/ruby/gems/3.3.0/bin:/Users/techfreakworm/.rubies/ruby-3.3.5/bin:/opt/homebrew/opt/mysql@8.4/bin:/opt/homebrew/share/google-cloud-sdk/bin:/Users/techfreakworm/.nvm/versions/node/v24.14.1/bin:/Users/techfreakworm/.antigravity-ide/antigravity-ide/bin:/Users/techfreakworm/.grok/bin:/Users/techfreakworm/.antigravity/antigravity/bin:/Users/techfreakworm/.opencode/bin:/Users/techfreakworm/.antigravity/antigravity/bin:/Users/techfreakworm/.local/bin:/Users/techfreakworm/.codeium/windsurf/bin:/opt/homebrew/opt/openjdk@11/bin:/opt/homebrew/opt/openjdk/bin::/opt/homebrew/anaconda3/bin:/opt/homebrew/opt/mysql@8.4/bin:/opt/homebrew/share/google-cloud-sdk/bin:/Users/techfreakworm/.nvm/versions/node/v20.18.2/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/opt/pkg/env/active/bin:/opt/pmk/env/global/bin:/Library/Apple/usr/bin:/Users/techfreakworm/Library/Application Support/JetBrains/Toolbox/scripts:/Users/techfreakworm/.lmstudio/bin:/Applications/Warp.app/Contents/Resources/bin:/Users/techfreakworm/.lmstudio/bin HOME=/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/fakehome TMPDIR=/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/tmp/ OPENCODE_DISABLE_AUTOUPDATE=1 XDG_CONFIG_HOME=/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/xdg/config XDG_DATA_HOME=/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/xdg/data XDG_CACHE_HOME=/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/xdg/cache XDG_STATE_HOME=/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/xdg/state /Users/techfreakworm/.opencode/bin/opencode agent list
+build (primary)
+  [
+  {
+    "permission": "*",
+    "action": "allow",
+    "pattern": "*"
+  },
+  {
+    "permission": "doom_loop",
+    "action": "ask",
+    "pattern": "*"
+  },
+  {
+    "permission": "external_directory",
+    "pattern": "*",
+    "action": "ask"
+  },
+  {
+    "permission": "external_directory",
+    "pattern": "/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/xdg/data/opencode/tool-output/*",
+    "action": "allow"
+  },
+  {
+    "permission": "external_directory",
+    "pattern": "/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/tmp/opencode/*",
+    "action": "allow"
+  },
+  {
+    "permission": "question",
+    "action": "deny",
+    "pattern": "*"
+  },
+  {
+    "permission": "plan_enter",
+    "action": "deny",
+    "pattern": "*"
+  },
+  {
+    "permission": "plan_exit",
+    "action": "deny",
+    "pattern": "*"
+  },
+  {
+    "permission": "read",
+    "pattern": "*",
+    "action": "allow"
+  },
+  {
+    "permission": "read",
+    "pattern": "*.env",
+    "action": "ask"
+  },
+  {
+    "permission": "read",
+    "pattern": "*.env.*",
+    "action": "ask"
+  },
+  {
+    "permission": "read",
+    "pattern": "*.env.example",
+    "action": "allow"
+  },
+  {
+    "permission": "question",
+    "action": "allow",
+    "pattern": "*"
+  },
+  {
+    "permission": "plan_enter",
+    "action": "allow",
+    "pattern": "*"
+  },
+  {
+    "permission": "external_directory",
+    "pattern": "/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/xdg/data/opencode/tool-output/*",
+    "action": "allow"
+  }
+]
+compaction (primary)
+  [
+  {
+    "permission": "*",
+    "action": "allow",
+    "pattern": "*"
+  },
+  {
+    "permission": "doom_loop",
+    "action": "ask",
+    "pattern": "*"
+  },
+  {
+    "permission": "external_directory",
+    "pattern": "*",
+    "action": "ask"
+  },
+  {
+    "permission": "external_directory",
+    "pattern": "/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/xdg/data/opencode/tool-output/*",
+    "action": "allow"
+  },
+  {
+    "permission": "external_directory",
+    "pattern": "/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/tmp/opencode/*",
+    "action": "allow"
+  },
+  {
+    "permission": "question",
+    "action": "deny",
+    "pattern": "*"
+  },
+  {
+    "permission": "plan_enter",
+    "action": "deny",
+    "pattern": "*"
+  },
+  {
+    "permission": "plan_exit",
+    "action": "deny",
+    "pattern": "*"
+  },
+  {
+    "permission": "read",
+    "pattern": "*",
+    "action": "allow"
+  },
+  {
+    "permission": "read",
+    "pattern": "*.env",
+    "action": "ask"
+  },
+  {
+    "permission": "read",
+    "pattern": "*.env.*",
+    "action": "ask"
+  },
+  {
+    "permission": "read",
+    "pattern": "*.env.example",
+    "action": "allow"
+  },
+  {
+    "permission": "*",
+    "action": "deny",
+    "pattern": "*"
+  },
+  {
+    "permission": "external_directory",
+    "pattern": "/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/xdg/data/opencode/tool-output/*",
+    "action": "allow"
+  }
+]
+explore (subagent)
+  [
+  {
+    "permission": "*",
+    "action": "allow",
+    "pattern": "*"
+  },
+  {
+    "permission": "doom_loop",
+    "action": "ask",
+    "pattern": "*"
+  },
+  {
+    "permission": "external_directory",
+    "pattern": "*",
+    "action": "ask"
+  },
+  {
+    "permission": "external_directory",
+    "pattern": "/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/xdg/data/opencode/tool-output/*",
+    "action": "allow"
+  },
+  {
+    "permission": "external_directory",
+    "pattern": "/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/tmp/opencode/*",
+    "action": "allow"
+  },
+  {
+    "permission": "question",
+    "action": "deny",
+    "pattern": "*"
+  },
+  {
+    "permission": "plan_enter",
+    "action": "deny",
+    "pattern": "*"
+  },
+  {
+    "permission": "plan_exit",
+    "action": "deny",
+    "pattern": "*"
+  },
+  {
+    "permission": "read",
+    "pattern": "*",
+    "action": "allow"
+  },
+  {
+    "permission": "read",
+    "pattern": "*.env",
+    "action": "ask"
+  },
+  {
+    "permission": "read",
+    "pattern": "*.env.*",
+    "action": "ask"
+  },
+  {
+    "permission": "read",
+    "pattern": "*.env.example",
+    "action": "allow"
+  },
+  {
+    "permission": "*",
+    "action": "deny",
+    "pattern": "*"
+  },
+  {
+    "permission": "grep",
+    "action": "allow",
+    "pattern": "*"
+  },
+  {
+    "permission": "glob",
+    "action": "allow",
+    "pattern": "*"
+  },
+  {
+    "permission": "list",
+    "action": "allow",
+    "pattern": "*"
+  },
+  {
+    "permission": "bash",
+    "action": "allow",
+    "pattern": "*"
+  },
+  {
+    "permission": "webfetch",
+    "action": "allow",
+    "pattern": "*"
+  },
+  {
+    "permission": "websearch",
+    "action": "allow",
+    "pattern": "*"
+  },
+  {
+    "permission": "read",
+    "action": "allow",
+    "pattern": "*"
+  },
+  {
+    "permission": "external_directory",
+    "pattern": "*",
+    "action": "ask"
+  },
+  {
+    "permission": "external_directory",
+    "pattern": "/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/xdg/data/opencode/tool-output/*",
+    "action": "allow"
+  },
+  {
+    "permission": "external_directory",
+    "pattern": "/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/tmp/opencode/*",
+    "action": "allow"
+  },
+  {
+    "permission": "external_directory",
+    "pattern": "/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/xdg/data/opencode/tool-output/*",
+    "action": "allow"
+  }
+]
+general (subagent)
+  [
+  {
+    "permission": "*",
+    "action": "allow",
+    "pattern": "*"
+  },
+  {
+    "permission": "doom_loop",
+    "action": "ask",
+    "pattern": "*"
+  },
+  {
+    "permission": "external_directory",
+    "pattern": "*",
+    "action": "ask"
+  },
+  {
+    "permission": "external_directory",
+    "pattern": "/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/xdg/data/opencode/tool-output/*",
+    "action": "allow"
+  },
+  {
+    "permission": "external_directory",
+    "pattern": "/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/tmp/opencode/*",
+    "action": "allow"
+  },
+  {
+    "permission": "question",
+    "action": "deny",
+    "pattern": "*"
+  },
+  {
+    "permission": "plan_enter",
+    "action": "deny",
+    "pattern": "*"
+  },
+  {
+    "permission": "plan_exit",
+    "action": "deny",
+    "pattern": "*"
+  },
+  {
+    "permission": "read",
+    "pattern": "*",
+    "action": "allow"
+  },
+  {
+    "permission": "read",
+    "pattern": "*.env",
+    "action": "ask"
+  },
+  {
+    "permission": "read",
+    "pattern": "*.env.*",
+    "action": "ask"
+  },
+  {
+    "permission": "read",
+    "pattern": "*.env.example",
+    "action": "allow"
+  },
+  {
+    "permission": "todowrite",
+    "action": "deny",
+    "pattern": "*"
+  },
+  {
+    "permission": "external_directory",
+    "pattern": "/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/xdg/data/opencode/tool-output/*",
+    "action": "allow"
+  }
+]
+plan (primary)
+  [
+  {
+    "permission": "*",
+    "action": "allow",
+    "pattern": "*"
+  },
+  {
+    "permission": "doom_loop",
+    "action": "ask",
+    "pattern": "*"
+  },
+  {
+    "permission": "external_directory",
+    "pattern": "*",
+    "action": "ask"
+  },
+  {
+    "permission": "external_directory",
+    "pattern": "/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/xdg/data/opencode/tool-output/*",
+    "action": "allow"
+  },
+  {
+    "permission": "external_directory",
+    "pattern": "/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/tmp/opencode/*",
+    "action": "allow"
+  },
+  {
+    "permission": "question",
+    "action": "deny",
+    "pattern": "*"
+  },
+  {
+    "permission": "plan_enter",
+    "action": "deny",
+    "pattern": "*"
+  },
+  {
+    "permission": "plan_exit",
+    "action": "deny",
+    "pattern": "*"
+  },
+  {
+    "permission": "read",
+    "pattern": "*",
+    "action": "allow"
+  },
+  {
+    "permission": "read",
+    "pattern": "*.env",
+    "action": "ask"
+  },
+  {
+    "permission": "read",
+    "pattern": "*.env.*",
+    "action": "ask"
+  },
+  {
+    "permission": "read",
+    "pattern": "*.env.example",
+    "action": "allow"
+  },
+  {
+    "permission": "question",
+    "action": "allow",
+    "pattern": "*"
+  },
+  {
+    "permission": "plan_exit",
+    "action": "allow",
+    "pattern": "*"
+  },
+  {
+    "permission": "task",
+    "pattern": "general",
+    "action": "deny"
+  },
+  {
+    "permission": "external_directory",
+    "pattern": "/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/xdg/data/opencode/plans/*",
+    "action": "allow"
+  },
+  {
+    "permission": "edit",
+    "pattern": "*",
+    "action": "deny"
+  },
+  {
+    "permission": "edit",
+    "pattern": ".opencode/plans/*.md",
+    "action": "allow"
+  },
+  {
+    "permission": "edit",
+    "pattern": "../../../../../../var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/xdg/data/opencode/plans/*.md",
+    "action": "allow"
+  },
+  {
+    "permission": "external_directory",
+    "pattern": "/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/xdg/data/opencode/tool-output/*",
+    "action": "allow"
+  }
+]
+summary (primary)
+  [
+  {
+    "permission": "*",
+    "action": "allow",
+    "pattern": "*"
+  },
+  {
+    "permission": "doom_loop",
+    "action": "ask",
+    "pattern": "*"
+  },
+  {
+    "permission": "external_directory",
+    "pattern": "*",
+    "action": "ask"
+  },
+  {
+    "permission": "external_directory",
+    "pattern": "/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/xdg/data/opencode/tool-output/*",
+    "action": "allow"
+  },
+  {
+    "permission": "external_directory",
+    "pattern": "/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/tmp/opencode/*",
+    "action": "allow"
+  },
+  {
+    "permission": "question",
+    "action": "deny",
+    "pattern": "*"
+  },
+  {
+    "permission": "plan_enter",
+    "action": "deny",
+    "pattern": "*"
+  },
+  {
+    "permission": "plan_exit",
+    "action": "deny",
+    "pattern": "*"
+  },
+  {
+    "permission": "read",
+    "pattern": "*",
+    "action": "allow"
+  },
+  {
+    "permission": "read",
+    "pattern": "*.env",
+    "action": "ask"
+  },
+  {
+    "permission": "read",
+    "pattern": "*.env.*",
+    "action": "ask"
+  },
+  {
+    "permission": "read",
+    "pattern": "*.env.example",
+    "action": "allow"
+  },
+  {
+    "permission": "*",
+    "action": "deny",
+    "pattern": "*"
+  },
+  {
+    "permission": "external_directory",
+    "pattern": "/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/xdg/data/opencode/tool-output/*",
+    "action": "allow"
+  }
+]
+title (primary)
+  [
+  {
+    "permission": "*",
+    "action": "allow",
+    "pattern": "*"
+  },
+  {
+    "permission": "doom_loop",
+    "action": "ask",
+    "pattern": "*"
+  },
+  {
+    "permission": "external_directory",
+    "pattern": "*",
+    "action": "ask"
+  },
+  {
+    "permission": "external_directory",
+    "pattern": "/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/xdg/data/opencode/tool-output/*",
+    "action": "allow"
+  },
+  {
+    "permission": "external_directory",
+    "pattern": "/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/tmp/opencode/*",
+    "action": "allow"
+  },
+  {
+    "permission": "question",
+    "action": "deny",
+    "pattern": "*"
+  },
+  {
+    "permission": "plan_enter",
+    "action": "deny",
+    "pattern": "*"
+  },
+  {
+    "permission": "plan_exit",
+    "action": "deny",
+    "pattern": "*"
+  },
+  {
+    "permission": "read",
+    "pattern": "*",
+    "action": "allow"
+  },
+  {
+    "permission": "read",
+    "pattern": "*.env",
+    "action": "ask"
+  },
+  {
+    "permission": "read",
+    "pattern": "*.env.*",
+    "action": "ask"
+  },
+  {
+    "permission": "read",
+    "pattern": "*.env.example",
+    "action": "allow"
+  },
+  {
+    "permission": "*",
+    "action": "deny",
+    "pattern": "*"
+  },
+  {
+    "permission": "external_directory",
+    "pattern": "/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/xdg/data/opencode/tool-output/*",
+    "action": "allow"
+  }
+]
+p9b-home-agent (primary)
+  [
+  {
+    "permission": "*",
+    "action": "allow",
+    "pattern": "*"
+  },
+  {
+    "permission": "doom_loop",
+    "action": "ask",
+    "pattern": "*"
+  },
+  {
+    "permission": "external_directory",
+    "pattern": "*",
+    "action": "ask"
+  },
+  {
+    "permission": "external_directory",
+    "pattern": "/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/xdg/data/opencode/tool-output/*",
+    "action": "allow"
+  },
+  {
+    "permission": "external_directory",
+    "pattern": "/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/tmp/opencode/*",
+    "action": "allow"
+  },
+  {
+    "permission": "question",
+    "action": "deny",
+    "pattern": "*"
+  },
+  {
+    "permission": "plan_enter",
+    "action": "deny",
+    "pattern": "*"
+  },
+  {
+    "permission": "plan_exit",
+    "action": "deny",
+    "pattern": "*"
+  },
+  {
+    "permission": "read",
+    "pattern": "*",
+    "action": "allow"
+  },
+  {
+    "permission": "read",
+    "pattern": "*.env",
+    "action": "ask"
+  },
+  {
+    "permission": "read",
+    "pattern": "*.env.*",
+    "action": "ask"
+  },
+  {
+    "permission": "read",
+    "pattern": "*.env.example",
+    "action": "allow"
+  },
+  {
+    "permission": "external_directory",
+    "pattern": "/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/xdg/data/opencode/tool-output/*",
+    "action": "allow"
+  }
+]
+
+[exit=0 wall=0.4s]
+
+## B. HOME-anchored: XDG_CONFIG_HOME UNSET -> defaults to $HOME/.config (what leaks with no XDG redirect)
+### B1 default
+$ env -i PATH=/Users/techfreakworm/.cargo/bin:/Users/techfreakworm/.antigravity-ide/antigravity-ide/bin:/Users/techfreakworm/.grok/bin:/Users/techfreakworm/.antigravity/antigravity/bin:/Users/techfreakworm/.opencode/bin:/Users/techfreakworm/.antigravity/antigravity/bin:/Users/techfreakworm/.codeium/windsurf/bin:/opt/homebrew/opt/openjdk@11/bin:/opt/homebrew/opt/openjdk/bin::/opt/homebrew/anaconda3/bin:/Users/techfreakworm/.gem/ruby/3.3.5/bin:/Users/techfreakworm/.rubies/ruby-3.3.5/lib/ruby/gems/3.3.0/bin:/Users/techfreakworm/.rubies/ruby-3.3.5/bin:/opt/homebrew/opt/mysql@8.4/bin:/opt/homebrew/share/google-cloud-sdk/bin:/Users/techfreakworm/.nvm/versions/node/v24.14.1/bin:/Users/techfreakworm/.antigravity-ide/antigravity-ide/bin:/Users/techfreakworm/.grok/bin:/Users/techfreakworm/.antigravity/antigravity/bin:/Users/techfreakworm/.opencode/bin:/Users/techfreakworm/.antigravity/antigravity/bin:/Users/techfreakworm/.local/bin:/Users/techfreakworm/.codeium/windsurf/bin:/opt/homebrew/opt/openjdk@11/bin:/opt/homebrew/opt/openjdk/bin::/opt/homebrew/anaconda3/bin:/opt/homebrew/opt/mysql@8.4/bin:/opt/homebrew/share/google-cloud-sdk/bin:/Users/techfreakworm/.nvm/versions/node/v20.18.2/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/opt/pkg/env/active/bin:/opt/pmk/env/global/bin:/Library/Apple/usr/bin:/Users/techfreakworm/Library/Application Support/JetBrains/Toolbox/scripts:/Users/techfreakworm/.lmstudio/bin:/Applications/Warp.app/Contents/Resources/bin:/Users/techfreakworm/.lmstudio/bin HOME=/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/fakehome TMPDIR=/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/tmp/ OPENCODE_DISABLE_AUTOUPDATE=1 XDG_DATA_HOME=/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/xdg/data XDG_CACHE_HOME=/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/xdg/cache XDG_STATE_HOME=/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/xdg/state /Users/techfreakworm/.opencode/bin/opencode debug paths
+home       /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/fakehome
+data       /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/xdg/data/opencode
+bin        /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/xdg/cache/opencode/bin
+log        /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/xdg/data/opencode/log
+repos      /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/xdg/data/opencode/repos
+cache      /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/xdg/cache/opencode
+config     /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/fakehome/.config/opencode
+state      /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/xdg/state/opencode
+tmp        /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/tmp/opencode
+
+[exit=0 wall=0.2s]
+
+$ env -i PATH=/Users/techfreakworm/.cargo/bin:/Users/techfreakworm/.antigravity-ide/antigravity-ide/bin:/Users/techfreakworm/.grok/bin:/Users/techfreakworm/.antigravity/antigravity/bin:/Users/techfreakworm/.opencode/bin:/Users/techfreakworm/.antigravity/antigravity/bin:/Users/techfreakworm/.codeium/windsurf/bin:/opt/homebrew/opt/openjdk@11/bin:/opt/homebrew/opt/openjdk/bin::/opt/homebrew/anaconda3/bin:/Users/techfreakworm/.gem/ruby/3.3.5/bin:/Users/techfreakworm/.rubies/ruby-3.3.5/lib/ruby/gems/3.3.0/bin:/Users/techfreakworm/.rubies/ruby-3.3.5/bin:/opt/homebrew/opt/mysql@8.4/bin:/opt/homebrew/share/google-cloud-sdk/bin:/Users/techfreakworm/.nvm/versions/node/v24.14.1/bin:/Users/techfreakworm/.antigravity-ide/antigravity-ide/bin:/Users/techfreakworm/.grok/bin:/Users/techfreakworm/.antigravity/antigravity/bin:/Users/techfreakworm/.opencode/bin:/Users/techfreakworm/.antigravity/antigravity/bin:/Users/techfreakworm/.local/bin:/Users/techfreakworm/.codeium/windsurf/bin:/opt/homebrew/opt/openjdk@11/bin:/opt/homebrew/opt/openjdk/bin::/opt/homebrew/anaconda3/bin:/opt/homebrew/opt/mysql@8.4/bin:/opt/homebrew/share/google-cloud-sdk/bin:/Users/techfreakworm/.nvm/versions/node/v20.18.2/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/opt/pkg/env/active/bin:/opt/pmk/env/global/bin:/Library/Apple/usr/bin:/Users/techfreakworm/Library/Application Support/JetBrains/Toolbox/scripts:/Users/techfreakworm/.lmstudio/bin:/Applications/Warp.app/Contents/Resources/bin:/Users/techfreakworm/.lmstudio/bin HOME=/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/fakehome TMPDIR=/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/tmp/ OPENCODE_DISABLE_AUTOUPDATE=1 XDG_DATA_HOME=/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/xdg/data XDG_CACHE_HOME=/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/xdg/cache XDG_STATE_HOME=/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/xdg/state /Users/techfreakworm/.opencode/bin/opencode debug config
+{
+  "$schema": "https://opencode.ai/config.json",
+  "username": "P9B-CONFIG-LEAK",
+  "small_model": "ollama/qwen3:32b",
+  "agent": {
+    "p9b-config-agent": {
+      "name": "p9b-config-agent",
+      "description": "P9B-CONFIG-AGENT-LEAK sentinel from ~/.config/opencode/agent.",
+      "mode": "primary",
+      "prompt": "sentinel",
+      "options": {},
+      "permission": {}
+    },
+    "p9b-home-agent": {
+      "name": "p9b-home-agent",
+      "description": "P9B-HOME-OPENCODE-LEAK sentinel from ~/.opencode/agent.",
+      "mode": "primary",
+      "prompt": "sentinel",
+      "options": {},
+      "permission": {}
+    }
+  },
+  "mode": {},
+  "plugin": [],
+  "command": {}
+}
+
+[exit=0 wall=0.5s]
+
+$ env -i PATH=/Users/techfreakworm/.cargo/bin:/Users/techfreakworm/.antigravity-ide/antigravity-ide/bin:/Users/techfreakworm/.grok/bin:/Users/techfreakworm/.antigravity/antigravity/bin:/Users/techfreakworm/.opencode/bin:/Users/techfreakworm/.antigravity/antigravity/bin:/Users/techfreakworm/.codeium/windsurf/bin:/opt/homebrew/opt/openjdk@11/bin:/opt/homebrew/opt/openjdk/bin::/opt/homebrew/anaconda3/bin:/Users/techfreakworm/.gem/ruby/3.3.5/bin:/Users/techfreakworm/.rubies/ruby-3.3.5/lib/ruby/gems/3.3.0/bin:/Users/techfreakworm/.rubies/ruby-3.3.5/bin:/opt/homebrew/opt/mysql@8.4/bin:/opt/homebrew/share/google-cloud-sdk/bin:/Users/techfreakworm/.nvm/versions/node/v24.14.1/bin:/Users/techfreakworm/.antigravity-ide/antigravity-ide/bin:/Users/techfreakworm/.grok/bin:/Users/techfreakworm/.antigravity/antigravity/bin:/Users/techfreakworm/.opencode/bin:/Users/techfreakworm/.antigravity/antigravity/bin:/Users/techfreakworm/.local/bin:/Users/techfreakworm/.codeium/windsurf/bin:/opt/homebrew/opt/openjdk@11/bin:/opt/homebrew/opt/openjdk/bin::/opt/homebrew/anaconda3/bin:/opt/homebrew/opt/mysql@8.4/bin:/opt/homebrew/share/google-cloud-sdk/bin:/Users/techfreakworm/.nvm/versions/node/v20.18.2/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/opt/pkg/env/active/bin:/opt/pmk/env/global/bin:/Library/Apple/usr/bin:/Users/techfreakworm/Library/Application Support/JetBrains/Toolbox/scripts:/Users/techfreakworm/.lmstudio/bin:/Applications/Warp.app/Contents/Resources/bin:/Users/techfreakworm/.lmstudio/bin HOME=/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/fakehome TMPDIR=/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/tmp/ OPENCODE_DISABLE_AUTOUPDATE=1 XDG_DATA_HOME=/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/xdg/data XDG_CACHE_HOME=/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/xdg/cache XDG_STATE_HOME=/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/xdg/state /Users/techfreakworm/.opencode/bin/opencode agent list
+build (primary)
+  [
+  {
+    "permission": "*",
+    "action": "allow",
+    "pattern": "*"
+  },
+  {
+    "permission": "doom_loop",
+    "action": "ask",
+    "pattern": "*"
+  },
+  {
+    "permission": "external_directory",
+    "pattern": "*",
+    "action": "ask"
+  },
+  {
+    "permission": "external_directory",
+    "pattern": "/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/xdg/data/opencode/tool-output/*",
+    "action": "allow"
+  },
+  {
+    "permission": "external_directory",
+    "pattern": "/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/tmp/opencode/*",
+    "action": "allow"
+  },
+  {
+    "permission": "question",
+    "action": "deny",
+    "pattern": "*"
+  },
+  {
+    "permission": "plan_enter",
+    "action": "deny",
+    "pattern": "*"
+  },
+  {
+    "permission": "plan_exit",
+    "action": "deny",
+    "pattern": "*"
+  },
+  {
+    "permission": "read",
+    "pattern": "*",
+    "action": "allow"
+  },
+  {
+    "permission": "read",
+    "pattern": "*.env",
+    "action": "ask"
+  },
+  {
+    "permission": "read",
+    "pattern": "*.env.*",
+    "action": "ask"
+  },
+  {
+    "permission": "read",
+    "pattern": "*.env.example",
+    "action": "allow"
+  },
+  {
+    "permission": "question",
+    "action": "allow",
+    "pattern": "*"
+  },
+  {
+    "permission": "plan_enter",
+    "action": "allow",
+    "pattern": "*"
+  },
+  {
+    "permission": "external_directory",
+    "pattern": "/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/xdg/data/opencode/tool-output/*",
+    "action": "allow"
+  }
+]
+compaction (primary)
+  [
+  {
+    "permission": "*",
+    "action": "allow",
+    "pattern": "*"
+  },
+  {
+    "permission": "doom_loop",
+    "action": "ask",
+    "pattern": "*"
+  },
+  {
+    "permission": "external_directory",
+    "pattern": "*",
+    "action": "ask"
+  },
+  {
+    "permission": "external_directory",
+    "pattern": "/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/xdg/data/opencode/tool-output/*",
+    "action": "allow"
+  },
+  {
+    "permission": "external_directory",
+    "pattern": "/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/tmp/opencode/*",
+    "action": "allow"
+  },
+  {
+    "permission": "question",
+    "action": "deny",
+    "pattern": "*"
+  },
+  {
+    "permission": "plan_enter",
+    "action": "deny",
+    "pattern": "*"
+  },
+  {
+    "permission": "plan_exit",
+    "action": "deny",
+    "pattern": "*"
+  },
+  {
+    "permission": "read",
+    "pattern": "*",
+    "action": "allow"
+  },
+  {
+    "permission": "read",
+    "pattern": "*.env",
+    "action": "ask"
+  },
+  {
+    "permission": "read",
+    "pattern": "*.env.*",
+    "action": "ask"
+  },
+  {
+    "permission": "read",
+    "pattern": "*.env.example",
+    "action": "allow"
+  },
+  {
+    "permission": "*",
+    "action": "deny",
+    "pattern": "*"
+  },
+  {
+    "permission": "external_directory",
+    "pattern": "/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/xdg/data/opencode/tool-output/*",
+    "action": "allow"
+  }
+]
+explore (subagent)
+  [
+  {
+    "permission": "*",
+    "action": "allow",
+    "pattern": "*"
+  },
+  {
+    "permission": "doom_loop",
+    "action": "ask",
+    "pattern": "*"
+  },
+  {
+    "permission": "external_directory",
+    "pattern": "*",
+    "action": "ask"
+  },
+  {
+    "permission": "external_directory",
+    "pattern": "/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/xdg/data/opencode/tool-output/*",
+    "action": "allow"
+  },
+  {
+    "permission": "external_directory",
+    "pattern": "/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/tmp/opencode/*",
+    "action": "allow"
+  },
+  {
+    "permission": "question",
+    "action": "deny",
+    "pattern": "*"
+  },
+  {
+    "permission": "plan_enter",
+    "action": "deny",
+    "pattern": "*"
+  },
+  {
+    "permission": "plan_exit",
+    "action": "deny",
+    "pattern": "*"
+  },
+  {
+    "permission": "read",
+    "pattern": "*",
+    "action": "allow"
+  },
+  {
+    "permission": "read",
+    "pattern": "*.env",
+    "action": "ask"
+  },
+  {
+    "permission": "read",
+    "pattern": "*.env.*",
+    "action": "ask"
+  },
+  {
+    "permission": "read",
+    "pattern": "*.env.example",
+    "action": "allow"
+  },
+  {
+    "permission": "*",
+    "action": "deny",
+    "pattern": "*"
+  },
+  {
+    "permission": "grep",
+    "action": "allow",
+    "pattern": "*"
+  },
+  {
+    "permission": "glob",
+    "action": "allow",
+    "pattern": "*"
+  },
+  {
+    "permission": "list",
+    "action": "allow",
+    "pattern": "*"
+  },
+  {
+    "permission": "bash",
+    "action": "allow",
+    "pattern": "*"
+  },
+  {
+    "permission": "webfetch",
+    "action": "allow",
+    "pattern": "*"
+  },
+  {
+    "permission": "websearch",
+    "action": "allow",
+    "pattern": "*"
+  },
+  {
+    "permission": "read",
+    "action": "allow",
+    "pattern": "*"
+  },
+  {
+    "permission": "external_directory",
+    "pattern": "*",
+    "action": "ask"
+  },
+  {
+    "permission": "external_directory",
+    "pattern": "/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/xdg/data/opencode/tool-output/*",
+    "action": "allow"
+  },
+  {
+    "permission": "external_directory",
+    "pattern": "/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/tmp/opencode/*",
+    "action": "allow"
+  },
+  {
+    "permission": "external_directory",
+    "pattern": "/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/xdg/data/opencode/tool-output/*",
+    "action": "allow"
+  }
+]
+general (subagent)
+  [
+  {
+    "permission": "*",
+    "action": "allow",
+    "pattern": "*"
+  },
+  {
+    "permission": "doom_loop",
+    "action": "ask",
+    "pattern": "*"
+  },
+  {
+    "permission": "external_directory",
+    "pattern": "*",
+    "action": "ask"
+  },
+  {
+    "permission": "external_directory",
+    "pattern": "/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/xdg/data/opencode/tool-output/*",
+    "action": "allow"
+  },
+  {
+    "permission": "external_directory",
+    "pattern": "/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/tmp/opencode/*",
+    "action": "allow"
+  },
+  {
+    "permission": "question",
+    "action": "deny",
+    "pattern": "*"
+  },
+  {
+    "permission": "plan_enter",
+    "action": "deny",
+    "pattern": "*"
+  },
+  {
+    "permission": "plan_exit",
+    "action": "deny",
+    "pattern": "*"
+  },
+  {
+    "permission": "read",
+    "pattern": "*",
+    "action": "allow"
+  },
+  {
+    "permission": "read",
+    "pattern": "*.env",
+    "action": "ask"
+  },
+  {
+    "permission": "read",
+    "pattern": "*.env.*",
+    "action": "ask"
+  },
+  {
+    "permission": "read",
+    "pattern": "*.env.example",
+    "action": "allow"
+  },
+  {
+    "permission": "todowrite",
+    "action": "deny",
+    "pattern": "*"
+  },
+  {
+    "permission": "external_directory",
+    "pattern": "/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/xdg/data/opencode/tool-output/*",
+    "action": "allow"
+  }
+]
+plan (primary)
+  [
+  {
+    "permission": "*",
+    "action": "allow",
+    "pattern": "*"
+  },
+  {
+    "permission": "doom_loop",
+    "action": "ask",
+    "pattern": "*"
+  },
+  {
+    "permission": "external_directory",
+    "pattern": "*",
+    "action": "ask"
+  },
+  {
+    "permission": "external_directory",
+    "pattern": "/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/xdg/data/opencode/tool-output/*",
+    "action": "allow"
+  },
+  {
+    "permission": "external_directory",
+    "pattern": "/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/tmp/opencode/*",
+    "action": "allow"
+  },
+  {
+    "permission": "question",
+    "action": "deny",
+    "pattern": "*"
+  },
+  {
+    "permission": "plan_enter",
+    "action": "deny",
+    "pattern": "*"
+  },
+  {
+    "permission": "plan_exit",
+    "action": "deny",
+    "pattern": "*"
+  },
+  {
+    "permission": "read",
+    "pattern": "*",
+    "action": "allow"
+  },
+  {
+    "permission": "read",
+    "pattern": "*.env",
+    "action": "ask"
+  },
+  {
+    "permission": "read",
+    "pattern": "*.env.*",
+    "action": "ask"
+  },
+  {
+    "permission": "read",
+    "pattern": "*.env.example",
+    "action": "allow"
+  },
+  {
+    "permission": "question",
+    "action": "allow",
+    "pattern": "*"
+  },
+  {
+    "permission": "plan_exit",
+    "action": "allow",
+    "pattern": "*"
+  },
+  {
+    "permission": "task",
+    "pattern": "general",
+    "action": "deny"
+  },
+  {
+    "permission": "external_directory",
+    "pattern": "/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/xdg/data/opencode/plans/*",
+    "action": "allow"
+  },
+  {
+    "permission": "edit",
+    "pattern": "*",
+    "action": "deny"
+  },
+  {
+    "permission": "edit",
+    "pattern": ".opencode/plans/*.md",
+    "action": "allow"
+  },
+  {
+    "permission": "edit",
+    "pattern": "../../../../../../var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/xdg/data/opencode/plans/*.md",
+    "action": "allow"
+  },
+  {
+    "permission": "external_directory",
+    "pattern": "/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/xdg/data/opencode/tool-output/*",
+    "action": "allow"
+  }
+]
+summary (primary)
+  [
+  {
+    "permission": "*",
+    "action": "allow",
+    "pattern": "*"
+  },
+  {
+    "permission": "doom_loop",
+    "action": "ask",
+    "pattern": "*"
+  },
+  {
+    "permission": "external_directory",
+    "pattern": "*",
+    "action": "ask"
+  },
+  {
+    "permission": "external_directory",
+    "pattern": "/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/xdg/data/opencode/tool-output/*",
+    "action": "allow"
+  },
+  {
+    "permission": "external_directory",
+    "pattern": "/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/tmp/opencode/*",
+    "action": "allow"
+  },
+  {
+    "permission": "question",
+    "action": "deny",
+    "pattern": "*"
+  },
+  {
+    "permission": "plan_enter",
+    "action": "deny",
+    "pattern": "*"
+  },
+  {
+    "permission": "plan_exit",
+    "action": "deny",
+    "pattern": "*"
+  },
+  {
+    "permission": "read",
+    "pattern": "*",
+    "action": "allow"
+  },
+  {
+    "permission": "read",
+    "pattern": "*.env",
+    "action": "ask"
+  },
+  {
+    "permission": "read",
+    "pattern": "*.env.*",
+    "action": "ask"
+  },
+  {
+    "permission": "read",
+    "pattern": "*.env.example",
+    "action": "allow"
+  },
+  {
+    "permission": "*",
+    "action": "deny",
+    "pattern": "*"
+  },
+  {
+    "permission": "external_directory",
+    "pattern": "/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/xdg/data/opencode/tool-output/*",
+    "action": "allow"
+  }
+]
+title (primary)
+  [
+  {
+    "permission": "*",
+    "action": "allow",
+    "pattern": "*"
+  },
+  {
+    "permission": "doom_loop",
+    "action": "ask",
+    "pattern": "*"
+  },
+  {
+    "permission": "external_directory",
+    "pattern": "*",
+    "action": "ask"
+  },
+  {
+    "permission": "external_directory",
+    "pattern": "/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/xdg/data/opencode/tool-output/*",
+    "action": "allow"
+  },
+  {
+    "permission": "external_directory",
+    "pattern": "/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/tmp/opencode/*",
+    "action": "allow"
+  },
+  {
+    "permission": "question",
+    "action": "deny",
+    "pattern": "*"
+  },
+  {
+    "permission": "plan_enter",
+    "action": "deny",
+    "pattern": "*"
+  },
+  {
+    "permission": "plan_exit",
+    "action": "deny",
+    "pattern": "*"
+  },
+  {
+    "permission": "read",
+    "pattern": "*",
+    "action": "allow"
+  },
+  {
+    "permission": "read",
+    "pattern": "*.env",
+    "action": "ask"
+  },
+  {
+    "permission": "read",
+    "pattern": "*.env.*",
+    "action": "ask"
+  },
+  {
+    "permission": "read",
+    "pattern": "*.env.example",
+    "action": "allow"
+  },
+  {
+    "permission": "*",
+    "action": "deny",
+    "pattern": "*"
+  },
+  {
+    "permission": "external_directory",
+    "pattern": "/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/xdg/data/opencode/tool-output/*",
+    "action": "allow"
+  }
+]
+p9b-config-agent (primary)
+  [
+  {
+    "permission": "*",
+    "action": "allow",
+    "pattern": "*"
+  },
+  {
+    "permission": "doom_loop",
+    "action": "ask",
+    "pattern": "*"
+  },
+  {
+    "permission": "external_directory",
+    "pattern": "*",
+    "action": "ask"
+  },
+  {
+    "permission": "external_directory",
+    "pattern": "/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/xdg/data/opencode/tool-output/*",
+    "action": "allow"
+  },
+  {
+    "permission": "external_directory",
+    "pattern": "/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/tmp/opencode/*",
+    "action": "allow"
+  },
+  {
+    "permission": "question",
+    "action": "deny",
+    "pattern": "*"
+  },
+  {
+    "permission": "plan_enter",
+    "action": "deny",
+    "pattern": "*"
+  },
+  {
+    "permission": "plan_exit",
+    "action": "deny",
+    "pattern": "*"
+  },
+  {
+    "permission": "read",
+    "pattern": "*",
+    "action": "allow"
+  },
+  {
+    "permission": "read",
+    "pattern": "*.env",
+    "action": "ask"
+  },
+  {
+    "permission": "read",
+    "pattern": "*.env.*",
+    "action": "ask"
+  },
+  {
+    "permission": "read",
+    "pattern": "*.env.example",
+    "action": "allow"
+  },
+  {
+    "permission": "external_directory",
+    "pattern": "/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/xdg/data/opencode/tool-output/*",
+    "action": "allow"
+  }
+]
+p9b-home-agent (primary)
+  [
+  {
+    "permission": "*",
+    "action": "allow",
+    "pattern": "*"
+  },
+  {
+    "permission": "doom_loop",
+    "action": "ask",
+    "pattern": "*"
+  },
+  {
+    "permission": "external_directory",
+    "pattern": "*",
+    "action": "ask"
+  },
+  {
+    "permission": "external_directory",
+    "pattern": "/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/xdg/data/opencode/tool-output/*",
+    "action": "allow"
+  },
+  {
+    "permission": "external_directory",
+    "pattern": "/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/tmp/opencode/*",
+    "action": "allow"
+  },
+  {
+    "permission": "question",
+    "action": "deny",
+    "pattern": "*"
+  },
+  {
+    "permission": "plan_enter",
+    "action": "deny",
+    "pattern": "*"
+  },
+  {
+    "permission": "plan_exit",
+    "action": "deny",
+    "pattern": "*"
+  },
+  {
+    "permission": "read",
+    "pattern": "*",
+    "action": "allow"
+  },
+  {
+    "permission": "read",
+    "pattern": "*.env",
+    "action": "ask"
+  },
+  {
+    "permission": "read",
+    "pattern": "*.env.*",
+    "action": "ask"
+  },
+  {
+    "permission": "read",
+    "pattern": "*.env.example",
+    "action": "allow"
+  },
+  {
+    "permission": "external_directory",
+    "pattern": "/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/xdg/data/opencode/tool-output/*",
+    "action": "allow"
+  }
+]
+
+[exit=0 wall=0.4s]
+
+### B2 OPENCODE_DISABLE_CLAUDE_CODE=1
+$ env -i PATH=/Users/techfreakworm/.cargo/bin:/Users/techfreakworm/.antigravity-ide/antigravity-ide/bin:/Users/techfreakworm/.grok/bin:/Users/techfreakworm/.antigravity/antigravity/bin:/Users/techfreakworm/.opencode/bin:/Users/techfreakworm/.antigravity/antigravity/bin:/Users/techfreakworm/.codeium/windsurf/bin:/opt/homebrew/opt/openjdk@11/bin:/opt/homebrew/opt/openjdk/bin::/opt/homebrew/anaconda3/bin:/Users/techfreakworm/.gem/ruby/3.3.5/bin:/Users/techfreakworm/.rubies/ruby-3.3.5/lib/ruby/gems/3.3.0/bin:/Users/techfreakworm/.rubies/ruby-3.3.5/bin:/opt/homebrew/opt/mysql@8.4/bin:/opt/homebrew/share/google-cloud-sdk/bin:/Users/techfreakworm/.nvm/versions/node/v24.14.1/bin:/Users/techfreakworm/.antigravity-ide/antigravity-ide/bin:/Users/techfreakworm/.grok/bin:/Users/techfreakworm/.antigravity/antigravity/bin:/Users/techfreakworm/.opencode/bin:/Users/techfreakworm/.antigravity/antigravity/bin:/Users/techfreakworm/.local/bin:/Users/techfreakworm/.codeium/windsurf/bin:/opt/homebrew/opt/openjdk@11/bin:/opt/homebrew/opt/openjdk/bin::/opt/homebrew/anaconda3/bin:/opt/homebrew/opt/mysql@8.4/bin:/opt/homebrew/share/google-cloud-sdk/bin:/Users/techfreakworm/.nvm/versions/node/v20.18.2/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/opt/pkg/env/active/bin:/opt/pmk/env/global/bin:/Library/Apple/usr/bin:/Users/techfreakworm/Library/Application Support/JetBrains/Toolbox/scripts:/Users/techfreakworm/.lmstudio/bin:/Applications/Warp.app/Contents/Resources/bin:/Users/techfreakworm/.lmstudio/bin HOME=/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/fakehome TMPDIR=/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/tmp/ OPENCODE_DISABLE_AUTOUPDATE=1 OPENCODE_DISABLE_CLAUDE_CODE=1 XDG_DATA_HOME=/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/xdg/data XDG_CACHE_HOME=/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/xdg/cache XDG_STATE_HOME=/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/xdg/state /Users/techfreakworm/.opencode/bin/opencode debug paths
+home       /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/fakehome
+data       /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/xdg/data/opencode
+bin        /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/xdg/cache/opencode/bin
+log        /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/xdg/data/opencode/log
+repos      /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/xdg/data/opencode/repos
+cache      /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/xdg/cache/opencode
+config     /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/fakehome/.config/opencode
+state      /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/xdg/state/opencode
+tmp        /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/tmp/opencode
+
+[exit=0 wall=0.2s]
+
+$ env -i PATH=/Users/techfreakworm/.cargo/bin:/Users/techfreakworm/.antigravity-ide/antigravity-ide/bin:/Users/techfreakworm/.grok/bin:/Users/techfreakworm/.antigravity/antigravity/bin:/Users/techfreakworm/.opencode/bin:/Users/techfreakworm/.antigravity/antigravity/bin:/Users/techfreakworm/.codeium/windsurf/bin:/opt/homebrew/opt/openjdk@11/bin:/opt/homebrew/opt/openjdk/bin::/opt/homebrew/anaconda3/bin:/Users/techfreakworm/.gem/ruby/3.3.5/bin:/Users/techfreakworm/.rubies/ruby-3.3.5/lib/ruby/gems/3.3.0/bin:/Users/techfreakworm/.rubies/ruby-3.3.5/bin:/opt/homebrew/opt/mysql@8.4/bin:/opt/homebrew/share/google-cloud-sdk/bin:/Users/techfreakworm/.nvm/versions/node/v24.14.1/bin:/Users/techfreakworm/.antigravity-ide/antigravity-ide/bin:/Users/techfreakworm/.grok/bin:/Users/techfreakworm/.antigravity/antigravity/bin:/Users/techfreakworm/.opencode/bin:/Users/techfreakworm/.antigravity/antigravity/bin:/Users/techfreakworm/.local/bin:/Users/techfreakworm/.codeium/windsurf/bin:/opt/homebrew/opt/openjdk@11/bin:/opt/homebrew/opt/openjdk/bin::/opt/homebrew/anaconda3/bin:/opt/homebrew/opt/mysql@8.4/bin:/opt/homebrew/share/google-cloud-sdk/bin:/Users/techfreakworm/.nvm/versions/node/v20.18.2/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/opt/pkg/env/active/bin:/opt/pmk/env/global/bin:/Library/Apple/usr/bin:/Users/techfreakworm/Library/Application Support/JetBrains/Toolbox/scripts:/Users/techfreakworm/.lmstudio/bin:/Applications/Warp.app/Contents/Resources/bin:/Users/techfreakworm/.lmstudio/bin HOME=/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/fakehome TMPDIR=/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/tmp/ OPENCODE_DISABLE_AUTOUPDATE=1 OPENCODE_DISABLE_CLAUDE_CODE=1 XDG_DATA_HOME=/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/xdg/data XDG_CACHE_HOME=/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/xdg/cache XDG_STATE_HOME=/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/xdg/state /Users/techfreakworm/.opencode/bin/opencode debug config
+{
+  "$schema": "https://opencode.ai/config.json",
+  "username": "P9B-CONFIG-LEAK",
+  "small_model": "ollama/qwen3:32b",
+  "agent": {
+    "p9b-config-agent": {
+      "name": "p9b-config-agent",
+      "description": "P9B-CONFIG-AGENT-LEAK sentinel from ~/.config/opencode/agent.",
+      "mode": "primary",
+      "prompt": "sentinel",
+      "options": {},
+      "permission": {}
+    },
+    "p9b-home-agent": {
+      "name": "p9b-home-agent",
+      "description": "P9B-HOME-OPENCODE-LEAK sentinel from ~/.opencode/agent.",
+      "mode": "primary",
+      "prompt": "sentinel",
+      "options": {},
+      "permission": {}
+    }
+  },
+  "mode": {},
+  "plugin": [],
+  "command": {}
+}
+
+[exit=0 wall=0.4s]
+
+$ env -i PATH=/Users/techfreakworm/.cargo/bin:/Users/techfreakworm/.antigravity-ide/antigravity-ide/bin:/Users/techfreakworm/.grok/bin:/Users/techfreakworm/.antigravity/antigravity/bin:/Users/techfreakworm/.opencode/bin:/Users/techfreakworm/.antigravity/antigravity/bin:/Users/techfreakworm/.codeium/windsurf/bin:/opt/homebrew/opt/openjdk@11/bin:/opt/homebrew/opt/openjdk/bin::/opt/homebrew/anaconda3/bin:/Users/techfreakworm/.gem/ruby/3.3.5/bin:/Users/techfreakworm/.rubies/ruby-3.3.5/lib/ruby/gems/3.3.0/bin:/Users/techfreakworm/.rubies/ruby-3.3.5/bin:/opt/homebrew/opt/mysql@8.4/bin:/opt/homebrew/share/google-cloud-sdk/bin:/Users/techfreakworm/.nvm/versions/node/v24.14.1/bin:/Users/techfreakworm/.antigravity-ide/antigravity-ide/bin:/Users/techfreakworm/.grok/bin:/Users/techfreakworm/.antigravity/antigravity/bin:/Users/techfreakworm/.opencode/bin:/Users/techfreakworm/.antigravity/antigravity/bin:/Users/techfreakworm/.local/bin:/Users/techfreakworm/.codeium/windsurf/bin:/opt/homebrew/opt/openjdk@11/bin:/opt/homebrew/opt/openjdk/bin::/opt/homebrew/anaconda3/bin:/opt/homebrew/opt/mysql@8.4/bin:/opt/homebrew/share/google-cloud-sdk/bin:/Users/techfreakworm/.nvm/versions/node/v20.18.2/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/opt/pkg/env/active/bin:/opt/pmk/env/global/bin:/Library/Apple/usr/bin:/Users/techfreakworm/Library/Application Support/JetBrains/Toolbox/scripts:/Users/techfreakworm/.lmstudio/bin:/Applications/Warp.app/Contents/Resources/bin:/Users/techfreakworm/.lmstudio/bin HOME=/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/fakehome TMPDIR=/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/tmp/ OPENCODE_DISABLE_AUTOUPDATE=1 OPENCODE_DISABLE_CLAUDE_CODE=1 XDG_DATA_HOME=/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/xdg/data XDG_CACHE_HOME=/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/xdg/cache XDG_STATE_HOME=/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/xdg/state /Users/techfreakworm/.opencode/bin/opencode agent list
+build (primary)
+  [
+  {
+    "permission": "*",
+    "action": "allow",
+    "pattern": "*"
+  },
+  {
+    "permission": "doom_loop",
+    "action": "ask",
+    "pattern": "*"
+  },
+  {
+    "permission": "external_directory",
+    "pattern": "*",
+    "action": "ask"
+  },
+  {
+    "permission": "external_directory",
+    "pattern": "/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/xdg/data/opencode/tool-output/*",
+    "action": "allow"
+  },
+  {
+    "permission": "external_directory",
+    "pattern": "/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/tmp/opencode/*",
+    "action": "allow"
+  },
+  {
+    "permission": "question",
+    "action": "deny",
+    "pattern": "*"
+  },
+  {
+    "permission": "plan_enter",
+    "action": "deny",
+    "pattern": "*"
+  },
+  {
+    "permission": "plan_exit",
+    "action": "deny",
+    "pattern": "*"
+  },
+  {
+    "permission": "read",
+    "pattern": "*",
+    "action": "allow"
+  },
+  {
+    "permission": "read",
+    "pattern": "*.env",
+    "action": "ask"
+  },
+  {
+    "permission": "read",
+    "pattern": "*.env.*",
+    "action": "ask"
+  },
+  {
+    "permission": "read",
+    "pattern": "*.env.example",
+    "action": "allow"
+  },
+  {
+    "permission": "question",
+    "action": "allow",
+    "pattern": "*"
+  },
+  {
+    "permission": "plan_enter",
+    "action": "allow",
+    "pattern": "*"
+  },
+  {
+    "permission": "external_directory",
+    "pattern": "/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/xdg/data/opencode/tool-output/*",
+    "action": "allow"
+  }
+]
+compaction (primary)
+  [
+  {
+    "permission": "*",
+    "action": "allow",
+    "pattern": "*"
+  },
+  {
+    "permission": "doom_loop",
+    "action": "ask",
+    "pattern": "*"
+  },
+  {
+    "permission": "external_directory",
+    "pattern": "*",
+    "action": "ask"
+  },
+  {
+    "permission": "external_directory",
+    "pattern": "/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/xdg/data/opencode/tool-output/*",
+    "action": "allow"
+  },
+  {
+    "permission": "external_directory",
+    "pattern": "/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/tmp/opencode/*",
+    "action": "allow"
+  },
+  {
+    "permission": "question",
+    "action": "deny",
+    "pattern": "*"
+  },
+  {
+    "permission": "plan_enter",
+    "action": "deny",
+    "pattern": "*"
+  },
+  {
+    "permission": "plan_exit",
+    "action": "deny",
+    "pattern": "*"
+  },
+  {
+    "permission": "read",
+    "pattern": "*",
+    "action": "allow"
+  },
+  {
+    "permission": "read",
+    "pattern": "*.env",
+    "action": "ask"
+  },
+  {
+    "permission": "read",
+    "pattern": "*.env.*",
+    "action": "ask"
+  },
+  {
+    "permission": "read",
+    "pattern": "*.env.example",
+    "action": "allow"
+  },
+  {
+    "permission": "*",
+    "action": "deny",
+    "pattern": "*"
+  },
+  {
+    "permission": "external_directory",
+    "pattern": "/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/xdg/data/opencode/tool-output/*",
+    "action": "allow"
+  }
+]
+explore (subagent)
+  [
+  {
+    "permission": "*",
+    "action": "allow",
+    "pattern": "*"
+  },
+  {
+    "permission": "doom_loop",
+    "action": "ask",
+    "pattern": "*"
+  },
+  {
+    "permission": "external_directory",
+    "pattern": "*",
+    "action": "ask"
+  },
+  {
+    "permission": "external_directory",
+    "pattern": "/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/xdg/data/opencode/tool-output/*",
+    "action": "allow"
+  },
+  {
+    "permission": "external_directory",
+    "pattern": "/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/tmp/opencode/*",
+    "action": "allow"
+  },
+  {
+    "permission": "question",
+    "action": "deny",
+    "pattern": "*"
+  },
+  {
+    "permission": "plan_enter",
+    "action": "deny",
+    "pattern": "*"
+  },
+  {
+    "permission": "plan_exit",
+    "action": "deny",
+    "pattern": "*"
+  },
+  {
+    "permission": "read",
+    "pattern": "*",
+    "action": "allow"
+  },
+  {
+    "permission": "read",
+    "pattern": "*.env",
+    "action": "ask"
+  },
+  {
+    "permission": "read",
+    "pattern": "*.env.*",
+    "action": "ask"
+  },
+  {
+    "permission": "read",
+    "pattern": "*.env.example",
+    "action": "allow"
+  },
+  {
+    "permission": "*",
+    "action": "deny",
+    "pattern": "*"
+  },
+  {
+    "permission": "grep",
+    "action": "allow",
+    "pattern": "*"
+  },
+  {
+    "permission": "glob",
+    "action": "allow",
+    "pattern": "*"
+  },
+  {
+    "permission": "list",
+    "action": "allow",
+    "pattern": "*"
+  },
+  {
+    "permission": "bash",
+    "action": "allow",
+    "pattern": "*"
+  },
+  {
+    "permission": "webfetch",
+    "action": "allow",
+    "pattern": "*"
+  },
+  {
+    "permission": "websearch",
+    "action": "allow",
+    "pattern": "*"
+  },
+  {
+    "permission": "read",
+    "action": "allow",
+    "pattern": "*"
+  },
+  {
+    "permission": "external_directory",
+    "pattern": "*",
+    "action": "ask"
+  },
+  {
+    "permission": "external_directory",
+    "pattern": "/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/xdg/data/opencode/tool-output/*",
+    "action": "allow"
+  },
+  {
+    "permission": "external_directory",
+    "pattern": "/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/tmp/opencode/*",
+    "action": "allow"
+  },
+  {
+    "permission": "external_directory",
+    "pattern": "/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/xdg/data/opencode/tool-output/*",
+    "action": "allow"
+  }
+]
+general (subagent)
+  [
+  {
+    "permission": "*",
+    "action": "allow",
+    "pattern": "*"
+  },
+  {
+    "permission": "doom_loop",
+    "action": "ask",
+    "pattern": "*"
+  },
+  {
+    "permission": "external_directory",
+    "pattern": "*",
+    "action": "ask"
+  },
+  {
+    "permission": "external_directory",
+    "pattern": "/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/xdg/data/opencode/tool-output/*",
+    "action": "allow"
+  },
+  {
+    "permission": "external_directory",
+    "pattern": "/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/tmp/opencode/*",
+    "action": "allow"
+  },
+  {
+    "permission": "question",
+    "action": "deny",
+    "pattern": "*"
+  },
+  {
+    "permission": "plan_enter",
+    "action": "deny",
+    "pattern": "*"
+  },
+  {
+    "permission": "plan_exit",
+    "action": "deny",
+    "pattern": "*"
+  },
+  {
+    "permission": "read",
+    "pattern": "*",
+    "action": "allow"
+  },
+  {
+    "permission": "read",
+    "pattern": "*.env",
+    "action": "ask"
+  },
+  {
+    "permission": "read",
+    "pattern": "*.env.*",
+    "action": "ask"
+  },
+  {
+    "permission": "read",
+    "pattern": "*.env.example",
+    "action": "allow"
+  },
+  {
+    "permission": "todowrite",
+    "action": "deny",
+    "pattern": "*"
+  },
+  {
+    "permission": "external_directory",
+    "pattern": "/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/xdg/data/opencode/tool-output/*",
+    "action": "allow"
+  }
+]
+plan (primary)
+  [
+  {
+    "permission": "*",
+    "action": "allow",
+    "pattern": "*"
+  },
+  {
+    "permission": "doom_loop",
+    "action": "ask",
+    "pattern": "*"
+  },
+  {
+    "permission": "external_directory",
+    "pattern": "*",
+    "action": "ask"
+  },
+  {
+    "permission": "external_directory",
+    "pattern": "/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/xdg/data/opencode/tool-output/*",
+    "action": "allow"
+  },
+  {
+    "permission": "external_directory",
+    "pattern": "/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/tmp/opencode/*",
+    "action": "allow"
+  },
+  {
+    "permission": "question",
+    "action": "deny",
+    "pattern": "*"
+  },
+  {
+    "permission": "plan_enter",
+    "action": "deny",
+    "pattern": "*"
+  },
+  {
+    "permission": "plan_exit",
+    "action": "deny",
+    "pattern": "*"
+  },
+  {
+    "permission": "read",
+    "pattern": "*",
+    "action": "allow"
+  },
+  {
+    "permission": "read",
+    "pattern": "*.env",
+    "action": "ask"
+  },
+  {
+    "permission": "read",
+    "pattern": "*.env.*",
+    "action": "ask"
+  },
+  {
+    "permission": "read",
+    "pattern": "*.env.example",
+    "action": "allow"
+  },
+  {
+    "permission": "question",
+    "action": "allow",
+    "pattern": "*"
+  },
+  {
+    "permission": "plan_exit",
+    "action": "allow",
+    "pattern": "*"
+  },
+  {
+    "permission": "task",
+    "pattern": "general",
+    "action": "deny"
+  },
+  {
+    "permission": "external_directory",
+    "pattern": "/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/xdg/data/opencode/plans/*",
+    "action": "allow"
+  },
+  {
+    "permission": "edit",
+    "pattern": "*",
+    "action": "deny"
+  },
+  {
+    "permission": "edit",
+    "pattern": ".opencode/plans/*.md",
+    "action": "allow"
+  },
+  {
+    "permission": "edit",
+    "pattern": "../../../../../../var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/xdg/data/opencode/plans/*.md",
+    "action": "allow"
+  },
+  {
+    "permission": "external_directory",
+    "pattern": "/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/xdg/data/opencode/tool-output/*",
+    "action": "allow"
+  }
+]
+summary (primary)
+  [
+  {
+    "permission": "*",
+    "action": "allow",
+    "pattern": "*"
+  },
+  {
+    "permission": "doom_loop",
+    "action": "ask",
+    "pattern": "*"
+  },
+  {
+    "permission": "external_directory",
+    "pattern": "*",
+    "action": "ask"
+  },
+  {
+    "permission": "external_directory",
+    "pattern": "/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/xdg/data/opencode/tool-output/*",
+    "action": "allow"
+  },
+  {
+    "permission": "external_directory",
+    "pattern": "/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/tmp/opencode/*",
+    "action": "allow"
+  },
+  {
+    "permission": "question",
+    "action": "deny",
+    "pattern": "*"
+  },
+  {
+    "permission": "plan_enter",
+    "action": "deny",
+    "pattern": "*"
+  },
+  {
+    "permission": "plan_exit",
+    "action": "deny",
+    "pattern": "*"
+  },
+  {
+    "permission": "read",
+    "pattern": "*",
+    "action": "allow"
+  },
+  {
+    "permission": "read",
+    "pattern": "*.env",
+    "action": "ask"
+  },
+  {
+    "permission": "read",
+    "pattern": "*.env.*",
+    "action": "ask"
+  },
+  {
+    "permission": "read",
+    "pattern": "*.env.example",
+    "action": "allow"
+  },
+  {
+    "permission": "*",
+    "action": "deny",
+    "pattern": "*"
+  },
+  {
+    "permission": "external_directory",
+    "pattern": "/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/xdg/data/opencode/tool-output/*",
+    "action": "allow"
+  }
+]
+title (primary)
+  [
+  {
+    "permission": "*",
+    "action": "allow",
+    "pattern": "*"
+  },
+  {
+    "permission": "doom_loop",
+    "action": "ask",
+    "pattern": "*"
+  },
+  {
+    "permission": "external_directory",
+    "pattern": "*",
+    "action": "ask"
+  },
+  {
+    "permission": "external_directory",
+    "pattern": "/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/xdg/data/opencode/tool-output/*",
+    "action": "allow"
+  },
+  {
+    "permission": "external_directory",
+    "pattern": "/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/tmp/opencode/*",
+    "action": "allow"
+  },
+  {
+    "permission": "question",
+    "action": "deny",
+    "pattern": "*"
+  },
+  {
+    "permission": "plan_enter",
+    "action": "deny",
+    "pattern": "*"
+  },
+  {
+    "permission": "plan_exit",
+    "action": "deny",
+    "pattern": "*"
+  },
+  {
+    "permission": "read",
+    "pattern": "*",
+    "action": "allow"
+  },
+  {
+    "permission": "read",
+    "pattern": "*.env",
+    "action": "ask"
+  },
+  {
+    "permission": "read",
+    "pattern": "*.env.*",
+    "action": "ask"
+  },
+  {
+    "permission": "read",
+    "pattern": "*.env.example",
+    "action": "allow"
+  },
+  {
+    "permission": "*",
+    "action": "deny",
+    "pattern": "*"
+  },
+  {
+    "permission": "external_directory",
+    "pattern": "/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/xdg/data/opencode/tool-output/*",
+    "action": "allow"
+  }
+]
+p9b-config-agent (primary)
+  [
+  {
+    "permission": "*",
+    "action": "allow",
+    "pattern": "*"
+  },
+  {
+    "permission": "doom_loop",
+    "action": "ask",
+    "pattern": "*"
+  },
+  {
+    "permission": "external_directory",
+    "pattern": "*",
+    "action": "ask"
+  },
+  {
+    "permission": "external_directory",
+    "pattern": "/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/xdg/data/opencode/tool-output/*",
+    "action": "allow"
+  },
+  {
+    "permission": "external_directory",
+    "pattern": "/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/tmp/opencode/*",
+    "action": "allow"
+  },
+  {
+    "permission": "question",
+    "action": "deny",
+    "pattern": "*"
+  },
+  {
+    "permission": "plan_enter",
+    "action": "deny",
+    "pattern": "*"
+  },
+  {
+    "permission": "plan_exit",
+    "action": "deny",
+    "pattern": "*"
+  },
+  {
+    "permission": "read",
+    "pattern": "*",
+    "action": "allow"
+  },
+  {
+    "permission": "read",
+    "pattern": "*.env",
+    "action": "ask"
+  },
+  {
+    "permission": "read",
+    "pattern": "*.env.*",
+    "action": "ask"
+  },
+  {
+    "permission": "read",
+    "pattern": "*.env.example",
+    "action": "allow"
+  },
+  {
+    "permission": "external_directory",
+    "pattern": "/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/xdg/data/opencode/tool-output/*",
+    "action": "allow"
+  }
+]
+p9b-home-agent (primary)
+  [
+  {
+    "permission": "*",
+    "action": "allow",
+    "pattern": "*"
+  },
+  {
+    "permission": "doom_loop",
+    "action": "ask",
+    "pattern": "*"
+  },
+  {
+    "permission": "external_directory",
+    "pattern": "*",
+    "action": "ask"
+  },
+  {
+    "permission": "external_directory",
+    "pattern": "/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/xdg/data/opencode/tool-output/*",
+    "action": "allow"
+  },
+  {
+    "permission": "external_directory",
+    "pattern": "/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/tmp/opencode/*",
+    "action": "allow"
+  },
+  {
+    "permission": "question",
+    "action": "deny",
+    "pattern": "*"
+  },
+  {
+    "permission": "plan_enter",
+    "action": "deny",
+    "pattern": "*"
+  },
+  {
+    "permission": "plan_exit",
+    "action": "deny",
+    "pattern": "*"
+  },
+  {
+    "permission": "read",
+    "pattern": "*",
+    "action": "allow"
+  },
+  {
+    "permission": "read",
+    "pattern": "*.env",
+    "action": "ask"
+  },
+  {
+    "permission": "read",
+    "pattern": "*.env.*",
+    "action": "ask"
+  },
+  {
+    "permission": "read",
+    "pattern": "*.env.example",
+    "action": "allow"
+  },
+  {
+    "permission": "external_directory",
+    "pattern": "/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-pe/P9b/xdg/data/opencode/tool-output/*",
+    "action": "allow"
+  }
+]
+
+[exit=0 wall=0.4s]
+
+## .claude / .agents external-skill leak: SKIPPED
+creating a '.claude/' path is gated by this worktree's harness hook; per the lead this sub-test is
+recorded and skipped, not worked around. From opencode's own built-in config reference (dumped by
+'opencode debug skill' in compat.log): external skills AUTO-LOAD from ~/.claude/skills and
+~/.agents/skills (HOME-anchored), toggled off by OPENCODE_DISABLE_CLAUDE_CODE_SKILLS=1 /
+OPENCODE_DISABLE_EXTERNAL_SKILLS=1. So with HOME = the user's own home, those DO leak unless the
+daemon sets those env vars or points HOME at a dedicated soma home.
+## findings
+~/.config/opencode username sentinel in A (XDG redirected)=0, in B (XDG default to $HOME/.config)=1
+~/.config/opencode/agent sentinel in A=0, in B=3
+~/.opencode/agent (HOME-anchored) seen anywhere=13 (config reference says ~/.opencode is NOT a config/agent source)
+VERDICT: PASS — redirecting XDG_CONFIG_HOME fully isolates opencode's global config (the fake ~/.config/opencode sentinel is invisible in A), but with no XDG redirect it defaults to $HOME/.config and the user's ~/.config/opencode LEAKS (visible in B). A soma daemon must redirect XDG_CONFIG_HOME (or point HOME at a dedicated soma home); ~/.claude|~/.agents skills leak too (documented, hook-skipped).
