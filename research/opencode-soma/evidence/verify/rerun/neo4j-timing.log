@@ -1,12 +1,12 @@
 # rerun neo4j-timing
-date-utc: 2026-10-10T08:12:54Z
+date-utc: 2026-10-10T08:50:49Z
 argv: ['bash', '-c', 'set -euo pipefail\nmkdir -p "$OCSOMA_SCRATCH"\npython3.12 -m venv "$OCSOMA_SCRATCH/venv"\n"$OCSOMA_SCRATCH/venv/bin/pip" install -q neo4j==6.4.0\npython3.12 research/opencode-soma/probes/memory/gen_memory.py --n-facts 50000 --seed 7 --out "$OCSOMA_SCRATCH/data"\n"$OCSOMA_SCRATCH/venv/bin/python" research/opencode-soma/probes/memory/bench.py --data "$OCSOMA_SCRATCH/data" --n-facts 50000 --backends neo4j --queries Q1 --runs 30 --out-tag verify\n']
-cwd: /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-vf/rerun-20261010T080047Z-25045/neo4j-timing/tree
-sandbox: /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-vf/rerun-20261010T080047Z-25045/neo4j-timing
+cwd: /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-vf/rerun-20261010T084007Z-68155/neo4j-timing/tree
+sandbox: /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-vf/rerun-20261010T084007Z-68155/neo4j-timing
 exit: 0
-wall-s: 20.4
+wall-s: 20.3
 dataset_sha256 matches
-p50 committed=32.248 rerun=8.276 correct=1.0
+p50 committed=32.248 rerun=8.282 correct=1.0
 result: PASS
 ---- stdout ----
 {
@@ -23,7 +23,7 @@ result: PASS
   "parent": 37869,
   "targeted": 68
  },
- "dataset_path": "/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-vf/rerun-20261010T080047Z-25045/neo4j-timing/neo4j/data/dataset-50000.json",
+ "dataset_path": "/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-vf/rerun-20261010T084007Z-68155/neo4j-timing/neo4j/data/dataset-50000.json",
  "dataset_sha256": "752ca976be0c7ca764edef0ddb5c52de57905dce0e5172ec4f46b16ced52d18c",
  "days_span": 180.0,
  "entities_in_2plus_leads": 46,
@@ -147,26 +147,26 @@ result: PASS
   "telegram": 4163,
   "tool": 14609
  },
- "truth_path": "/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-vf/rerun-20261010T080047Z-25045/neo4j-timing/neo4j/data/truth-50000.json",
+ "truth_path": "/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-vf/rerun-20261010T084007Z-68155/neo4j-timing/neo4j/data/truth-50000.json",
  "truth_sha256": "c1d8228cc38b6caf9b691055f1a8c0bc9314057b5861b2cebbdda198c862b5ca"
 }
-date_utc: 2026-10-10T08:12:38Z
-command: PYTHONHASHSEED=0 python bench.py --data /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-vf/rerun-20261010T080047Z-25045/neo4j-timing/neo4j/data --n-facts 50000 --backends neo4j --queries Q1 --runs 30 --out-tag verify
+date_utc: 2026-10-10T08:50:33Z
+command: PYTHONHASHSEED=0 python bench.py --data /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-vf/rerun-20261010T084007Z-68155/neo4j-timing/neo4j/data --n-facts 50000 --backends neo4j --queries Q1 --runs 30 --out-tag verify
 python: 3.12.10  sqlite: 3.53.4  ripgrep: ripgrep 15.1.0  neo4j-driver: 6.4.0  image: neo4j:2026.09.0-community
 host: Darwin 25.4.0 arm64  neo4j container: ocsoma-vf-neo4j (volume ocsoma-vf-neo4j-data, bolt 127.0.0.1:47397, http 127.0.0.1:47398)
 dataset: n_facts=50000 entities=2172 sources=29430 scopes=126 planted={"alias_mentions": 7301, "contradictions_resolved": 1000, "contradictions_unresolved": 1250, "derived": 2500, "duplicates": 3500, "promoted": 750, "update_chains": 625, "updates": 2500}
 loc: {"files": {"per_query": {"Q1": 8, "Q2": 8, "Q3": 11, "Q4": 11, "Q5": 7, "Q6": 8, "Q7a": 2, "Q7b": 3, "Q8": 16, "W1": 24}, "load_and_helpers": 56}, "sqlite": {"per_query": {"Q1": 3, "Q2": 9, "Q3": 7, "Q4": 8, "Q5": 4, "Q6": 13, "Q7a": 2, "Q7b": 3, "Q8": 6, "W1": 17}, "load_and_helpers": 32}, "neo4j": {"per_query": {"Q1": 3, "Q2": 7, "Q3": 7, "Q4": 7, "Q5": 7, "Q6": 7, "Q7a": 3, "Q7b": 3, "Q8": 5, "W1": 17}, "load_and_helpers": 44}, "naive": {"per_query": {"Q1": 8}, "load_and_helpers": 4}}
 == backend neo4j
-load: {"load_s": 6.066, "disk_kb": 528500, "fresh_start_to_bolt_s": 5.03, "idle_mem_mb_before_load": 932.3, "mem_mb_after_load": 1138.2}
-{"backend": "neo4j", "query": "Q1", "n_facts": 50000, "p50_ms": 8.276, "p95_ms": 12.638, "first_ms": 125.379, "correct": 1.0, "runs": 31, "warm_runs": 30, "instances": 10, "connect_ms": 33.277, "mem_mb_after_batch": 1147.8, "untimed_warmup_runs": 30}
-neo4j mem during bench: {"max_mb_between_batches": 1147.8, "note": "docker stats sampled after each query batch, never during timed runs"}
+load: {"load_s": 5.953, "disk_kb": 528504, "fresh_start_to_bolt_s": 4.99, "idle_mem_mb_before_load": 907.3, "mem_mb_after_load": 1110.2}
+{"backend": "neo4j", "query": "Q1", "n_facts": 50000, "p50_ms": 8.282, "p95_ms": 13.763, "first_ms": 131.857, "correct": 1.0, "runs": 31, "warm_runs": 30, "instances": 10, "connect_ms": 40.881, "mem_mb_after_batch": 1127.4, "untimed_warmup_runs": 30}
+neo4j mem during bench: {"max_mb_between_batches": 1127.4, "note": "docker stats sampled after each query batch, never during timed runs"}
 summary (backend query p50_ms p95_ms first_ms correct):
-  neo4j   Q1        8.276     12.638    125.379 1.0
+  neo4j   Q1        8.282     13.763    131.857 1.0
 VERDICT: PASS — 1 backend x query rows at n=50000; all non-naive backends match the oracle on every run
 
 
 ---- stderr ----
 
 [notice] A new release of pip is available: 25.1.1 -> 26.2.1
-[notice] To update, run: /private/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-vf/rerun-20261010T080047Z-25045/neo4j-timing/neo4j/venv/bin/python3.12 -m pip install --upgrade pip
+[notice] To update, run: /private/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-vf/rerun-20261010T084007Z-68155/neo4j-timing/neo4j/venv/bin/python3.12 -m pip install --upgrade pip
 

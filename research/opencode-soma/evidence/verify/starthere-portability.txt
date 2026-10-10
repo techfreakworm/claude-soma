@@ -1,0 +1,25 @@
+verifier check: are START-HERE's 'fully portable and read-only' analyze.sh commands portable?
+date-utc: 2026-10-10T08:41:54Z
+HEAD: 9ec322a9b113a679febd1e17434965f4bd8d2f44
+method: git archive HEAD into a fresh dir; HOME and OCSOMA_REAL_TMPDIR point at empty dirs (a machine without the probe author's $TMPDIR/ocsoma-pe sandbox); run START-HERE's command
+command: bash research/opencode-soma/probes/opencode/P2-hooks/analyze.sh   (exit 0)
+
+VERDICTs it wrote into the copy's evidence/opencode/P2-hooks/ (the committed logs it overwrites):
+  gate.log     HEAD: VERDICT: PASS — tool.execute.before blocked the primary's bash call before execution (sent
+               here: VERDICT: PARTIAL — primary-agent gating works (blocked before execution, reason visible) b
+  events.log   HEAD: VERDICT: PASS — the spy plugin saw 11 distinct hooks and 14 distinct bus event types in on
+               here: VERDICT: PASS — the spy plugin saw 11 distinct hooks and 14 distinct bus event types in on
+  inject.log   HEAD: VERDICT: PASS — chat.message injection (the additionalContext analog) re-read the file per
+               here: VERDICT: PASS — chat.message injection (the additionalContext analog) re-read the file per
+  activity.log HEAD: VERDICT: PASS — every executed tool call in every session of the tree (built-in, MCP, task
+               here: VERDICT: PASS — every executed tool call in every session of the tree (built-in, MCP, task
+
+gate.log on the fresh machine:
+  $ sh -c ls -la '/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-vf/starthere-portable-20261010T141126/tmp/ocsoma-pe/P2-hooks/p2' | grep sentinel || echo 'no sentinel files at all'
+  no sentinel files at all
+  summary: primary sentinel absent=1, deny decisions=1, model saw reason=2, subagent exempt decisions=1, subagent sentinel present=0
+
+result: analyze.sh writes the committed logs (not read-only), and P2's gate verdict depends on sentinel files that exist only in this machine's sandbox (not portable): gate.log goes PASS -> PARTIAL.
+
+status at a97300c: fixed. START-HERE no longer runs the P2 analyze.sh, every re-derivation runs inside a
+git-archive copy under $TMPDIR, and the portability note is precise (see starthere-safety.log: clone untouched).

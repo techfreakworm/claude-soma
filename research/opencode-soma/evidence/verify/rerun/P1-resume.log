@@ -1,15 +1,15 @@
 # rerun P1-resume
-date-utc: 2026-10-10T08:01:28Z
+date-utc: 2026-10-10T08:40:41Z
 argv: ['bash', 'research/opencode-soma/probes/opencode/P1-headless/crash-run.sh']
-cwd: /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-vf/rerun-20261010T080047Z-25045/P1-resume/tree
-sandbox: /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-vf/rerun-20261010T080047Z-25045/P1-resume
+cwd: /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-vf/rerun-20261010T084007Z-68155/P1-resume/tree
+sandbox: /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-vf/rerun-20261010T084007Z-68155/P1-resume
 exit: 0
-wall-s: 40.8
+wall-s: 34.3
 crash-run.log committed=['PASS'] rerun=['PASS']
 result: PASS
 ---- stdout ----
 VERDICT: PASS — after kill -9 mid-generation (in-flight request cut: 1) the history survived on disk and -s <same id> continued it; the model recalled KIWI-4417.
 
 ---- stderr ----
-/private/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-vf/rerun-20261010T080047Z-25045/P1-resume/tree/research/opencode-soma/probes/opencode/P1-headless/../sandbox.sh: line 170: 25097 Terminated: 15          python3.12 -I "$OCSOMA_PROBES/ollama_log_proxy.py" --port "$port" --log "$log" >> "$SANDBOX/proxy-$port.stderr" 2>&1
+/private/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-vf/rerun-20261010T084007Z-68155/P1-resume/tree/research/opencode-soma/probes/opencode/P1-headless/../sandbox.sh: line 170: 68247 Terminated: 15          python3.12 -I "$OCSOMA_PROBES/ollama_log_proxy.py" --port "$port" --log "$log" >> "$SANDBOX/proxy-$port.stderr" 2>&1
 

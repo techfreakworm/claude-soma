@@ -1,5 +1,5 @@
 # P2-hooks/gate.log
-date-utc: 2026-10-10T08:07:17Z
+date-utc: 2026-10-10T08:44:12Z
 probe-script: research/opencode-soma/probes/opencode/P2-hooks/analyze.sh (after run.sh)
 opencode-version: 1.18.8
 model: ollama/qwen3:32b
@@ -7,23 +7,23 @@ sandbox: $TMPDIR/ocsoma-pe/P2-hooks (HOME, XDG_*, TMPDIR all inside it)
 purpose: (b) deny a bash call BEFORE it runs (orchestrator_gate.py analog) and tell primary from subagent
 
 ## gate decisions (evidence/opencode/P2-hooks/gate.jsonl): note input_fields = what the hook input carries
-$ cat /private/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-vf/rerun-20261010T080047Z-25045/P2-gate/tree/research/opencode-soma/evidence/opencode/P2-hooks/gate.jsonl
-{"ts":"2026-10-10T08:05:10.427Z","hook":"tool.execute.before","input_fields":["tool","sessionID","callID"],"tool":"bash","sessionID":"ses_edb2a8e3dffepO0Rrtdj5Dozym","callID":"call_asms9dde","parentID":null,"isSubagent":false,"command":"touch \"/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-vf/rerun-20261010T080047Z-25045/P2-gate/ocsoma-pe/P2-hooks/p2/sentinel-primary\"","decision":"deny"}
-{"ts":"2026-10-10T08:05:49.618Z","hook":"tool.execute.before","input_fields":["tool","sessionID","callID"],"tool":"task","sessionID":"ses_edb2a8e3dffepO0Rrtdj5Dozym","callID":"call_nihizmuc","parentID":null,"isSubagent":false,"command":"","decision":"allow"}
-{"ts":"2026-10-10T08:06:26.005Z","hook":"tool.execute.before","input_fields":["tool","sessionID","callID"],"tool":"bash","sessionID":"ses_edb273648ffesna81bPLJf3Eje","callID":"call_75frjw0r","parentID":"ses_edb2a8e3dffepO0Rrtdj5Dozym","isSubagent":true,"command":"touch \"/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-vf/rerun-20261010T080047Z-25045/P2-gate/ocsoma-pe/P2-hooks/p2/sentinel-subagent\" && echo P2-SUB-DONE","decision":"allow-subagent-exempt"}
-{"ts":"2026-10-10T08:07:05.660Z","hook":"tool.execute.before","input_fields":["tool","sessionID","callID"],"tool":"probe-stdio_stdio_echo","sessionID":"ses_edb2a8e3dffepO0Rrtdj5Dozym","callID":"call_bgzx90xp","parentID":null,"isSubagent":false,"command":"","decision":"allow"}
-{"ts":"2026-10-10T08:07:12.339Z","hook":"tool.execute.before","input_fields":["tool","sessionID","callID"],"tool":"bash","sessionID":"ses_edb2a8e3dffepO0Rrtdj5Dozym","callID":"call_9iso3n71","parentID":null,"isSubagent":false,"command":"echo P2-ASK-OK","decision":"allow"}
+$ cat /private/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-vf/rerun-20261010T084007Z-68155/P2-gate/tree/research/opencode-soma/evidence/opencode/P2-hooks/gate.jsonl
+{"ts":"2026-10-10T08:42:40.474Z","hook":"tool.execute.before","input_fields":["tool","sessionID","callID"],"tool":"bash","sessionID":"ses_edb06bc7effeu2EOuAckubUSsV","callID":"call_tirwr1w1","parentID":null,"isSubagent":false,"command":"touch \"/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-vf/rerun-20261010T084007Z-68155/P2-gate/ocsoma-pe/P2-hooks/p2/sentinel-primary\"","decision":"deny"}
+{"ts":"2026-10-10T08:43:00.628Z","hook":"tool.execute.before","input_fields":["tool","sessionID","callID"],"tool":"task","sessionID":"ses_edb06bc7effeu2EOuAckubUSsV","callID":"call_1pp2pf8z","parentID":null,"isSubagent":false,"command":"","decision":"allow"}
+{"ts":"2026-10-10T08:43:25.746Z","hook":"tool.execute.before","input_fields":["tool","sessionID","callID"],"tool":"bash","sessionID":"ses_edb052b66ffeV6uC3jFVTnA8Ic","callID":"call_h4egy2sb","parentID":"ses_edb06bc7effeu2EOuAckubUSsV","isSubagent":true,"command":"touch \"/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-vf/rerun-20261010T084007Z-68155/P2-gate/ocsoma-pe/P2-hooks/p2/sentinel-subagent\" && echo P2-SUB-DONE","decision":"allow-subagent-exempt"}
+{"ts":"2026-10-10T08:43:57.600Z","hook":"tool.execute.before","input_fields":["tool","sessionID","callID"],"tool":"probe-stdio_stdio_echo","sessionID":"ses_edb06bc7effeu2EOuAckubUSsV","callID":"call_157cz4or","parentID":null,"isSubagent":false,"command":"","decision":"allow"}
+{"ts":"2026-10-10T08:44:06.048Z","hook":"tool.execute.before","input_fields":["tool","sessionID","callID"],"tool":"bash","sessionID":"ses_edb06bc7effeu2EOuAckubUSsV","callID":"call_9c6btel9","parentID":null,"isSubagent":false,"command":"echo P2-ASK-OK","decision":"allow"}
 
 [exit=0 wall=0.0s]
 
 ## sentinel files after the run
-$ sh -c ls -la '/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-vf/rerun-20261010T080047Z-25045/P2-gate/ocsoma-pe/P2-hooks/p2' | grep sentinel || echo 'no sentinel files at all'
--rw-r--r--@ 1 techfreakworm  staff       0 10 Oct 13:36 sentinel-subagent
+$ sh -c ls -la '/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-vf/rerun-20261010T084007Z-68155/P2-gate/ocsoma-pe/P2-hooks/p2' | grep sentinel || echo 'no sentinel files at all'
+-rw-r--r--@ 1 techfreakworm  staff       0 10 Oct 14:13 sentinel-subagent
 
 [exit=0 wall=0.0s]
 
 ## what the model saw: tool results carrying the gate reason (proxy last_tool_result)
-$ sh -c jq -r 'select(.request.last_tool_result != null and (.request.last_tool_result|test("BLOCKED"))) | .request.last_tool_result' '/private/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-vf/rerun-20261010T080047Z-25045/P2-gate/tree/research/opencode-soma/evidence/opencode/P2-hooks/proxy.jsonl' | head -3
+$ sh -c jq -r 'select(.request.last_tool_result != null and (.request.last_tool_result|test("BLOCKED"))) | .request.last_tool_result' '/private/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-vf/rerun-20261010T084007Z-68155/P2-gate/tree/research/opencode-soma/evidence/opencode/P2-hooks/proxy.jsonl' | head -3
 BLOCKED by orchestrator gate: creating sentinel files is substantive work; dispatch a subagent via the task tool instead.
 BLOCKED by orchestrator gate: creating sentinel files is substantive work; dispatch a subagent via the task tool instead.
 
@@ -34,8 +34,8 @@ $ sh -c turn_json() { :; }; true
 
 [exit=0 wall=0.0s]
 
-{"final_text":"I cannot perform the task directly. Please create a task using the task tool to handle this operation.","tools":[{"tool":"bash","status":"error","output_head":"BLOCKED by orchestrator gate: creating sentinel files is substantive work; dispatch a subagent via the task tool instead."}]}
+{"final_text":"The command to create the sentinel file was blocked. You need to dispatch a subagent via the task tool to handle substantive work like creating sentinel files.","tools":[{"tool":"bash","status":"error","output_head":"BLOCKED by orchestrator gate: creating sentinel files is substantive work; dispatch a subagent via the task tool instead."}]}
 ## turn 4 (subagent asked to touch its sentinel): reply, tool parts and child sessions
-{"final_text":"The subagent reported the output: P2-SUB-DONE.","children":["ses_edb273648ffesna81bPLJf3Eje"],"tools":[{"tool":"task","status":"completed","child_session":"ses_edb273648ffesna81bPLJf3Eje","output_head":"<task id=\"ses_edb273648ffesna81bPLJf3Eje\" state=\"completed\">\n<task_result>\nThe command was executed successfully, and the output is:\n\nP2-SUB-DONE\n</task_result>\n</task>"}]}
+{"final_text":"The subagent successfully executed the command and reported: `P2-SUB-DONE`.","children":["ses_edb052b66ffeV6uC3jFVTnA8Ic"],"tools":[{"tool":"task","status":"completed","child_session":"ses_edb052b66ffeV6uC3jFVTnA8Ic","output_head":"<task id=\"ses_edb052b66ffeV6uC3jFVTnA8Ic\" state=\"completed\">\n<task_result>\nP2-SUB-DONE\n</task_result>\n</task>"}]}
 summary: primary sentinel absent=1, deny decisions=1, model saw reason=2, subagent exempt decisions=1, subagent sentinel present=1
 VERDICT: PASS — tool.execute.before blocked the primary's bash call before execution (sentinel absent, reason in the tool result) and exempted the subagent via a session.parentID lookup (the hook input itself carries only tool/sessionID/callID).

@@ -1,22 +1,22 @@
 # rerun P2-gate
-date-utc: 2026-10-10T08:07:18Z
+date-utc: 2026-10-10T08:44:13Z
 argv: ['bash', '-c', 'bash research/opencode-soma/probes/opencode/P2-hooks/run.sh; bash research/opencode-soma/probes/opencode/P2-hooks/analyze.sh']
-cwd: /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-vf/rerun-20261010T080047Z-25045/P2-gate/tree
-sandbox: /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-vf/rerun-20261010T080047Z-25045/P2-gate
+cwd: /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-vf/rerun-20261010T084007Z-68155/P2-gate/tree
+sandbox: /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-vf/rerun-20261010T084007Z-68155/P2-gate
 exit: 0
-wall-s: 312.9
+wall-s: 179.5
 gate.log committed=['PASS'] rerun=['PASS']
 result: PASS
 ---- stdout ----
 VERDICT: PASS — the spy plugin saw 11 distinct hooks and 14 distinct bus event types in one session (lists above).
-VERDICT: PASS — chat.message injection (the additionalContext analog) re-read the file per prompt and the model quoted the latest value; system.transform also delivered the fresh value (proxy) but qwen3:32b repeated its stale earlier answer for that field.
+VERDICT: PASS — both hooks re-read the file on every prompt; the proxy shows the fresh values in each request and the model quoted the latest values.
 VERDICT: PASS — tool.execute.before blocked the primary's bash call before execution (sentinel absent, reason in the tool result) and exempted the subagent via a session.parentID lookup (the hook input itself carries only tool/sessionID/callID).
 VERDICT: PASS — every executed tool call in every session of the tree (built-in, MCP, task, the subagent's own calls) is in the activity log with args, session, parent session, agent, duration and result head; the gate-blocked attempt is on record in the gate's own log (later plugins never see a call an earlier plugin rejects).
 VERDICT: PASS — the spy plugin saw 11 distinct hooks and 14 distinct bus event types in one session (lists above).
-VERDICT: PASS — chat.message injection (the additionalContext analog) re-read the file per prompt and the model quoted the latest value; system.transform also delivered the fresh value (proxy) but qwen3:32b repeated its stale earlier answer for that field.
+VERDICT: PASS — both hooks re-read the file on every prompt; the proxy shows the fresh values in each request and the model quoted the latest values.
 VERDICT: PASS — tool.execute.before blocked the primary's bash call before execution (sentinel absent, reason in the tool result) and exempted the subagent via a session.parentID lookup (the hook input itself carries only tool/sessionID/callID).
 VERDICT: PASS — every executed tool call in every session of the tree (built-in, MCP, task, the subagent's own calls) is in the activity log with args, session, parent session, agent, duration and result head; the gate-blocked attempt is on record in the gate's own log (later plugins never see a call an earlier plugin rejects).
 
 ---- stderr ----
-/private/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-vf/rerun-20261010T080047Z-25045/P2-gate/tree/research/opencode-soma/probes/opencode/P2-hooks/../sandbox.sh: line 170: 29560 Terminated: 15          python3.12 -I "$OCSOMA_PROBES/ollama_log_proxy.py" --port "$port" --log "$log" >> "$SANDBOX/proxy-$port.stderr" 2>&1
+/private/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-vf/rerun-20261010T084007Z-68155/P2-gate/tree/research/opencode-soma/probes/opencode/P2-hooks/../sandbox.sh: line 170: 72496 Terminated: 15          python3.12 -I "$OCSOMA_PROBES/ollama_log_proxy.py" --port "$port" --log "$log" >> "$SANDBOX/proxy-$port.stderr" 2>&1
 

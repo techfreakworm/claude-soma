@@ -1,19 +1,17 @@
 # rerun P5-tmux
-date-utc: 2026-10-10T08:12:33Z
+date-utc: 2026-10-10T08:50:28Z
 argv: ['bash', 'research/opencode-soma/probes/opencode/P5-tmux/run.sh']
-cwd: /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-vf/rerun-20261010T080047Z-25045/P5-tmux/tree
-sandbox: /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-vf/rerun-20261010T080047Z-25045/P5-tmux
+cwd: /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-vf/rerun-20261010T084007Z-68155/P5-tmux/tree
+sandbox: /var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-vf/rerun-20261010T084007Z-68155/P5-tmux
 exit: 0
-wall-s: 146.4
-tmux.log committed=['PARTIAL'] rerun=['PASS']
-pane-analysis.log committed=['PARTIAL'] rerun=['FAIL']
-result: FAIL
-P5-tmux: tmux.log VERDICT mismatch, committed=['PARTIAL'] rerun=['PASS']
-P5-tmux: pane-analysis.log VERDICT mismatch, committed=['PARTIAL'] rerun=['FAIL']
+wall-s: 203.0
+tmux.log committed=['PARTIAL'] rerun=['PARTIAL']
+pane-analysis.log committed=['PARTIAL'] rerun=['PARTIAL']
+result: PASS
 ---- stdout ----
-VERDICT: PASS — send-keys + capture-pane scraping got 6/6 replies (HTTP: 6/6); see per-case panes for rendering caveats.
-VERDICT: FAIL — even column-aware parsing misses replies (see table).
+VERDICT: PARTIAL — send-keys DELIVERY is reliable (12/12 verbatim to the server over 2 rounds) and HTTP is 6/6, but pane SCRAPING is lossy and can false-positive: strict scrape 12/12, old whole-line 11/12, and the old checker matched the sidebar auto-title mid-turn 6/12 times. The HTTP API supersedes the scrape.
+VERDICT: PARTIAL — these are the committed round-1 panes (a single sample); the authoritative scrape reliability is the multi-round aggregate in tmux.log. On these panes whole-line parsing and column-aware parsing differ (the sidebar shares rows, so whole-line can miss or match the wrong column), and long replies are cut to the visible screen (alt-screen, no tmux scrollback). Separately, tmux.log shows the old whole-line checker also false-positives mid-turn on the sidebar auto-title before any reply exists. Net: pane scraping is lossy and can false-positive; the HTTP API supersedes it.
 
 ---- stderr ----
-/private/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-vf/rerun-20261010T080047Z-25045/P5-tmux/tree/research/opencode-soma/probes/opencode/P5-tmux/../sandbox.sh: line 170: 59537 Terminated: 15          python3.12 -I "$OCSOMA_PROBES/ollama_log_proxy.py" --port "$port" --log "$log" >> "$SANDBOX/proxy-$port.stderr" 2>&1
+/private/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-vf/rerun-20261010T084007Z-68155/P5-tmux/tree/research/opencode-soma/probes/opencode/P5-tmux/../sandbox.sh: line 170: 92284 Terminated: 15          python3.12 -I "$OCSOMA_PROBES/ollama_log_proxy.py" --port "$port" --log "$log" >> "$SANDBOX/proxy-$port.stderr" 2>&1
 

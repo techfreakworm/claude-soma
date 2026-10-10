@@ -1,5 +1,5 @@
 # P3-mcp/scoping-verdict.log
-date-utc: 2026-10-10T08:10:06Z
+date-utc: 2026-10-10T08:47:04Z
 probe-script: research/opencode-soma/probes/opencode/P3-mcp/run.sh
 opencode-version: 1.18.8
 model: ollama/qwen3:32b
@@ -8,13 +8,13 @@ purpose: per-agent MCP scoping: agent-driven cases vs a trusted-caller override
 
 source artifacts: scoping.log (per-case 'telegram_offered' from the proxy) and telegram-outbox.jsonl
 ## telegram offered to the model, per case (from the proxy tool lists in scoping.log)
-$ sh -c grep -E 'requests offering telegram_send_message per case' '/private/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-vf/rerun-20261010T080047Z-25045/P3-scoping/tree/research/opencode-soma/evidence/opencode/P3-mcp/scoping.log'
+$ sh -c grep -E 'requests offering telegram_send_message per case' '/private/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-vf/rerun-20261010T084007Z-68155/P3-scoping/tree/research/opencode-soma/evidence/opencode/P3-mcp/scoping.log'
 requests offering telegram_send_message per case: A orchestrator=2, B lead(permission deny)=0, C lead-tools(tools false)=0, D lead+API override=2, E lead via run=0
 
 [exit=0 wall=0.0s]
 
 ## what actually reached the fake telegram server
-$ sh -c cat '/private/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-vf/rerun-20261010T080047Z-25045/P3-scoping/tree/research/opencode-soma/evidence/opencode/P3-mcp/telegram-outbox.jsonl' 2>/dev/null || echo empty
+$ sh -c cat '/private/var/folders/lp/m_0rzyhs19g7l2x5dnql4tjh0000gp/T/ocsoma-vf/rerun-20261010T084007Z-68155/P3-scoping/tree/research/opencode-soma/evidence/opencode/P3-mcp/telegram-outbox.jsonl' 2>/dev/null || echo empty
 {"chat_id": "42", "text": "P3-ORCH-HELLO"}
 {"chat_id": "42", "text": "P3-LEAD-FORCED"}
 

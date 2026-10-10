@@ -2,16 +2,16 @@
  "loads": {
   "50000": {
    "neo4j": {
-    "disk_kb": 528500,
-    "disk_kb_after_bench": 528500,
-    "fresh_start_to_bolt_s": 5.03,
-    "idle_mem_mb_before_load": 932.3,
-    "load_s": 6.066,
+    "disk_kb": 528504,
+    "disk_kb_after_bench": 528504,
+    "fresh_start_to_bolt_s": 4.99,
+    "idle_mem_mb_before_load": 907.3,
+    "load_s": 5.953,
     "mem_during_bench": {
-     "max_mb_between_batches": 1147.8,
+     "max_mb_between_batches": 1127.4,
      "note": "docker stats sampled after each query batch, never during timed runs"
     },
-    "mem_mb_after_load": 1138.2
+    "mem_mb_after_load": 1110.2
    }
   }
  },
@@ -72,14 +72,14 @@
  "rows": [
   {
    "backend": "neo4j",
-   "connect_ms": 33.277,
+   "connect_ms": 40.881,
    "correct": 1.0,
-   "first_ms": 125.379,
+   "first_ms": 131.857,
    "instances": 10,
-   "mem_mb_after_batch": 1147.8,
+   "mem_mb_after_batch": 1127.4,
    "n_facts": 50000,
-   "p50_ms": 8.276,
-   "p95_ms": 12.638,
+   "p50_ms": 8.282,
+   "p95_ms": 13.763,
    "query": "Q1",
    "runs": 31,
    "untimed_warmup_runs": 30,
