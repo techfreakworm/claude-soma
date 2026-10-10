@@ -493,35 +493,32 @@ the visible set measured 0.8–1.6 ms at 50k.
   2–4x between runs; the decision rests on comparisons within one run (same protocol, same load)
   and on capability and operating cost, not on any single latency.
 
-### 11.2 Results (p50 / p95 ms, first run in brackets; every cell matched the oracle on every run)
+### 11.2 Results (fair re-run: p50 / p95 ms, first run in brackets; every cell matched the oracle on every run)
 
 #### 50,000 facts
 
 | query | files | sqlite | neo4j |
 |---|---|---|---|
-| Q1 recall by entity | 1,042 / 1,295 (1,046) | 2.75 / 3.71 (3.30) | 19.2 / 30.0 (208) |
-| Q2 cross-project links | 2,531 / 2,991 (2,113) | 264 / 385 (379) | 174 / 213 (441) |
-| Q3 recency/decay top-10 | 93.2 / 101 (107) | 1.86 / 2.06 (2.57) | 48.1 / 57.9 (339) |
-| Q4 provenance chain | 35.2 / 67.9 (23.5) | 6.82 / 8.85 (9.37) | 5.23 / 8.84 (283) |
-| Q5 unresolved contradictions | 2,706 / 3,459 (2,767) | 99.8 / 109 (110) | 221 / 328 (324) |
-| Q6 2-hop expansion | 2,245 / 2,849 (2,326) | 12.7 / 163 (8.14) | 8.30 / 108 (238) |
-| Q7a parent view of a lead | 26.0 / 30.5 (33.4) | 0.39 / 0.51 (1.07) | 10.3 / 16.3 (58.2) |
-| Q7b lead view of parent | 41.4 / 43.8 (55.3) | 1.12 / 1.54 (1.62) | 19.5 / 22.8 (76.6) |
-| Q8 keyword recall (FTS) | 67.5 / 74.5 (69.8) | 1.34 / 3.33 (0.79) | 10.2 / 17.4 (180) |
-| W1 upsert with dedupe/supersede | 24.2 / 26.5 (24.7) | 0.23 / 0.82 (0.05) | 22.0 / 62.3 (48.5) |
+| Q1 recall by entity | 627 / 670 (764) | 3.29 / 4.77 (3.66) | 32.2 / 46.6 (690) |
+| Q2 cross-project links | 1,198 / 1,323 (1,278) | 548 / 757 (399) | 310 / 361 (955) |
+| Q3 recency/decay top-10 | 40.0 / 42.0 (52.5) | 3.88 / 9.76 (5.91) | 15.3 / 18.7 (638) |
+| Q4 provenance chain | 15.2 / 25.0 (9.62) | 14.6 / 20.0 (20.8) | 7.60 / 8.91 (522) |
+| Q5 unresolved contradictions | 1,292 / 2,626 (1,227) | 241 / 326 (175) | 375 / 456 (680) |
+| Q6 2-hop expansion | 1,897 / 3,522 (1,970) | 33.9 / 403 (17.7) | 11.1 / 137 (594) |
+| Q7a parent view of a lead | 39.6 / 49.7 (40.0) | 1.00 / 1.24 (1.25) | 13.3 / 15.4 (111) |
+| Q7b lead view of parent | 77.1 / 98.6 (108) | 3.18 / 3.58 (3.47) | 37.0 / 42.3 (117) |
+| Q8 keyword recall (FTS) | 83.8 / 106 (99.8) | 3.50 / 7.51 (1.58) | 13.5 / 23.7 (335) |
+| W1 upsert with dedupe/supersede | 37.3 / 46.0 (31.5) | 0.49 / 0.74 (0.13) | 30.5 / 99.6 (123) |
 
-Load: files 5.4 s and 202 MB on disk (50,126 files); SQLite 1.2 s and 34 MB; Neo4j 14.3 s and
-516 MB.
+Load: files 7.6 s and 202 MB on disk (50,126 files); SQLite 1.2 s and 34 MB; Neo4j 24.8 s and 516 MB. The 50k SQLite and Neo4j phases overlapped the lfm2.5 curation run (11.1, machine load); 600 and 5k did not.
 
 #### 5,000 facts
 
-p95 on the recall queries (Q1, Q3, Q7a, Q7b, Q8): files up to 76 ms; SQLite at most 0.39 ms;
-Neo4j at most 10.4 ms. The cross-project scan (Q2) takes 224 / 12 / 27 ms p95 respectively, and
-the files backend's full scans already take 132–173 ms p50 (`bench-5000.log`).
+p95 on the recall queries (Q1, Q3, Q7a, Q7b, Q8): files up to 68.1 ms; SQLite at most 0.58 ms; Neo4j at most 5.40 ms. The cross-project scan (Q2) takes 171 / 13.2 / 11.3 ms p95 respectively, and the files backend's full scans already take 135–180 ms p50 (`bench-5000.log`).
 
 #### 600 facts
 
-Everything is fast. Files take 10–24 ms because each query spawns ripgrep (`bench-600.log`).
+Everything is fast: SQLite at most 1.33 ms p95, Neo4j recall 1.44–2.85 ms p50 (Bolt round trip). Files take 11.6–18.2 ms because each query spawns ripgrep (`bench-600.log`).
 
 #### 500,000 facts (SQLite vs Neo4j; files extrapolate linearly from 5k→50k and were not run)
 
