@@ -50,6 +50,7 @@ opencode and ollama so "which tools each agent was offered", "what the system pr
 | P5 attach-to-serve send-keys delivery (5/5) | PARTIAL | `P5-tmux/attach.log` |
 | P6 reject a pending permission over HTTP | PASS | `P6-permissions/reject-retest.log` |
 | P9 compat: claude-soma skills/agent/command load under opencode | PASS | `P9-compat/compat.log` |
+| P9b fake-HOME config leak: which user config leaks when HOME is the user's own | PASS | `P9-compat/fakehome.log` |
 | Conditions + per-model turn timing | PASS | `conditions.log` |
 
 Follow-up findings (second round):
@@ -73,6 +74,11 @@ Follow-up findings (second round):
 - **Model contention (RISKS)**: one local GPU + ollama `NUM_PARALLEL=1` means a second model is not
   served while the first has a queue (`evidence/memory/ollama-two-models.log`): everything queues
   behind the agent model.
+- **Config isolation (P9b)**: with HOME = the user's own home, `~/.config/opencode` leaks only
+  without an `XDG_CONFIG_HOME` redirect, but `~/.opencode/agent` is HOME-anchored and loads even with
+  XDG redirected, and `~/.claude`/`~/.agents` external skills auto-load (documented) - so a soma
+  instance must run under a dedicated HOME (what `sandbox.sh` does), not just redirected XDG dirs
+  (`P9-compat/fakehome.log`).
 
 Verifier-rerun note: ports derive from `OCSOMA_PORT_BASE` (default 47100; port = base + offset, offset
 = last 2 digits) and tmux sockets from `OCSOMA_TMUX_PREFIX` (default `ocsoma-pe-`); set both to rerun
