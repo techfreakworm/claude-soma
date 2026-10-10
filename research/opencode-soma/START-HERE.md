@@ -11,8 +11,10 @@ both.
 
 Feasible. opencode 1.18.8 can be the engine on a local model with no Claude account, and every
 load-bearing mechanism (HTTP+SSE serve per lead, crash resume, instant-ack queuing, plugin
-gate/inject/log, MCP with per-agent scoping, subagents incl. background dispatch, SQLite usage) is
-verified. Headline numbers: 1 PARITY / 4 DEGRADED / 7 NEEDS-BUILD across the 12 surfaces; qwen3:32b
+gate/inject/log, MCP with per-agent scoping (holds against the model; a trusted HTTP caller can
+re-grant per request, so the daemon is the only client and the password is the boundary), subagents
+incl. background dispatch, SQLite usage) is verified. Headline numbers: 0 PARITY / 5 DEGRADED /
+7 NEEDS-BUILD across the 12 surfaces; qwen3:32b
 turn p50 7.5s / p90 50s, 4 destructive curation decisions and 0 secret leaks (with rails), while the
 1.2B lfm2.5 leaked secrets in its danger cases (16 dangerous total); send-keys scrape 6/6 delivered
 vs HTTP 6/6; crash resume and per-agent MCP scoping both hold. What is lost is model quality (frontier
@@ -26,7 +28,7 @@ daemon to build, not capabilities that ship out of the box.
 
 ## Reading order
 
-1. `FEASIBILITY.md` — the 12-surface parity table and per-item verdicts (1 PARITY, 4 DEGRADED, 7 NEEDS-BUILD).
+1. `FEASIBILITY.md` — the 12-surface parity table and per-item verdicts (0 PARITY, 5 DEGRADED, 7 NEEDS-BUILD).
 2. `ARCHITECTURE.md` — the opencode-soma daemon, the one-writer-per-serve rule, flows, the full
    claude-soma -> opencode-soma component mapping, and the `opencode-soma init` wizard spec.
 3. `MEMORY-DESIGN.md` — the SQLite memory service (claude-soma writes no memory itself).
@@ -53,6 +55,12 @@ python3.12 -I research/opencode-soma/probes/opencode/sqlite_mem_bench.py --data 
 python3.12 -I research/opencode-soma/probes/opencode/turn_timing.py research/opencode-soma/evidence/opencode
 bash research/opencode-soma/probes/opencode/isolation.sh verify
 ```
+
+Note: the last command rewrites the committed `evidence/opencode/isolation-check.log` and compares
+against this machine's `$TMPDIR/ocsoma-pe/isolation` snapshot taken before the probes, so it exits 2
+on a machine without that snapshot; it is the probe author's closing check, not a portable one. The
+other commands are fully portable and read-only except the SQLite bench, which writes only to
+`$TMPDIR`.
 
 ## Operator decisions needed
 

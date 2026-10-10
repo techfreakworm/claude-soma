@@ -4,27 +4,29 @@ The verdict is yes, feasible: opencode 1.18.8 can replace Claude Code as the eng
 personal assistant, driven by any model including a fully local one, installable by a stranger with
 no VPS, and every load-bearing mechanism claude-soma leans on has a verified opencode equivalent — a
 headless HTTP+SSE server per lead, crash-resilient sessions, instant-ack queuing, a plugin
-gate/inject/log layer, MCP tools with per-agent scoping, subagents including background dispatch, and
+gate/inject/log layer, MCP tools with per-agent scoping (which holds against the model; a trusted
+HTTP caller can re-grant a tool per request, so the daemon is the only client and the server
+password is the boundary), subagents including background dispatch, and
 SQLite usage accounting. What is honestly lost is model quality measured on local models: qwen3:32b
 made 4 destructive curation decisions and leaked 0 secrets (with rails), the 1.2B lfm2.5 leaked
 secrets in its danger cases (16 dangerous decisions total), and a hosted frontier model was not
 tested. The single biggest risk is unattended 24/7 reliability on a local model — silent judgement
 errors plus opencode's hang classes: the second-writer session wedge, pending approvals with no
 server-side timeout, and no default provider timeouts in 1.18.8 (desk). Seven of the twelve surfaces
-are NEEDS-BUILD (the daemon is the product), four are DEGRADED, one is PARITY.
+are NEEDS-BUILD (the daemon is the product), five are DEGRADED, and none is full PARITY.
 
 | # | Feature | claude-soma mechanism | opencode mechanism | Verdict | Evidence |
 |---|---|---|---|---|---|
 | 1 | Telegram channel | `scripts/channel-claude.sh:88-96` launches the channel; routing in `system_prompts/responsive_bot.md:94-153` | daemon long-poll bridge -> `prompt_async` ack -> SSE reply | NEEDS-BUILD | `evidence/platform/telegram-nat.log`, `evidence/opencode/P1-headless/busy.log`, `evidence/opencode/P8-serve/serve.log`; `desk-research-only` the real-token round trip was not run |
 | 2 | Memory, parent + per-lead | claude-soma only reads a Claude-authored file `src/claude_soma/mcp_servers/hermes_api/claude_state.py:69-75` | daemon-hosted SQLite memory MCP, single writer | NEEDS-BUILD | `evidence/memory/bench-results.json`, `evidence/memory/neo4j-container.json`, `evidence/memory/curation-qwen3_32b-think-false.log` |
 | 3 | Voice in/out | voice-out stub `skills/respond-with-voice/SKILL.md:16-21`; STT `src/claude_soma/mcp_servers/voice_stt/server.py:73-87`; TTS `src/claude_soma/mcp_servers/voice_tts/server.py:55-78` | whisper-cli + piper + ffmpeg bridge in the daemon | NEEDS-BUILD | `evidence/platform/stt-whisper.log`, `evidence/platform/tts-piper.log` |
-| 4 | Project orchestration | tmux send-keys/scrape `src/claude_soma/mcp_servers/project_orchestrator/server.py:193-230`, spawn `src/claude_soma/mcp_servers/project_orchestrator/spawner.py:479-557`, scrape-reply `skills/message-project/SKILL.md:32-91` | one `opencode serve` per lead over HTTP; subagents; independent lead serves | PARITY | `evidence/opencode/P4-subagents/basic.log`, `evidence/opencode/P8-serve/serve.log`, `evidence/opencode/P5-tmux/tmux.log` |
+| 4 | Project orchestration | tmux send-keys/scrape + multi-VPS RemoteRunner `src/claude_soma/mcp_servers/project_orchestrator/server.py:193-230`, spawn `src/claude_soma/mcp_servers/project_orchestrator/spawner.py:479-557`, scrape-reply `skills/message-project/SKILL.md:32-91` | one `opencode serve` per lead over HTTP; subagents; independent lead serves; single host only | DEGRADED | `evidence/opencode/P4-subagents/basic.log`, `evidence/opencode/P8-serve/serve.log`, `evidence/opencode/P5-tmux/tmux.log` |
 | 5 | Scheduled routines | cron routines `skills/schedule-routine/SKILL.md:58-96`, one-shot reminders are detached sleeps `src/claude_soma/mcp_servers/hermes_api/server.py:193-243`, reaper timer `systemd/claude-soma-lead-reaper.timer:11-13` | daemon scheduler firing HTTP prompts, with catch-up | NEEDS-BUILD | `desk-research-only` no local scheduler was built or run; the reminders are not reboot-safe and the timers assume systemd |
 | 6 | Dashboard | FastAPI app `src/claude_soma/api/main.py:9-44`, GitHub-OAuth gate `frontend/lib/auth.ts:4-30`, reverse proxy `Caddyfile:17-44` | daemon dashboard; opencode's own web UI covers per-instance view | NEEDS-BUILD | `evidence/opencode/P8-serve/web-index.html` |
 | 7 | Social posting | playwright MCP servers `.mcp.json:43-96`, headed browser `systemd/vncserver@.service:6-17`, persistent login `scripts/pw-login.js:2-19` | playwright-mcp under opencode + persistent profile | NEEDS-BUILD | `evidence/platform/playwright-persist.log` |
 | 8 | Extension-point parity | PreToolUse gate `scripts/orchestrator_gate.py:41-63`, all hooks `hooks/hooks.json:1-89`, lead MCP scoping `config/claude/lead-mcp.json:1-130` | plugin `tool.execute.before`/`chat.message`/`tool.execute.after`; MCP per-agent scoping | DEGRADED | `evidence/opencode/P2-hooks/gate.log`, `evidence/opencode/P2-hooks/extras.log`, `evidence/opencode/P3-mcp/scoping-verdict.log`, `evidence/opencode/P9-compat/compat.log` |
 | 9 | Model-agnostic auth | Max-OAuth token, no API key `secrets.env.example:22-24`, injected via EnvironmentFile `src/claude_soma/mcp_servers/project_orchestrator/spawner.py:48-56` | any opencode provider; local ollama verified, no account | DEGRADED | `evidence/opencode/P0-setup/sandbox-verify.log`; `desk-research-only` the hosted-frontier tier was documented not run |
-| 10 | Remote attach | Remote Control URL per lead `src/claude_soma/mcp_servers/project_orchestrator/spawner.py:497-501` | `opencode web` + `attach` on the LAN; no anywhere-relay without a user tunnel | DEGRADED | `evidence/opencode/P8-serve/serve.log` |
+| 10 | Remote attach | Remote Control URL per lead `src/claude_soma/mcp_servers/project_orchestrator/spawner.py:497-501` | `opencode web` + `attach` on 127.0.0.1 (loopback); remote only via an SSH tunnel / Tailscale (desk) | DEGRADED | `evidence/opencode/P8-serve/serve.log` |
 | 11 | Cross-platform no-VPS install | canonical runbook `INSTALL.md:3`, per-OS path resolver `src/claude_soma/platform/paths.py:128-146` | user-level systemd / LaunchAgent; Windows via WSL2 | DEGRADED | `evidence/platform/linux-container.log`, `evidence/platform/macos-launchd.log`, `evidence/platform/telegram-nat.log` |
 | 12 | Install wizard | interactive installer `src/claude_soma/wizard/init.py:406-491` | `opencode-soma init` detect/ask/write/refuse (spec in ARCHITECTURE) | NEEDS-BUILD | `desk-research-only` the wizard is specified not built; validated unit/plist generation is the building block |
 
@@ -38,7 +40,11 @@ What we ran: `evidence/platform/telegram-nat.log` confirms the NAT shape (below,
 the opencode side of the bridge (instant `prompt_async` ack, SSE reply). Gap: the bridge itself
 (`scripts/channel-claude.sh:88-96` is where Claude Code gave claude-soma the channel for free) is new
 daemon code. The one unverified claim is a real bot-token round trip (`desk-research-only`), an
-operator decision.
+operator decision. The bridge must be channel-pluggable: claude-soma routes operator DMs
+Discord-first because "Telegram is banned in India (~2026-06)" and its sendMessage returned HTTP 000
+there (`src/claude_soma/operator_dm.py:1-7`), yet api.telegram.org WAS reachable from this laptop at
+06:21Z (getMe returned a clean 401 over outbound HTTPS, `evidence/platform/telegram-nat.log`). So the
+daemon needs a Telegram adapter first and a Discord adapter second behind one channel interface.
 
 ## 2. Memory — NEEDS-BUILD
 claude-soma writes no durable memory of its own — `src/claude_soma/mcp_servers/hermes_api/claude_state.py:69-75`
@@ -53,17 +59,21 @@ OGG/Opus note at WER 0.000 (`evidence/platform/stt-whisper.log`, the subprocess 
 Telegram file transfer (getFile / sendVoice) inside the item-1 bridge, untested without a token,
 hence NEEDS-BUILD. claude-soma's own voice-out was a stub (`skills/respond-with-voice/SKILL.md:16-21`).
 
-## 4. Project orchestration — PARITY
+## 4. Project orchestration — DEGRADED
 The load-bearing hack the operator asked about is claude-soma's tmux `send-keys` + `capture-pane`
 scrape (`src/claude_soma/mcp_servers/project_orchestrator/server.py:193-230`, driven by
 `skills/message-project/SKILL.md:32-91`, leads spawned by `spawner.py:479-557`). We tested it against
 opencode directly (`evidence/opencode/P5-tmux/tmux.log`): `send-keys` delivered 6/6 messages
 verbatim (short, long, multi-line, quotes, `$`/backticks), whole-line `capture-pane` scraping found
 5/6 replies and a column-aware parse found 6/6, long replies are truncated to the visible screen
-(alt-screen, no tmux scrollback), and delivery through `opencode attach` to a serve was 5/5. So the
-hack works but is lossy; the HTTP API (`evidence/opencode/P8-serve/serve.log`) hits 6/6 and
-supersedes it, and P4 (`evidence/opencode/P4-subagents/basic.log`) shows subagents and independent
-lead serves. macOS has no cgroup memory caps for leads (ARCHITECTURE covers per-OS isolation).
+(alt-screen, no tmux scrollback), and delivery through `opencode attach` to a serve was 5/5. So on
+messaging opencode-soma is strictly BETTER: the HTTP API (`evidence/opencode/P8-serve/serve.log`)
+hits 6/6 where the scrape hits 5/6, and P4 (`evidence/opencode/P4-subagents/basic.log`) shows
+subagents and independent lead serves. The reason this is DEGRADED, not PARITY, is the honest gap by
+this doc's own definition: claude-soma's orchestration includes multi-VPS leads (the RemoteRunner
+path that `server.py:193-230` opens with `if host != "local"`) and no probe ran a remote lead, so
+those are dropped by design for a no-VPS single-host install; macOS also has no cgroup memory caps
+for leads (ARCHITECTURE covers per-OS isolation).
 
 ## 5. Scheduled routines — NEEDS-BUILD
 The firing mechanism (an HTTP prompt) is proven by P1/P8. Gap: claude-soma's cron routines
@@ -122,7 +132,7 @@ capability/quality tier table, measured vs desk:
 | Orchestrator tool use | — | unreliable | tool calls OK in P1-P4 (measured) | desk: expected OK | yes if the model skips a tool |
 | Gate re-routing | gate is deterministic (measured) | — | — | — | no |
 | Recall injection | inject is deterministic; model must quote it | lfm2.5 ignored refreshed system text | qwen3 quoted msg, sometimes ignored system (measured) | desk | yes |
-| Memory curation | pre-scrub is deterministic | FAIL: 16 dangerous, 5 secret leaks (measured) | precision 0.882, 4 destructive, 0 leaks with rails (measured) | desk: expected better | yes (silent bad merges) |
+| Memory curation | pre-scrub is deterministic | FAIL: 16 dangerous, 5 secret leaks (measured) | contradiction-task precision 0.882, 4 destructive, 0 leaks with rails (measured) | desk: expected better | yes (silent bad merges) |
 | Lead coding | — | too weak | works, turn p50 7.5s / p90 50s (measured) | desk | partial |
 | Social drafting (approval-gated posting) | — | too weak | plausible, not run under opencode | desk | yes |
 | Scheduling | cron is deterministic | n/a | n/a | n/a | no |
@@ -134,10 +144,14 @@ timing from `evidence/opencode/conditions.log`. Hosted-frontier is `desk-researc
 Plus/Pro OAuth or an API-key provider), not run.
 
 ## 10. Remote attach — DEGRADED
-`opencode serve` + `opencode web` + `opencode attach` drive a session over the LAN behind basic auth
-(`evidence/opencode/P8-serve/serve.log`). Degraded dimension: claude-soma's Remote Control gave
-anywhere-access via a hosted relay URL per lead (`src/claude_soma/mcp_servers/project_orchestrator/spawner.py:497-501`);
-opencode-soma is LAN-only unless the operator adds their own tunnel.
+`opencode serve` + `opencode web` + `opencode attach` drive a session on 127.0.0.1 behind basic auth,
+verified on loopback (`evidence/opencode/P8-serve/serve.log`). Architecture decision (approved):
+opencode serves NEVER bind beyond loopback; remote reach is `opencode attach`/web on 127.0.0.1 from a
+phone or another machine through an SSH tunnel or a user-installed Tailscale (desk), and the soma
+dashboard's `--lan` opt-in is the only LAN listener. Degraded dimension: claude-soma's Remote Control
+gave anywhere-access via a hosted relay URL per lead
+(`src/claude_soma/mcp_servers/project_orchestrator/spawner.py:497-501`); opencode-soma reaches a
+remote device only through a tunnel the operator sets up (LAN/remote is `desk-research-only`).
 
 ## 11. Cross-platform no-VPS install — DEGRADED
 A Linux container and a macOS LaunchAgent path (`evidence/platform/linux-container.log`,

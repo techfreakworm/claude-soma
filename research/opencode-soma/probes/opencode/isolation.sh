@@ -80,10 +80,13 @@ verify() {
     echo "opencode-version: $(sandboxed_version)"
     echo "note: the version line above is read from opencode run with a THROWAWAY HOME+XDG under"
     echo "      \$TMPDIR/ocsoma-pe/isolation/verx (see sandboxed_version); this script makes NO opencode"
-    echo "      call against the operator's real HOME. (For the record: a plain 'opencode --version' only"
-    echo "      prints the version; opencode Global init only mkdir -p's dirs that already exist, so the"
-    echo "      operator's earlier real-HOME --version calls today wrote nothing and changed no mtime -"
-    echo "      corroborated by the UNCHANGED listings below.) All probes ran under sandbox.sh."
+    echo "      call against the real HOME. For the record, the only real-HOME 'opencode --version'"
+    echo "      calls today were: one by the LEAD at ~05:44Z, before this snapshot, during orientation;"
+    echo "      and the ones this verify step itself made before the sandboxed-version fix (at least the"
+    echo "      07:24:18Z run). A plain 'opencode --version' only prints the version and opencode's"
+    echo "      Global init only mkdir -p's dirs that already exist, so none of those calls wrote"
+    echo "      anything or changed an mtime - corroborated by the UNCHANGED listings below. All probes"
+    echo "      ran under sandbox.sh."
     echo
     for d in "${DIRS[@]}"; do
       local k; k="$(key "$d")"
