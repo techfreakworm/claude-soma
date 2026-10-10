@@ -134,8 +134,13 @@ One Python 3.12 asyncio process, supervised by the OS user service manager (sect
   - Creates the lead's session, sends the brief with `prompt_async`, and keeps the registry: name,
     cwd, port, pid, session id and state.
   - Messages a lead with `prompt_async` and takes the reply from `session.idle` on the lead's SSE
-    stream. This replaces claude-soma's tmux typing and screen scraping: HTTP got 6 of 6 replies,
-    tmux scraping 5 of 6 (`evidence/opencode/P5-tmux/tmux.log`).
+    stream. This replaces claude-soma's tmux typing and screen scraping
+    (`evidence/opencode/P5-tmux/tmux.log`):
+    - tmux delivered all 12 messages verbatim, and a scrape found all 12 replies once each turn
+      had completed;
+    - mid-turn, a naive scrape matched the TUI's session title, which repeats the prompt, 8 of 12
+      times before any reply existed, and long replies are cut to the screen;
+    - HTTP got 6 of 6 replies with neither problem.
   - Admission: a lead cap and a free-memory floor before each spawn, as claude-soma does
     (`src/claude_soma/mcp_servers/project_orchestrator/server.py:90-110`).
   - Restart: a dead lead's serve is restarted on the same data dir, and its session comes back idle
@@ -657,7 +662,7 @@ relay: away from home, the user brings the tunnel. opencode can bind beyond loop
 | `relay_link_gate.py`: text-heavy replies go out as relay links | `scripts/relay_link_gate.py:129-200`, `scripts/markserv-launch.sh:14-18` | long replies go out in chunks or as a document (`sendDocument`) | No public files relay, so no extra Caddy site. |
 | voice-stt and voice-tts MCP servers | `src/claude_soma/mcp_servers/voice_stt/server.py:73-87`, `src/claude_soma/mcp_servers/voice_tts/server.py:55-78` | the daemon's voice pipeline | Voice replies are wired end to end. |
 | project-orchestrator MCP | `src/claude_soma/mcp_servers/project_orchestrator/server.py:447-549` | soma MCP orchestrator tools plus the lead manager | Same jobs, over HTTP. |
-| tmux `send-keys` in, `capture-pane` out | `src/claude_soma/mcp_servers/project_orchestrator/server.py:206-225`, `skills/message-project/SKILL.md:32-91` | `prompt_async` in, SSE `session.idle` out | 6 of 6 replies over HTTP vs 5 of 6 by scraping (P5). |
+| tmux `send-keys` in, `capture-pane` out | `src/claude_soma/mcp_servers/project_orchestrator/server.py:206-225`, `skills/message-project/SKILL.md:32-91` | `prompt_async` in, SSE `session.idle` out | HTTP got 6 of 6 replies. A scrape found all 12 replies only after each turn completed; mid-turn, a naive check matched the session title 8 of 12 times (P5). |
 | lead spawn: tmux plus `sudo systemd-run` transient units | `src/claude_soma/mcp_servers/project_orchestrator/spawner.py:164-192`, `src/claude_soma/mcp_servers/project_orchestrator/spawner.py:544-557`, `systemd/sudoers.d/99-claude-soma-spawner:19-28` | one `opencode serve` per lead, user-level (on Linux, `systemd-run --user --scope`) | No sudo. |
 | `registry.sqlite` | `src/claude_soma/mcp_servers/project_orchestrator/registry.py:17-35` | registry tables in `soma.db` | One database. |
 | hermes-notify MCP (`notify_orchestrator`) | `src/claude_soma/mcp_servers/hermes_notify/server.py:252-299` | `soma_report` on the lead's soma MCP endpoint | Same five event types. The token sets the lead's identity. |
