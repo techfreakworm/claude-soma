@@ -1,0 +1,26 @@
+# systemd/claude-soma-tripwire-alert.service
+#
+# Daily AI-bubble tripwire check: headless claude + web search, short Telegram DM
+# to the operator, full writeup published to the relay.
+#
+# User=ubuntu is load-bearing: the headless `claude -p` run authenticates off the
+# stored Max OAuth credential in /home/ubuntu/.claude/.credentials.json (systemd
+# sets HOME from passwd). CLAUDE_CODE_OAUTH_TOKEN is commented out in secrets.env,
+# so there is no env-token path to fall back on.
+[Unit]
+Description=Claude Soma daily AI-bubble tripwire check (Telegram DM + relay writeup)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=ubuntu
+WorkingDirectory=/opt/claude-soma
+EnvironmentFile=-/etc/claude-soma/secrets.env
+ExecStart=/opt/claude-soma/scripts/tripwire_alert.sh
+# The script hard-timeboxes the claude run to 600s and holds a flock, so a wedged
+# run can never stack onto tomorrow's. Bound the unit just above that.
+TimeoutStartSec=900
+
+[Install]
+WantedBy=multi-user.target
