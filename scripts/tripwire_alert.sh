@@ -6,11 +6,18 @@
 # Fired by claude-soma-tripwire-alert.timer at 09:30 IST (04:00 UTC), ahead of the
 # operator's 10:00 IST reconnect.
 #
-# The three tripwires come from the reference analysis transcript:
+# The tripwires come from the reference analysis transcript:
 #   https://files.mayankgupta.in/general-worker/linkedin-alvinfsc-ai-bubble-transcript.md
+# and the follow-up US-market AI-bubble video summary:
+#   https://files.mayankgupta.in/general-worker/us-market-ai-bubble-video-summary.md
 #   (1) hyperscaler capex guidance (MSFT/GOOGL/AMZN/META)
 #   (2) GPU rental prices + datacenter utilisation
 #   (3) OpenAI revenue
+#   (4) AI-related debt issuance + debt-funded share of capex
+#   (5) off-balance-sheet commitments + SPV financing
+#   (6) Oracle credit rating + RPO/backlog
+#   (7) circular / vendor financing (Nvidia -> labs -> neoclouds -> back)
+#   (8) AI unit economics + $/token
 #
 # Design notes
 # ------------
@@ -26,8 +33,9 @@
 #   FAILED notice -- we never fabricate a reading.
 # * The previous run's JSON is fed back in so the model can answer "what changed in
 #   the last ~24h" against a real baseline rather than guessing.
-# * House rule: the DM stays a few lines; the full writeup goes to the relay and the
-#   DM carries the link.
+# * House rule: the DM carries all 8 tripwire status lines (one per marker) -- this is
+#   intentional per the user's decision on 2026-10-22; the full writeup still goes to
+#   the relay and the DM carries the link.
 #
 # Usage:
 #   tripwire_alert.sh              normal run
@@ -173,6 +181,76 @@ TRIPWIRE 3 - OPENAI REVENUE
   RED   = run-rate revised DOWN materially (toward or below ~$50B), a funding round
           is pulled or downsized, or a flagship compute deal is cancelled.
 
+TRIPWIRE 4 - AI-RELATED DEBT ISSUANCE + DEBT-FUNDED SHARE OF CAPEX
+  Watch: new bond issuance by MSFT/GOOGL/AMZN/META/ORCL tagged to AI/datacenter spend,
+  the share of capex funded by debt rather than cash flow, and any hyperscaler turning
+  cash-flow negative. Reference video: the five issued $375B of debt from 2023 to
+  Sept 2026 (more in three years than the $306B of 2008-2022 combined); ~30% of 2025
+  capex and ~33% of planned 2026 capex is debt-funded; $143B issued by June 2026; of
+  the future $3.4T, ~$1.4T is expected to be debt. Google turned cash-flow negative in
+  Q2 2026 (a first since IPO) and issued an $85B FPO.
+  GREEN = debt-funded share of capex flat/declining; issuance at or below prior yields.
+  AMBER = debt-funded share climbs above ~33%, a new large tranche prices at a notably
+          higher yield, or one more hyperscaler reports negative free cash flow.
+  RED   = a hyperscaler's AI build is throttled by financing cost or access, a planned
+          issuance is pulled/downsized, or two or more are debt-funding the majority of
+          capex.
+
+TRIPWIRE 5 - OFF-BALANCE-SHEET COMMITMENTS + SPV FINANCING
+  Watch: growth in footnoted purchase commitments and signed-but-not-started leases, and
+  new or existing data-centre SPVs (special-purpose vehicles). Reference video: ~$2.7T of
+  real obligation sits off balance sheet; purchase commitments of Alphabet ~$200.7B,
+  Microsoft $199B (by June 2027), Meta $135B (by end-2027); Meta/Blue Owl formed the
+  Beignet Investor LLC SPV for the Hyperion DC, which issued $27B of A+ bonds (one notch
+  below Meta's AA-) against a Meta 25-year 100%-capacity rental guarantee.
+  GREEN = no new mega-SPV; SPV ratings stable; commitment footnotes growing in line with
+          disclosed capex.
+  AMBER = a new multi-billion SPV is formed, an SPV is placed on negative outlook, or
+          off-B/S commitments jump materially faster than on-balance-sheet capex.
+  RED   = an SPV is downgraded, a hyperscaler signals it will not renew/walks an SPV
+          lease, or an SPV bond is accelerated/defaults.
+
+TRIPWIRE 6 - ORACLE CREDIT RATING + RPO/BACKLOG
+  Watch: Oracle (ORCL) S&P/Moody's rating and outlook, its RPO/backlog disclosure, its
+  bond prices/yields, and the status of Stargate / Project Jupiter. Reference video:
+  $638B RPO (~half earmarked for OpenAI alone); S&P BBB- (one notch above junk); bonds
+  trading ~18% below par (6.9% coupon now yielding ~8.45%); a force-majeure notice sent
+  to Project Jupiter builders over power delays; Stargate itself delayed.
+  GREEN = rating and outlook held; RPO maintained; no new Stargate/Jupiter slippage.
+  AMBER = a negative outlook is assigned, spreads widen further, or RPO conversion slips.
+  RED   = a second agency cuts Oracle to junk (forcing by-law sellers), the RPO/backlog is
+          materially written down, or an OpenAI/Stargate commitment is cancelled.
+
+TRIPWIRE 7 - CIRCULAR / VENDOR FINANCING
+  Watch: vendor-financing loops where a supplier funds its own customers' purchases
+  (Nvidia -> OpenAI/Anthropic/neoclouds -> back to Nvidia) and the funders propping up the
+  labs. Reference video: Nvidia put $35B into OpenAI and $10B into Anthropic (Huang
+  indicated both were likely its last before IPO); the IMF counted 14 such deals since
+  2023 (~$300B equity + $650B debt into weaker AI firms against $1.4T of PROMISED future
+  revenue); SoftBank funded a $10B tranche of its $64B commitment by selling its Nvidia
+  and T-Mobile stakes, pledging ~85% of Arm, a $40B bridge loan and $11B of junk bonds
+  (total debt ~$159B, $40B to refinance this year).
+  GREEN = no circular deal unwinds; funders reaffirm or extend their commitments.
+  AMBER = a circular/vendor-financing deal is restructured or downsized, or a key funder
+          (Nvidia, SoftBank) signals it is tapped out.
+  RED   = a circular deal collapses or is pulled, a funding round for OpenAI/Anthropic
+          goes unfilled, or a major funder cannot meet a committed tranche.
+
+TRIPWIRE 8 - AI UNIT ECONOMICS + $/TOKEN
+  Watch: per-seat/per-token unit economics and signs enterprises are pulling back AI spend.
+  Reference video: a $20/mo subscriber can burn ~$700 of compute; a $200/mo ChatGPT Pro
+  seat can still consume ~$14,000 (Anthropic ~$8,000); OpenAI would have needed a ~2.5x
+  price rise ($20 -> ~$55) to break even on 2025's loss; Uber burned a full year's AI
+  budget in three months then concluded more usage raised cost without raising output;
+  routine work is migrating to cheaper open-source models with ~zero switching friction
+  ("the era of token maxing is over").
+  GREEN = enterprise AI spend holding/growing; no forced price hikes; margins described
+          as improving.
+  AMBER = credible reporting of enterprises cutting AI budgets or capping seats, or token
+          prices falling further with no offsetting margin improvement.
+  RED   = a major lab is forced into a steep price hike or usage cap to stem losses, or
+          multiple large enterprises publicly cut AI spend on poor ROI.
+
 CRACK WATCH (context, not a tripwire)
   The reference analysis names CoreWeave (CRWV) the weak link - four tests, four
   fails: GAAP loss-making, 3 customers = 72% of revenue (largest 36%), ~$35B debt
@@ -197,7 +275,12 @@ fences. Exactly this shape:
       "sources": ["https://..."]
     },
     { "id": "gpu", "label": "GPU rent", "status": "...", "line": "...", "detail": "...", "sources": [] },
-    { "id": "openai", "label": "OpenAI rev", "status": "...", "line": "...", "detail": "...", "sources": [] }
+    { "id": "openai", "label": "OpenAI rev", "status": "...", "line": "...", "detail": "...", "sources": [] },
+    { "id": "debt", "label": "Debt load", "status": "...", "line": "...", "detail": "...", "sources": [] },
+    { "id": "offbalance", "label": "Off-B/S", "status": "...", "line": "...", "detail": "...", "sources": [] },
+    { "id": "oracle", "label": "Oracle", "status": "...", "line": "...", "detail": "...", "sources": [] },
+    { "id": "circular", "label": "Circular fin", "status": "...", "line": "...", "detail": "...", "sources": [] },
+    { "id": "unitecon", "label": "Unit econ", "status": "...", "line": "...", "detail": "...", "sources": [] }
   ],
   "red_flags": ["only for a threshold ACTUALLY crossed per the rules above; empty array if none"],
   "crack_watch": "one line on CoreWeave / warrant-funded demand, or 'nothing new'",
@@ -301,7 +384,7 @@ if i == -1 or j <= i:
     sys.exit(1)
 obj = json.loads(t[i:j+1])
 ids = {x.get('id') for x in obj.get('tripwires', [])}
-if not {'capex', 'gpu', 'openai'} <= ids:
+if not {'capex', 'gpu', 'openai', 'debt', 'offbalance', 'oracle', 'circular', 'unitecon'} <= ids:
     sys.exit(2)
 for x in obj['tripwires']:
     if x.get('status') not in ('GREEN', 'AMBER', 'RED'):
@@ -371,6 +454,23 @@ L.append("**2 GPU rent** — RED if H100 on-demand falls >20% MoM, or on credibl
 L.append("**3 OpenAI revenue** — RED if the run-rate is revised down toward or below "
          "~$50B, a round is pulled/downsized, or a flagship compute deal is "
          "cancelled. AMBER on conflicting numbers or a restructured commitment.\n")
+L.append("**4 Debt load** — RED if an AI build is throttled by financing cost/access, "
+         "an issuance is pulled/downsized, or 2+ hyperscalers debt-fund the majority of "
+         "capex. AMBER if the debt-funded share tops ~33%, a tranche prices notably "
+         "higher, or one more reports negative free cash flow.\n")
+L.append("**5 Off-B/S** — RED if an SPV is downgraded, defaulted or walked, or a bond is "
+         "accelerated. AMBER on a new multi-billion SPV, an SPV negative outlook, or "
+         "off-balance-sheet commitments jumping faster than disclosed capex.\n")
+L.append("**6 Oracle** — RED if a second agency cuts ORCL to junk, the RPO/backlog is "
+         "materially written down, or a Stargate/OpenAI commitment is cancelled. AMBER "
+         "on a negative outlook, widening spreads, or RPO-conversion slippage.\n")
+L.append("**7 Circular fin** — RED if a circular/vendor-financing deal collapses or is "
+         "pulled, an OpenAI/Anthropic round goes unfilled, or a major funder cannot meet "
+         "a committed tranche. AMBER on a restructured/downsized deal or a funder "
+         "signalling it is tapped out.\n")
+L.append("**8 Unit econ** — RED if a lab is forced into a steep price hike or usage cap, "
+         "or multiple large enterprises cut AI spend on poor ROI. AMBER on reported "
+         "enterprise AI-budget cuts or token prices falling with no margin improvement.\n")
 L.append(f"\n_changed in last ~24h: {d.get('changed_24h')}_\n")
 open(out, 'w', encoding='utf-8').write("\n".join(L))
 PY
