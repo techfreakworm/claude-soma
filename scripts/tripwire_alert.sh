@@ -34,6 +34,10 @@
 #   tripwire_alert.sh --test       same, but the DM is prefixed [TEST]
 #   tripwire_alert.sh --dry-run    run the check + publish, print the DM, don't send
 #
+# Retries: a fast failure (<120s) is retried twice, 60s then 240s apart. Every
+# failure's stdout is kept at <state>/last-fail-N.txt -- claude reports errors on
+# stdout, so that file is the first place to look when a morning goes missing.
+#
 # Exit: 0 ok | 2 notify failed | 3 check failed (claude/JSON) | 4 already running
 
 set -uo pipefail
@@ -51,7 +55,7 @@ CHAT_ID="${TRIPWIRE_CHAT_ID:-935376085}"
 TG_ENV_FILE="${SOMA_TG_ENV_FILE:-/home/ubuntu/.claude/channels/telegram/.env}"
 SECRETS_FILE="${SOMA_SECRETS_FILE:-/etc/claude-soma/secrets.env}"
 RELAY_LEAD="${TRIPWIRE_RELAY_LEAD:-general-worker}"
-CLAUDE_TIMEOUT="${TRIPWIRE_CLAUDE_TIMEOUT:-600}"
+CLAUDE_TIMEOUT="${TRIPWIRE_CLAUDE_TIMEOUT:-420}"
 REFERENCE_URL="https://files.mayankgupta.in/general-worker/linkedin-alvinfsc-ai-bubble-transcript.md"
 
 MODE="run"
@@ -99,6 +103,11 @@ _read_var() {   # _read_var FILE NAME -> last NAME=value, quotes stripped. Never
 # notify_lib's dual route. Token is never echoed or logged.
 tw_notify() {
     local msg="$1" token http
+    if [[ "$MODE" == "dry" ]]; then
+        printf '%s\n' "--- dry-run, would notify ---" "$msg" "------"
+        log "dry-run: suppressed notify (${#msg} chars)"
+        return 0
+    fi
     token="${TELEGRAM_BOT_TOKEN:-}"
     [[ -z "$token" ]] && token="$(_read_var "$TG_ENV_FILE" TELEGRAM_BOT_TOKEN)"
     [[ -z "$token" ]] && token="$(_read_var "$SECRETS_FILE" TELEGRAM_BOT_TOKEN)"
@@ -227,15 +236,61 @@ ${CONTRACT}"
 
 # ---------------------------------------------------------------- check --------
 log "run start (mode=${MODE}, date=${DATE_IST})"
-RAW="$(cd "$WORK_DIR" && timeout --kill-after=30 "$CLAUDE_TIMEOUT" \
-    "$CLAUDE_BIN" -p "$PROMPT" --allowedTools "WebSearch,WebFetch" --output-format text 2>>"$LOG")"
-RC=$?
+
+# Retry policy. A *fast* failure (< FAST_FAIL_SECS) means the request was rejected
+# before any real work started -- a racing OAuth refresh, a usage-limit window, a
+# transient 5xx. Those are worth retrying with backoff: on 2026-10-19 and -10-20
+# the run exited rc=1 in ~5s while the same command worked by hand minutes later.
+# A *slow* failure is a research run that genuinely timed out; retrying that just
+# burns another timeout, so we stop and report.
+FAST_FAIL_SECS="${TRIPWIRE_FAST_FAIL_SECS:-120}"
+# shellcheck disable=SC2206
+BACKOFFS=(${TRIPWIRE_BACKOFFS:-60 240})
+RAW=""; RC=0; ATTEMPT=0; SNIP=""
+while :; do
+    ATTEMPT=$((ATTEMPT + 1))
+    T0=$SECONDS
+    RAW="$(cd "$WORK_DIR" && timeout --kill-after=30 "$CLAUDE_TIMEOUT" \
+        "$CLAUDE_BIN" -p "$PROMPT" --allowedTools "WebSearch,WebFetch" --output-format text 2>>"$LOG")"
+    RC=$?
+    ELAPSED=$((SECONDS - T0))
+    if [[ $RC -eq 0 && -n "$RAW" ]]; then
+        log "attempt ${ATTEMPT} ok (${ELAPSED}s)"
+        break
+    fi
+    # Keep every failure's output. claude prints its error to STDOUT, not stderr,
+    # so discarding RAW here is exactly what made the first two failures
+    # undiagnosable (67 and 59 chars, both lost).
+    printf '%s' "$RAW" > "${STATE_DIR}/last-fail-${ATTEMPT}.txt"
+    SNIP="$(printf '%s' "$RAW" | tr '\n' ' ' | cut -c1-200)"
+    log "attempt ${ATTEMPT} FAILED (rc=${RC}, ${ELAPSED}s, ${#RAW} chars): ${SNIP:-<no output>}"
+    IDX=$((ATTEMPT - 1))
+    if [[ $ELAPSED -ge $FAST_FAIL_SECS ]]; then
+        log "slow failure (${ELAPSED}s >= ${FAST_FAIL_SECS}s) - not retrying"
+        break
+    fi
+    if [[ $IDX -ge ${#BACKOFFS[@]} ]]; then
+        log "retry budget exhausted after ${ATTEMPT} attempts"
+        break
+    fi
+    log "fast failure - retrying in ${BACKOFFS[$IDX]}s"
+    sleep "${BACKOFFS[$IDX]}"
+done
+
 if [[ $RC -ne 0 || -z "$RAW" ]]; then
-    log "claude failed (rc=${RC}, ${#RAW} chars)"
-    tw_notify "⚠️ AI tripwire check FAILED ${DATE_HUMAN} — headless claude returned rc=${RC}. No reading today; log: ${LOG}"
+    # Say how stale the picture now is. A bare "FAILED" hides a multi-day gap,
+    # which is precisely when the gap matters.
+    STALE="no prior reading on file"
+    if [[ -s "$STATE_FILE" ]]; then
+        LAST_OK="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("asof","?"))' "$STATE_FILE" 2>/dev/null)"
+        STALE="last good reading: ${LAST_OK:-unknown}"
+    fi
+    log "check FAILED after ${ATTEMPT} attempt(s); ${STALE}"
+    tw_notify "⚠️ AI tripwires ${DATE_HUMAN} — check FAILED after ${ATTEMPT} attempt(s), rc=${RC}. ${STALE}. Error: ${SNIP:-<no output>}"
     exit 3
 fi
 printf '%s' "$RAW" > "${STATE_DIR}/last-raw.txt"
+rm -f "${STATE_DIR}"/last-fail-*.txt
 
 # Extract the outermost JSON object (tolerates stray prose or ``` fences).
 JSON="$(python3 - "${STATE_DIR}/last-raw.txt" <<'PY'

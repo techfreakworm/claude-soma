@@ -18,9 +18,10 @@ User=ubuntu
 WorkingDirectory=/opt/claude-soma
 EnvironmentFile=-/etc/claude-soma/secrets.env
 ExecStart=/opt/claude-soma/scripts/tripwire_alert.sh
-# The script hard-timeboxes the claude run to 600s and holds a flock, so a wedged
+# The script timeboxes each claude attempt to 420s and retries a fast failure twice
+# (60s + 240s backoff); worst case ~1560s. It holds a flock, so a wedged
 # run can never stack onto tomorrow's. Bound the unit just above that.
-TimeoutStartSec=900
+TimeoutStartSec=1800
 
 [Install]
 WantedBy=multi-user.target
